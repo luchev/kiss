@@ -218,11 +218,32 @@ TODO: Expand this section with more details
 
 ## Peers leaving the network
 
-<!-- TODO -->
+Peers (Keeper nodes) keep information about their neighbors in ID space.
+To keep information about neighbors, peers use exponential back-off heartbeat.
+Once a peer fails to contact a neighbor (let's call it W) for 1 minute, they contact their other neighbors to inform them that peer W is dead.
+The neighbors either confirm or deny this statement.
+Once all neighbors confirm that the peer is dead, the neighbors redistribute the files that that peer was keeping.
+This way the replication factor of 3 will always be preserved.
 
 ## Peers joining the network
 
+When a peer (Keeper node) wants to join the network it contacts a node in the network, which generates the new node's ID by hashing its IP.
+The node then performs a query on its ID in order to find nodes close to this ID.
+Once at least one such node has been found, the current node can contact a fixed number of nodes in the neighborhood (3-5 close peers) and request to join the network.
+All nodes in the neighborhood require the newly joining peer to complete a hard cryptographic puzzle before allowing it to join.
+The nodes of the neighborhood exchange information between them whenever the peer solves a puzzle.
+After all puzzles are solved, the nodes in the network have to reach consensus that the new node is joining the network.
+Consensus is achieved by having all nodes acknowledge that all the crypto puzzles are solved, and all neighbors approve of the new peer.
+
+Once a peer joins a network it starts to request files from its neighbors, which it should own.
+Now that the peer owns files it can start answering queries, but files stored on the peer don't count towards the replication invariant.
+After a peer has been active in the network and actively contributing (answering queries) for a while (24h up to 1 week), it can join the network as a permanent peer.
+At that point, peers from the neighborhood can start dropping files, which they shouldn't own (which are father away in the ID space).
+This decision for dropping files is made by the old nodes in the network, not the node that recently joined.
+This decision is also synchronized with the Verifier nodes.
+
 <!-- TODO -->
+TODO: Research cryptographic puzzles
 
 ## Blockchain vs Ledger stores
 
