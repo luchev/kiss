@@ -216,9 +216,6 @@ The Validator also stores in a ledger, metadata about the file, in order to be a
 ### How to store large files?
 <!-- TODO -->
 
-<!--TODO-->
-TODO: Expand this section with more details
-
 ## Peers leaving the network
 
 Peers (Keeper nodes) keep information about their neighbors in ID space.
