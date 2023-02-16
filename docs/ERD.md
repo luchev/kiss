@@ -1,6 +1,6 @@
 # KISS
 
-Kooky and wannabe-Innovative decentralized Storage System
+Kooky and (maybe) Innovative decentralized Storage System
 
 ## The high level idea
 
@@ -20,51 +20,7 @@ If possible the whole system should run inside a Docker container, so it can be 
 - Keeper (node): a peer in the network storing files
 - Validator (node): a peer in the network validating the integrity of stored files by Keeper nodes
 - Gatekeeping: The ability of Keeper nodes to decide which files to store, based on whom the client storing them is
-
-## Specifications
-
-- Validator nodes will be responsible for checking this replication invariant. If a node loses the file, the Validator will pick another node to store the file
-- Keeper nodes will be awarded tokens whenever a contract they made is verified
-  - Tokens will be kept on a blockchain to avoid malicious peers lying about their tokens
-- Ideas for token awards by Verifiers:
-  - Longer storage period → More tokens
-  - Faster download → More tokens
-  - More popular file → More tokens (probably a bad idea because nodes will prefer popular files and drop less popular ones)
-    - This can be mitigated by increasing the rewards for unpopular files. This will cause files to oscillate between being “popular” and “unpopular”, which pay out high rewards, but files that are neither popular nor unpopular (in the middle) will be less profitable.
-- Clients that want to store a file will have to “pay” for that file storage with their own tokens
-  - Ideally, tokens can be “purchased” using tokens from other chains
-  - (Optional) have a more practical method of payment
-- File storage contracts will be timed. After the specified time, the file will be removed
-
-## Normal operational flow
-
-- We start with at least:
-  - 1 Keeper node
-  - 1 Verifier node
-  - 1 Client who wants to store a file, which is 100MB
-- The Client contacts the Verifier with a request to store a file with size 100MB, for 10 days
-- The Verifier proposes a contract, which will cost the Client X number of tokens to store the file for that period
-- The Client accepts
-- The Verifier takes the file and contacts Keeper nodes, offering them a contract to store the given file for 10 days for Y number of tokens
-- The Verifier distributes the file to the Keeper nodes that accept the contract
-- The Verifier creates a hash of the file and verifies that the Keeper nodes have the file by asking them to send the Verifier the hash of the file. This check occurs regularly
-- The Verifier chooses another 2 Verifiers (based on proximity in the ID space), which should also hold the hash of the file
-- The Client is informed that the contract is complete and is given the IDs of the Verifiers that know where the file is stored.
-- If the Client wants to retrieve the file, they contact the Verifiers, which forward the request to the Keeper nodes
-- If the Client wishes to store the file for longer, they need to establish a new contract before the 10 days period ends
-
-## Security
-
-- Preventing peers from hurting the durable storage guarantee: Peers will be required to “stake” their tokens in order to store files. File integrity will be checked randomly and if the file storage contract isn’t obeyed, the peer’s tokens will be slashed
-- Preventing Sybil attacks: Peers joining the network need to solve a crypto puzzle before joining. Also, the previous point
-- Eclipse attacks: The reason we are choosing a structured p2p network
-- DDoS: _Unclear_
-
-## Privacy
-
-- (Optional) Files will be stored encrypted
-- (Optional) Access to files will be allowed only for clients, which have an access token (key)
-- File editing/deletion will be allowed only for clients, which have a certificate (key)
+- Contract: Agreement between a client and the system to store a file for a certain period of time
 
 ## Programming language
 
@@ -153,6 +109,7 @@ We'll favor solutions that are easy to set up and have a bigger community.
 This choice comes down to Docker vs namespaces + cgroups.
 
 #### (Preferred) Option 1: Docker
+
 The most popular containerization system is Docker.
 It is also pretty much the only one that runs on Mac, Windows, and Linux.
 [Source](https://en.wikipedia.org/wiki/OS-level_virtualization#Implementations).
@@ -160,50 +117,40 @@ It is also pretty much the only one that runs on Mac, Windows, and Linux.
 The downside of Docker is that it has overhead, and it cannot directly control the allocated hard drive space (but this can be worked around).
 
 #### Option 2: cgroups + namespaces
+
 [cgroups](https://en.wikipedia.org/wiki/Cgroups) in combination with [namespaces](https://en.wikipedia.org/wiki/Linux_namespaces) is what other containerization systems are built on top (at least under Linux).
 They can limit CPU, Memory, I/O, Network, and can isolate network interfaces as well as the file system.
 
 The upside of cgroups + namespaces is that there isn't as much overhead as with Docker.
 The downsides are that this approach is limited to Linux systems and is harder to implement.
 
-### Blockchain vs Ledger stores
-
-Blockchain
-
-- Data is immutable
-- Decentralized
-- Distributed consensus
-
-Ledger
-
-- Data is immutable
-- Centralized
-- Options
-  - [https://github.com/google/trillian](https://github.com/google/trillian)
-  - [https://github.com/codenotary/immudb](https://github.com/codenotary/immudb)
-
-#### Available blockchains
-
-The more popular Rust-based blockchains are:
-  - Polkadot (using [https://substrate.io/](https://substrate.io/)) or
-  - Solana ([https://solana.com/developers](https://solana.com/developers)) or
-  - Near protocol ([https://near.org/](https://near.org/))
-
-The more popular Golang-based blockchains are:
-  - Algorand [https://github.com/algorand](https://github.com/algorand)
-
-After a short look into these, they all seem to have detailed development docs.
-
 ## Validator nodes
 
-Validator nodes check Keepers’ contracts for storing files
+Validator nodes check Keepers’ contracts for storing files.
+Validators are responsible for creating the Contracts between clients and the system for storing files, (read more in the Storing section).
 
-### How to avoid malicious Validators?
+### Validation of file integrity and replication invariant
 
-The files a Validator is responsible for will be rotated.
+Files in the system must be replicated 3 times.
+In order to adhere to this requirement, the system must handle Keeper nodes, which drop files or leave the network.
+Validators will check every couple of minutes if a file is stored on all Keeper nodes, that promised to store it.
+If a Keeper node is inaccessible or cannot prove that they are storing the file, the Validator will store the file elsewhere.
 
-TODO: How to rotate them to ensure Validators don't choose which files they validate but also make this decentralized? - Consensus algorithms?
+##### (Preferred) Option 1: Zero knowledge proof
+
+Ideally this will verification will be handled with a zero-knowledge proof.
+
+##### Option 2: Hash trees
+
+If this turns out to be impossible we'll have to rely on hash trees ([Merkle trees](https://en.wikipedia.org/wiki/Merkle_tree)).
+
+##### Option 3: Complete file retrieval
+
+Another way to verify the file integrity is to request the whole file from the Keeper node and compare it to a checksum for the file, which has been calculated at the time of adding the file to the system.
+
 <!-- TODO -->
+TODO: Investigate if zero-knowledge proof is possible in this case
+TODO: Investigate these options in more detail
 
 ## Resource naming scheme
 
@@ -229,18 +176,16 @@ One problem would be that the client's name is exposed.
 This can be solved by hashing the client name and namespace name.
 This means that as when querying the client and namespaces will be hashed before the query is propagated to the network.
 
-TODO: does this make sense, are there any other downsides being overlooked
 <!-- TODO -->
+TODO: does this make sense, are there any other downsides being overlooked
 
-## Indexing and Querying
-
-### Indexing (searching for file by name/metadata)
+## Indexing (searching for file by name/metadata)
 
 Searching in the network will be impossible.
 The client is expected to know what file they are looking for.
 i.e. the client is responsible for keeping an index of files, metadata about them, and their identifiers (reference the naming scheme).
 
-### Querying
+## Querying
 
 The Keeper nodes will be part of a structured p2p network.
 The replication factor of the system will be 3.
@@ -255,15 +200,160 @@ The node we arrived at should have the file if it exists. If it doesn't, we chec
 If a node doesn't want to store a file, they're still required to store a pointer to it (the IP/ID of the Keeper node where it's been moved).
 
 <!--TODO-->
-TODO: Expand this section
+TODO: Expand this section with more details
 
-### Storing
+## Storing
+
+Files storage will be handled similarly to querying.
+First, a Validator node is contacted by a client, who wants to store a file.
+The Validator node generates the file name identifier.
+Then, it proceeds to query the Keeper nodes for that identifier.
+If a file name with the same identifier is found, the request is rejected.
+Otherwise, the query for the file will return the Keeper node, which should have the file.
+The Validator node stores the file on that Node and on the 2 nodes after it in the ID space.
+The Validator also stores in a ledger, metadata about the file, in order to be able to verify the file integrity at a later point in time.
 
 <!--TODO-->
+TODO: Expand this section with more details
+
+## Peers leaving the network
+
+<!-- TODO -->
+
+## Peers joining the network
+
+<!-- TODO -->
+
+## Blockchain vs Ledger stores
+
+Blockchain
+
+- Data is immutable
+- Decentralized
+- Distributed consensus
+
+Ledger
+
+- Data is immutable
+- Centralized
+- Options
+  - [https://github.com/google/trillian](https://github.com/google/trillian)
+  - [https://github.com/codenotary/immudb](https://github.com/codenotary/immudb)
+
+### Available blockchains
+
+After a short look into these options, they all seem to have detailed development docs.
+Rust having more successful blockchains is a good sign for the maturity of the language in the field.
+It also provides alternatives if one of the blockchains turns out to be unusable for the purposes of this system.
+
+#### (Preferred) Rust-based blockchains
+
+The more popular Rust blockchains are
+
+- Polkadot (using [https://substrate.io/](https://substrate.io/))
+- Solana ([https://solana.com/developers](https://solana.com/developers))
+- Near protocol ([https://near.org/](https://near.org/))
+
+#### Golang-based blockchains
+
+There is 1 popular Golang-based blockchain.
+Algorand [https://github.com/algorand](https://github.com/algorand)
 
 ## Attacks
 
+<!-- TODO -->
+
 sybil malicious peers try to get into 3 consecutive positions and exchange info about what files they have and simultaneously drop files.
+
+- Leaving and joining the network - don't count nodes who recently joined as a part of the replication factor.
+
+### How to avoid malicious Validators?
+
+The files a Validator is responsible for will be rotated.
+
+<!-- TODO -->
+TODO: How to rotate them to ensure Validators don't choose which files they validate but also make this decentralized? - Consensus algorithms?
+
+## Redundancy
+
+The replication factor of the system will be 3.
+i.e. Each file will be stored on 3 different nodes.
+The 3 nodes must be with sequential IDs.
+
+If one of these 3 nodes doesn't want to store the file, they have to store a pointer to the file on another machine.
+
+The Validator nodes will occasionally check for the existence of the 3 replicas of each file and if 1 or more of these replicas are down, the Validators will store it to another Keeper node.
+
+## Availability
+
+<!-- TODO -->
+
+## Reliability
+
+<!-- TODO -->
+
+## Performance
+
+<!-- TODO -->
+
+## Security
+
+<!-- TODO -->
+- Preventing peers from hurting the durable storage guarantee: Peers will be required to “stake” their tokens in order to store files. File integrity will be checked randomly and if the file storage contract isn’t obeyed, the peer’s tokens will be slashed
+- Preventing Sybil attacks: Peers joining the network need to solve a crypto puzzle before joining. Also, the previous point
+- Eclipse attacks: The reason we are choosing a structured p2p network
+- DDoS: _Unclear_
+
+## Privacy
+
+<!-- TODO -->
+- (Optional) Files will be stored encrypted
+- (Optional) Access to files will be allowed only for clients, which have an access token (key)
+- File editing/deletion will be allowed only for clients, which have a certificate (key)
+
+## Maintainability
+
+<!-- TODO -->
+
+## Scalability
+
+<!-- TODO -->
+
+## Normal operational flow
+
+<!-- TODO -->
+TODO: Refine this section with more details
+
+- We start with at least:
+  - 1 Keeper node
+  - 1 Verifier node
+  - 1 Client who wants to store a file, which is 100MB
+- The Client contacts the Verifier with a request to store a file with size 100MB, for 10 days
+- The Verifier proposes a contract, which will cost the Client X number of tokens to store the file for that period
+- The Client accepts
+- The Verifier takes the file and contacts Keeper nodes, offering them a contract to store the given file for 10 days for Y number of tokens
+- The Verifier distributes the file to the Keeper nodes that accept the contract
+- The Verifier creates a hash of the file and verifies that the Keeper nodes have the file by asking them to send the Verifier the hash of the file. This check occurs regularly
+- The Verifier chooses another 2 Verifiers (based on proximity in the ID space), which should also hold the hash of the file
+- The Client is informed that the contract is complete and is given the IDs of the Verifiers that know where the file is stored.
+- If the Client wants to retrieve the file, they contact the Verifiers, which forward the request to the Keeper nodes
+- If the Client wishes to store the file for longer, they need to establish a new contract before the 10 days period ends
+
+## Award points system
+
+<!-- TODO -->
+TODO: This needs to be refined.
+
+- Keeper nodes will be awarded tokens whenever a contract they made is verified
+  - Tokens will be kept on a blockchain to avoid malicious peers lying about their tokens
+- Ideas for token awards by Verifiers:
+  - Longer storage period → More tokens
+  - Faster download → More tokens
+  - More popular file → More tokens (probably a bad idea because nodes will prefer popular files and drop less popular ones)
+    - This can be mitigated by increasing the rewards for unpopular files. This will cause files to oscillate between being “popular” and “unpopular”, which pay out high rewards, but files that are neither popular nor unpopular (in the middle) will be less profitable.
+- Clients that want to store a file will have to “pay” for that file storage with their own tokens
+  - Ideally, tokens can be “purchased” using tokens from other chains
+  - (Optional) have a more practical method of payment
 
 ## Sources
 
@@ -277,6 +367,8 @@ sybil malicious peers try to get into 3 consecutive positions and exchange info 
 - Read [https://www.dock.io/post/verifiable-credentials](https://www.dock.io/post/verifiable-credentials)
 - https://narasimmantech.com/how-namespaces-and-cgroups-can-help-you-isolate-your-processes/
 - https://nixhacker.com/sandboxing-and-program-isolation-in-linux-using-many-approaches/
+
+- File storage contracts will be timed. After the specified time, the file will be removed
 
 IPFS - lookup
 
