@@ -501,6 +501,8 @@ TODO: This needs to be refined.
 
 - File storage contracts will be timed. After the specified time, the file will be removed
 
+- File storage contracts will be timed. After the specified time, the file will be removed
+
 IPFS - lookup
 
 Immutable databases - immudb instead of a blockchain
