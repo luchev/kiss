@@ -213,6 +213,9 @@ Otherwise, the query for the file will return the Keeper node, which should have
 The Validator node stores the file on that Node and on the 2 nodes after it in the ID space.
 The Validator also stores in a ledger, metadata about the file, in order to be able to verify the file integrity at a later point in time.
 
+### How to store large files?
+<!-- TODO -->
+
 <!--TODO-->
 TODO: Expand this section with more details
 
@@ -246,6 +249,7 @@ This decision is also synchronized with the Verifier nodes.
 TODO: Research cryptographic puzzles
 
 ## Blockchain vs Ledger stores
+<!-- TODO -->
 
 Blockchain
 
@@ -288,6 +292,11 @@ sybil malicious peers try to get into 3 consecutive positions and exchange info 
 
 - Leaving and joining the network - don't count nodes who recently joined as a part of the replication factor.
 
+Potential attack: If a Keeper is malicious, and it starts receiving requests to duplicate its state (all their files), it might decide to disconnect from the network in order to harm the integrity.
+
+### How to avoid malicious Keepers?
+<!-- TODO -->
+
 ### How to avoid malicious Validators?
 
 The files a Validator is responsible for will be rotated.
@@ -295,7 +304,9 @@ The files a Validator is responsible for will be rotated.
 <!-- TODO -->
 TODO: How to rotate them to ensure Validators don't choose which files they validate but also make this decentralized? - Consensus algorithms?
 
-## Redundancy
+## Reliability
+
+### Redundancy
 
 The replication factor of the system will be 3.
 i.e. Each file will be stored on 3 different nodes.
@@ -305,17 +316,36 @@ If one of these 3 nodes doesn't want to store the file, they have to store a poi
 
 The Validator nodes will occasionally check for the existence of the 3 replicas of each file and if 1 or more of these replicas are down, the Validators will store it to another Keeper node.
 
-## Availability
+### Availability
 
-<!-- TODO -->
+The system should be able to achieve 99.999% uptime.
+This is assuming normal operation.
+We have not dived deep into DDoS attack prevention, but anything else should be accounted for.
+We're also assuming peers joining the network intend to stay in the network for at least 24 hours.
+Without long-lived peers the system cannot exist.
 
-## Reliability
+### Performance
 
-<!-- TODO -->
+Querying should run in O(log N) time, where N is the number of Keeper nodes in the network.
+Queries should be optimized for proximity.
+i.e. Queries should be answered by the Keeper node, closest to the requester.
 
-## Performance
+### Integrity
 
-<!-- TODO -->
+We assume normal operation conditions (conditions under which the network can continue to exist).
+Under those conditions the network should never lose a file.
+This implies that if a peer goes down the Validator responsible for this Keeper should prioritize restoring the redundancy of the files that were stored on that Keeper.
+
+### Scalability
+
+The system should be able to handle increase in traffic with linear increase in resources.
+
+### Maintainability
+
+The components of the system should check for updates every 1h.
+When two peers communicate they should exchange versions and if they are on different versions, they have to check the current latest version and update themselves.
+
+The different components of the system should be able to update themselves with downtime of less than 1 minute.
 
 ## Security
 
@@ -332,13 +362,6 @@ The Validator nodes will occasionally check for the existence of the 3 replicas 
 - (Optional) Access to files will be allowed only for clients, which have an access token (key)
 - File editing/deletion will be allowed only for clients, which have a certificate (key)
 
-## Maintainability
-
-<!-- TODO -->
-
-## Scalability
-
-<!-- TODO -->
 
 ## Normal operational flow
 
@@ -386,8 +409,6 @@ TODO: This needs to be refined.
 - Read [https://www.dolthub.com/blog/2022-03-21-immutable-database/](https://www.dolthub.com/blog/2022-03-21-immutable-database/)
 - Read [https://www.tibco.com/reference-center/what-is-immutable-data](https://www.tibco.com/reference-center/what-is-immutable-data)
 - Read [https://www.dock.io/post/verifiable-credentials](https://www.dock.io/post/verifiable-credentials)
-- https://narasimmantech.com/how-namespaces-and-cgroups-can-help-you-isolate-your-processes/
-- https://nixhacker.com/sandboxing-and-program-isolation-in-linux-using-many-approaches/
 
 - File storage contracts will be timed. After the specified time, the file will be removed
 
