@@ -165,9 +165,11 @@ i.e. Isolating files from different clients will be more difficult and not as ap
 
 ### (Preferred) Option 2: Hierarchical naming scheme
 
-The scheme would be `/client/namespace/UUIDv4`.
+The scheme would be `/client/namespace/UUIDv4/chunk-number`.
 This scheme is not fixed and can be extended by clients.
 The critical parts are the client name and the filename.
+The chunk number is the file part, it may be omitted for small files.
+Read more on large files in the Storing section of this document.
 
 Using this scheme Keeper nodes can separate files into different locations and isolate them if necessary.
 It would also make gatekeeping easier, as the Keeper node can at any point in time choose to drop files for a certain client if that client is deemed to store malicious data.
@@ -214,7 +216,14 @@ The Validator node stores the file on that Node and on the 2 nodes after it in t
 The Validator also stores in a ledger, metadata about the file, in order to be able to verify the file integrity at a later point in time.
 
 ### How to store large files?
-<!-- TODO -->
+
+Large files are files with size over 100mb.
+Such files will be split into chunks of size 100mb.
+Each chunk will be saved separately, as it has a different hash of its name - `/client/namespace/UUIDv4/chunk-number`.
+The number of chunks will be saved as metadata when saving the file.
+Chunk 0 will have no chunk number.
+When a client wants to download the file they will retrieve chunk 0 and information that there are X other chunks with numbers [1, X-1].
+Then the client can proceed to download the other chunks as well.
 
 ## Peers leaving the network
 
@@ -246,21 +255,35 @@ This decision is also synchronized with the Verifier nodes.
 TODO: Research cryptographic puzzles
 
 ## Blockchain vs Ledger stores
-<!-- TODO -->
 
-Blockchain
+In order for the Validators to keep the Keeper nodes in check, they need to store information about which nodes are behaving properly.
+In order to achieve this Validators need to keep track of what contracts have been established between clients and the system.
+The last thing that needs to be kept track of is which Validators are responsible for which Keepers at a given point in time.
+Potentially, there is 1 more piece of information that can be stored - what files with what names are being stored, but this can be inferred from the contracts, which are stored anyway.
+Additionally, we are not handling indexing inside the system so keeping more metadata for files is meaningless.
 
-- Data is immutable
-- Decentralized
-- Distributed consensus
+To be able to store this kind of data - Behavior of Keepers, Contracts, and Validators state, we can employ two storage strategies - blockchain or a Ledger store.
 
-Ledger
+### Blockchain
 
-- Data is immutable
-- Centralized
-- Options
+A blockchain is essentially a decentralized ledger.
+It would be best if we can use this storage method, but it has 2 major downsides:
+
+- Development complexity (it is harder to work with)
+- Bad scalability = low number of queries/writes per second (depending on the blockchain used)
+
+### (Preferred) Ledger
+
+Using a ledger is the centralized version of a blockchain.
+We get all the benefits of immutable data storage, but we lose the decentralization part.
+However, the pros of a ledger are that we'd get better scalability and easier development as it's not too different from a SQL data store.
+
+The ledger options we have are mainly
   - [https://github.com/google/trillian](https://github.com/google/trillian)
   - [https://github.com/codenotary/immudb](https://github.com/codenotary/immudb)
+
+<!-- TODO -->
+TODO: investigate which option to use, maybe immudb
 
 ### Available blockchains
 
