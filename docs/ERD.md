@@ -148,9 +148,20 @@ If this turns out to be impossible we'll have to rely on hash trees ([Merkle tre
 
 Another way to verify the file integrity is to request the whole file from the Keeper node and compare it to a checksum for the file, which has been calculated at the time of adding the file to the system.
 
+Cons
+
+- Increases traffic in the system
+
+Pros
+
+- Provides cover traffic. Read more under the Attacks against integrity section
+
 <!-- TODO -->
 TODO: Investigate if zero-knowledge proof is possible in this case
 TODO: Investigate these options in more detail
+
+<!-- TODO -->
+TODO: How to rotate them to ensure Validators don't choose which files they validate but also make this decentralized? - Consensus algorithms?
 
 ## Resource naming scheme
 
@@ -321,8 +332,14 @@ Potential attack: If a Keeper is malicious, and it starts receiving requests to 
 
 The files a Validator is responsible for will be rotated.
 
-<!-- TODO -->
-TODO: How to rotate them to ensure Validators don't choose which files they validate but also make this decentralized? - Consensus algorithms?
+### Attacks against the integrity
+
+When a Keeper node disconnects the files it stored should be duplicated hence a lot of traffic is generated to its neighbors.
+This can be abused by malicious neighbors to also disconnect from the network in order to destroy the integrity.
+i.e. If all 3 Nodes that have a single file disconnect in short succession, that file is lost.
+The best way to solve this issue is with cover traffic.
+Alternatively we could restore the lost Node slower, but this increases the risk of the other nodes disconnecting.
+
 
 ## Reliability
 
@@ -381,7 +398,6 @@ The different components of the system should be able to update themselves with 
 - (Optional) Files will be stored encrypted
 - (Optional) Access to files will be allowed only for clients, which have an access token (key)
 - File editing/deletion will be allowed only for clients, which have a certificate (key)
-
 
 ## Normal operational flow
 
@@ -443,3 +459,15 @@ Ensure it can’t be spammed
 Zero knowledge proofs
 
 Merkle trees
+
+store files at differently aged peers, don't store only on old peers as they can still be sybils
+or store on different scored nodes
+
+think about prioritizing downloading from younger peers
+if a request comes from someone with a low score don't give high rewards
+
+harnessing the power of disruptive technologies (peer to peer) andy oram
+
+e/s kademlia crypto puzzle
+
+think about centralized authority allowing peers to join
