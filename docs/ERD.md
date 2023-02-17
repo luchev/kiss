@@ -306,7 +306,6 @@ TODO: Research cryptographic puzzles
 TODO: Check the E/S Kademlia algorithm hash(hash) = node ID
 
 ## Blockchain vs Ledger stores
-<!-- TODO -->
 
 In order for the Validators to keep the Keeper nodes in check, they need to store information about which nodes are behaving properly.
 In order to achieve this Validators need to keep track of what contracts have been established between clients and the system.
