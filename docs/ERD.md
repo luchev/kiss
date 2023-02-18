@@ -136,15 +136,15 @@ In order to adhere to this requirement, the system must handle Keeper nodes, whi
 Validators will check every couple of minutes if a file is stored on all Keeper nodes, that promised to store it.
 If a Keeper node is inaccessible or cannot prove that they are storing the file, the Validator will store the file elsewhere.
 
-##### (Preferred) Option 1: Zero knowledge proof
+#### (Preferred) Option 1: Zero knowledge proof
 
 Ideally this will verification will be handled with a zero-knowledge proof.
 
-##### Option 2: Hash trees
+#### Option 2: Hash trees
 
 If this turns out to be impossible we'll have to rely on hash trees ([Merkle trees](https://en.wikipedia.org/wiki/Merkle_tree)).
 
-##### Option 3: Complete file retrieval
+#### Option 3: Complete file retrieval
 
 Another way to verify the file integrity is to request the whole file from the Keeper node and compare it to a checksum for the file, which has been calculated at the time of adding the file to the system.
 
@@ -160,8 +160,47 @@ Pros
 TODO: Investigate if zero-knowledge proof is possible in this case
 TODO: Investigate these options in more detail
 
+### Rotating Validator Keepers
+
+In order to avoid malicious Validators and Keepers being matched, we need to rotate the relationships Validator-files.
+
+#### Option 1: Random exchange
+
+Two Validators randomly communicate and agree to exchange the files they are responsible for.
+This option has a downside that if there is a malicious Validator it might choose to not switch its responsibilities or to switch them with another malicious Validator.
+
+#### Option 2: Move by 1
+
+The Validators are in a structured p2p network, and they know their neighborhood.
+In this case we can have at a certain period of time, all validators move their responsibilities to the next Validator in the ID space.
+i.e. We rotate all Validators by 1.
+
+To ensure this is happening Validators will either keep a small part of the files they are responsible for and will check with +2/+4/... Validators in ID space if they received the correct files.
+If they didn't - the validators in the middle will be flagged as untrusted.
+After a number of such flags, the untrusted Validator will be kicked from the network.
+
+The downside of this option is that if many malicious peers connect to the network and happen to have neighboring IDs, they can exploit the system by not doing any work.
+
+#### Option 3: Use a consensus algorithm
+
+Occasionally all Validators have to agree on a number that they are going to use for rotation.
+e.g. if the number chosen is 3, all Validators will give their responsible files to the Validator that is 3 positions away from them in the ID space.
+
+This makes the algorithm more unpredictable and harder for Malicious peers to exploit.
+The downside is the consensus algorithm.
+It can take time to reach consensus, it's hard to implement, and it can be compromised by malicious Validators if they are >50%.
+To mitigate this issue the Validators might fall back to Option 2 if too many random numbers are rejected by the consensus algorithm.
+
+#### (Preferred) Option 4: Use a centralized system
+
+All Validators can be centralized, or can be controlled by a centralized component, which has a database, where the responsibilities of each Validator are stored.
+This database will also have all the Contracts, so it can reshuffle the responsibilities at will.
+
+While this option is centralized, it's much easier to implement.
+It is preferred because it can be used as a stepping stone and can always be expanded or swapped by any of the other options at a later time.
+
 <!-- TODO -->
-TODO: How to rotate them to ensure Validators don't choose which files they validate but also make this decentralized? - Consensus algorithms?
+TODO: Think what can go wrong if the Validators misbehave. Can we validate the Validators? Then maybe we don't need Validators, but the Keeper nodes can employ that validation logic and validate each other?
 
 ## Resource naming scheme
 
@@ -264,6 +303,7 @@ This decision is also synchronized with the Verifier nodes.
 
 <!-- TODO -->
 TODO: Research cryptographic puzzles
+TODO: Check the E/S Kademlia algorithm hash(hash) = node ID
 
 ## Blockchain vs Ledger stores
 
@@ -326,11 +366,21 @@ sybil malicious peers try to get into 3 consecutive positions and exchange info 
 Potential attack: If a Keeper is malicious, and it starts receiving requests to duplicate its state (all their files), it might decide to disconnect from the network in order to harm the integrity.
 
 ### How to avoid malicious Keepers?
+
+A malicious Keeper is a Keeper that breaks the storage Contracts.
+The Validators are responsible for checking these Contracts periodically.
+If a Validator finds a misbehaving Keeper/disconnected Keeper, that Keeper is flagged and the Validator will prompt other Validators to check on the Keeper.
+If the Validators reach consensus that the Keeper is misbehaving, the Keeper is kicked from the network and loses all its rewards.
+
 <!-- TODO -->
+TODO: Expand on this section
 
 ### How to avoid malicious Validators?
 
 The files a Validator is responsible for will be rotated.
+
+<!-- TODO -->
+TODO: Can we validate the validators? Maybe a cross-validator check?
 
 ### Attacks against the integrity
 
@@ -339,7 +389,6 @@ This can be abused by malicious neighbors to also disconnect from the network in
 i.e. If all 3 Nodes that have a single file disconnect in short succession, that file is lost.
 The best way to solve this issue is with cover traffic.
 Alternatively we could restore the lost Node slower, but this increases the risk of the other nodes disconnecting.
-
 
 ## Reliability
 
@@ -387,6 +436,8 @@ The different components of the system should be able to update themselves with 
 ## Security
 
 <!-- TODO -->
+TODO: improve on this section
+
 - Preventing peers from hurting the durable storage guarantee: Peers will be required to “stake” their tokens in order to store files. File integrity will be checked randomly and if the file storage contract isn’t obeyed, the peer’s tokens will be slashed
 - Preventing Sybil attacks: Peers joining the network need to solve a crypto puzzle before joining. Also, the previous point
 - Eclipse attacks: The reason we are choosing a structured p2p network
@@ -395,6 +446,8 @@ The different components of the system should be able to update themselves with 
 ## Privacy
 
 <!-- TODO -->
+TODO: improve on this section
+
 - (Optional) Files will be stored encrypted
 - (Optional) Access to files will be allowed only for clients, which have an access token (key)
 - File editing/deletion will be allowed only for clients, which have a certificate (key)
@@ -467,7 +520,5 @@ think about prioritizing downloading from younger peers
 if a request comes from someone with a low score don't give high rewards
 
 harnessing the power of disruptive technologies (peer to peer) andy oram
-
-e/s kademlia crypto puzzle
 
 think about centralized authority allowing peers to join
