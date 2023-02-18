@@ -522,3 +522,5 @@ if a request comes from someone with a low score don't give high rewards
 harnessing the power of disruptive technologies (peer to peer) andy oram
 
 think about centralized authority allowing peers to join
+
+ARA
