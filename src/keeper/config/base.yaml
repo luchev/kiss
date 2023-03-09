@@ -1,0 +1,4 @@
+storage:
+  type: local
+  path: data
+  # create: true

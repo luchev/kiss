@@ -1,0 +1,2 @@
+[workspace]
+members = ["src/keeper", "src/verifier", "src/common"]
