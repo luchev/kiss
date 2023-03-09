@@ -501,6 +501,8 @@ TODO: This needs to be refined.
 
 - File storage contracts will be timed. After the specified time, the file will be removed
 
+- File storage contracts will be timed. After the specified time, the file will be removed
+
 IPFS - lookup
 
 Immutable databases - immudb instead of a blockchain
@@ -523,4 +525,14 @@ harnessing the power of disruptive technologies (peer to peer) andy oram
 
 think about centralized authority allowing peers to join
 
-ARA
+ARA - read
+
+https://github.com/fristonio/docker.rs
+
+https://stackoverflow.com/questions/36604010/how-can-i-build-multiple-binaries-with-cargo
+
+to avoid deadlock every peer should have some minimum traffic allowed
+
+neighbors (interested peers) keep recent transactions and sign them so the peer's contribution can be verified
+
+look at game theory
