@@ -1,8 +1,10 @@
 mod settings;
 mod storage;
 mod types;
+mod deps;
 
 use common::errors::{die, Result};
+use deps::dependency_injector;
 use log::info;
 use runtime_injector::{Injector, IntoSingleton, Svc, TypedProvider};
 use storage::{local::LocalStorage, Storage};
@@ -18,16 +20,9 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
-    let mut builder = Injector::builder();
-    builder.provide(
-        LocalStorage::default
-            .singleton()
-            .with_interface::<dyn Storage>(),
-    );
-
-    let injector = builder.build();
+    let injector = dependency_injector()?;
     let storage: Svc<dyn Storage> = injector.get().unwrap();
-    storage.put("file1".into(), vec![b'c']).await;
+    storage.put("file1".into(), vec![b'b']).await;
     println!(
         "{}",
         String::from_utf8(storage.get("file1".into()).await.unwrap()).unwrap()

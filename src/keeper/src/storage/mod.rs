@@ -11,13 +11,12 @@ use self::local::LocalStorage;
 
 #[async_trait]
 pub trait Storage: Service {
-    fn list(&self);
     async fn put(&self, path: PathBuf, data: Bytes) -> Result<()>;
     async fn get(&self, path: PathBuf) -> Result<Bytes>;
 }
 
 interface! {
     dyn Storage = [
-        LocalStorage
+        LocalStorage,
     ]
 }

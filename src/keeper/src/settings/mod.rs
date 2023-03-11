@@ -5,7 +5,7 @@ use common::{
 use config::{Config, File};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum StorageType {
     Local {
@@ -31,7 +31,7 @@ impl StorageType {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Settings {
     pub storage: StorageType,
 }
