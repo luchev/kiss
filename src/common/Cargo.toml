@@ -1,0 +1,18 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+config = "0.13.3"
+env_logger = "0.10.0"
+error-chain = "0.12.4"
+exitcode = "1.1.2"
+log = "0.4.17"
+object_store = "0.5.5"
+rust_docker = "0.1.1"
+tonic = "0.8.3"
+
+[lib]
+name = "common"
+path = "src/lib.rs"
