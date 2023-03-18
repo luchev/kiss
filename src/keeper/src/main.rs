@@ -11,18 +11,16 @@ use runtime_injector::Svc;
 
 #[tokio::main]
 async fn main() {
-    env_logger::init();
-    let run = run().await;
-    match run {
-        Ok(()) => info!("shutting down..."),
+    match run().await {
+        Ok(()) => info!("shutting down"),
         Err(err) => die(err),
     }
 }
 
 async fn run() -> Result<()> {
+    env_logger::init();
     let injector = dependency_injector()?;
     let grpc_provider: Svc<dyn GrpcProvider> = injector.get().unwrap();
     grpc_provider.start().await?;
-
     Ok(())
 }

@@ -1,6 +1,6 @@
 storage:
   type: local
   path: data
-  # create: true
+  create: true
 grpc:
   port: 5005

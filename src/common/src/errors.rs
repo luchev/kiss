@@ -82,10 +82,6 @@ impl Die for Error {
     }
 }
 
-// impl Service for Error {
-
-// }
-
 pub fn die(err: Error) {
     error!("{}", err);
     error!("{}", err.help());
