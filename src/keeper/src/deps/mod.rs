@@ -1,18 +1,36 @@
 use crate::{
-    settings::Settings,
+    grpc::{GrpcProvider, GrpcProviderImpl},
+    settings::{Settings, SettingsImpl, Storage as StorageSettings},
     storage::{local::LocalStorage, Storage},
 };
 use common::errors::Result;
-use dill::*;
+use runtime_injector::{Injector, IntoSingleton, TypedProvider};
 
-pub fn dependency_injector() -> Result<Catalog> {
-    let settings = Settings::new()?;
-    let mut builder = CatalogBuilder::new();
-    builder.add_builder(
-        builder_for::<LocalStorage>().with_settings(settings)
+pub fn dependency_injector() -> Result<Injector> {
+    let settings = SettingsImpl::new()?;
+    let mut builder = Injector::builder();
+    match settings.clone().storage {
+        StorageSettings::Local { path, create: _create } => {
+            builder.provide(
+                LocalStorage::constructor(path)
+                    .singleton()
+                    .with_interface::<dyn Storage>(),
+            );
+        }
+        StorageSettings::Docker => todo!(),
+    }
+
+    builder.provide(
+        SettingsImpl::constructor()
+            .singleton()
+            .with_interface::<dyn Settings>(),
     );
-    builder.bind::<dyn Storage, LocalStorage>();
-    // builder.with_arg::<LocalStorage, Settings>(settings);
+
+    builder.provide(
+        GrpcProviderImpl
+            .singleton()
+            .with_interface::<dyn GrpcProvider>(),
+    );
 
     Ok(builder.build())
 }

@@ -1,13 +1,13 @@
+mod deps;
+mod grpc;
 mod settings;
 mod storage;
 mod types;
-mod deps;
-
 use common::errors::{die, Result};
 use deps::dependency_injector;
+use grpc::GrpcProvider;
 use log::info;
-use runtime_injector::{Injector, IntoSingleton, Svc, TypedProvider};
-use storage::{local::LocalStorage, Storage};
+use runtime_injector::Svc;
 
 #[tokio::main]
 async fn main() {
@@ -21,12 +21,8 @@ async fn main() {
 
 async fn run() -> Result<()> {
     let injector = dependency_injector()?;
-    let storage: Svc<dyn Storage> = injector.get().unwrap();
-    storage.put("file1".into(), vec![b'b']).await;
-    println!(
-        "{}",
-        String::from_utf8(storage.get("file1".into()).await.unwrap()).unwrap()
-    );
+    let grpc_provider: Svc<dyn GrpcProvider> = injector.get().unwrap();
+    grpc_provider.start().await?;
 
     Ok(())
 }

@@ -1,0 +1,22 @@
+syntax = "proto3";
+package keeper_grpc;
+
+message PutRequest {
+    string path = 1;
+    bytes content = 2;
+}
+
+message PutResponse { }
+
+message GetRequest {
+    string path = 1;
+}
+
+message GetResponse {
+    bytes content = 1;
+}
+
+service KeeperGrpc {
+    rpc Put(PutRequest) returns (PutResponse);
+    rpc Get(GetRequest) returns (GetResponse);
+}

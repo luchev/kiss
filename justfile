@@ -1,5 +1,5 @@
 keeper:
-    cargo run --package keeper
+    RUST_LOG=info cargo run --package keeper
 
 verifier:
-    cargo run --package verifier
+    RUST_LOG=info cargo run --package verifier

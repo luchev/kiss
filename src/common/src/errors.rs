@@ -1,4 +1,4 @@
-use std::process::exit;
+use std::{error::Error as StdError, process::exit};
 
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
@@ -37,9 +37,21 @@ error_chain! {
             description(""),
             display(""),
         }
+        SettingsParseError(e: String) {
+            description(""),
+            display(""),
+        }
         StoragePutFailed(e: object_store::Error) {
             description("storing file failed"),
             display("storing file failed: {}", e),
+        }
+        StorageGetFailed(e: object_store::Error) {
+            description("retrieving file failed"),
+            display("retrieving file failed: {}", e),
+        }
+        GrpcServerStartFailed(e: tonic::transport::Error) {
+            description("grpc server failed to start"),
+            display("grpc server failed to start: {}", e.source().map_or("unknown transport error".to_string(), |e| e.to_string())),
         }
     }
 }
@@ -59,7 +71,8 @@ impl ErrorHelper for Error {
             ErrorKind::DockerConnectionFailed(_) => "Is Docker running?",
             ErrorKind::LocalStorageFail(_) => "Does the directory exist?",
             _ => "No help available for this error",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -68,6 +81,10 @@ impl Die for Error {
         die(self);
     }
 }
+
+// impl Service for Error {
+
+// }
 
 pub fn die(err: Error) {
     error!("{}", err);
