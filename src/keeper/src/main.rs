@@ -3,11 +3,15 @@ mod grpc;
 mod settings;
 mod storage;
 mod types;
-use common::errors::{die, Result};
+mod p2p;
+
+use common::{die, Res};
 use deps::dependency_injector;
-use grpc::GrpcProvider;
+use grpc::IGrpcProvider;
 use log::info;
+use p2p::ISwarm;
 use runtime_injector::Svc;
+use tokio::try_join;
 
 #[tokio::main]
 async fn main() {
@@ -17,10 +21,10 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<()> {
+async fn run() -> Res<()> {
     env_logger::init();
     let injector = dependency_injector()?;
-    let grpc_provider: Svc<dyn GrpcProvider> = injector.get().unwrap();
-    grpc_provider.start().await?;
-    Ok(())
+    let grpc_provider: Svc<dyn IGrpcProvider> = injector.get().unwrap();
+    let kad: Svc<dyn ISwarm> = injector.get().unwrap();
+    try_join!(grpc_provider.start(), kad.start()).map(|_| ())
 }

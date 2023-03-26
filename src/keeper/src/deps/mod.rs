@@ -1,35 +1,46 @@
 use crate::{
-    grpc::{GrpcProvider, GrpcProviderImpl},
-    settings::{Settings, SettingsImpl, Storage as StorageSettings},
-    storage::{local::LocalStorage, Storage},
+    grpc::{IGrpcProvider, GrpcProvider},
+    settings::{ISettings, Settings, Storage as StorageSettings},
+    storage::{local::LocalStorage, IStorage}, p2p::{Swarm, ISwarm},
 };
-use common::errors::Result;
+use common::Res;
 use runtime_injector::{Injector, IntoSingleton, TypedProvider};
 
-pub fn dependency_injector() -> Result<Injector> {
-    let settings = SettingsImpl::new()?;
+pub fn dependency_injector() -> Res<Injector> {
+    let settings = Settings::new();
     let mut builder = Injector::builder();
+    // TODO remove duplicated settings initialization
+
+    builder.provide(
+        Settings::constructor()
+            .singleton()
+            .with_interface::<dyn ISettings>(),
+    );
+
     match settings.clone().storage {
-        StorageSettings::Local { path, create: _create } => {
+        StorageSettings::Local {
+            path,
+            create: _create,
+        } => {
             builder.provide(
                 LocalStorage::constructor(path)
                     .singleton()
-                    .with_interface::<dyn Storage>(),
+                    .with_interface::<dyn IStorage>(),
             );
         }
         StorageSettings::Docker => todo!(),
     }
 
     builder.provide(
-        SettingsImpl::constructor()
+        GrpcProvider
             .singleton()
-            .with_interface::<dyn Settings>(),
+            .with_interface::<dyn IGrpcProvider>(),
     );
 
     builder.provide(
-        GrpcProviderImpl
+        Swarm
             .singleton()
-            .with_interface::<dyn GrpcProvider>(),
+            .with_interface::<dyn ISwarm>(),
     );
 
     Ok(builder.build())

@@ -540,3 +540,10 @@ look at game theory
 The Kademlia Distributed Hash Table (DHT) subsystem in libp2p is a DHT implementation largely based on the Kademlia [0] whitepaper, augmented with notions from S/Kademlia [1], Coral [2] and the BitTorrent DHT.
 
 https://github.com/libp2p/specs/blob/master/kad-dht/README.md
+
+
+https://www.youtube.com/watch?v=HqSXFlCwgMY
+
+https://www.youtube.com/watch?v=bz4Y_HwyEqM
+
+https://en.wikipedia.org/wiki/Binary-to-text_encoding

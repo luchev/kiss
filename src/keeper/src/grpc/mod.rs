@@ -1,14 +1,16 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
-use crate::settings::Settings;
-use crate::storage::Storage;
+use crate::settings::ISettings;
+use crate::storage::IStorage;
 use async_trait::async_trait;
+use base64::Engine;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
-use common::errors::{ErrorKind, Result};
+use common::{ErrorKind, Res};
 use keeper_grpc::keeper_grpc_server::KeeperGrpc;
 use keeper_grpc::keeper_grpc_server::KeeperGrpcServer;
 use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
+use libp2p_identity::Keypair;
 use log::info;
 use runtime_injector::{interface, Service, Svc};
 use std::net::SocketAddr;
@@ -16,20 +18,26 @@ use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-#[async_trait]
-pub trait GrpcProvider: Service {
-    async fn start(&self) -> Result<()>;
+interface! {
+    dyn IGrpcProvider = [
+        GrpcProvider,
+    ]
 }
 
-pub struct GrpcProviderImpl(pub Svc<dyn Settings>, pub Svc<dyn Storage>);
+#[async_trait]
+pub trait IGrpcProvider: Service {
+    async fn start(&self) -> Res<()>;
+}
+
+pub struct GrpcProvider(pub Svc<dyn ISettings>, pub Svc<dyn IStorage>);
 
 struct Grpc {
-    storage: Svc<dyn Storage>,
+    storage: Svc<dyn IStorage>,
 }
 
 #[async_trait]
-impl GrpcProvider for GrpcProviderImpl {
-    async fn start(&self) -> Result<()> {
+impl IGrpcProvider for GrpcProvider {
+    async fn start(&self) -> Res<()> {
         let grpc = Grpc {
             storage: self.1.clone(),
         };
@@ -97,8 +105,11 @@ impl KeeperGrpc for Grpc {
     }
 }
 
-interface! {
-    dyn GrpcProvider = [
-        GrpcProviderImpl,
-    ]
+impl Grpc {
+    async fn generate_keypair(&self) -> String {
+        let local_key = Keypair::generate_ed25519();
+        let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
+            .encode(local_key.to_protobuf_encoding().unwrap());
+        return encoded;
+    }
 }
