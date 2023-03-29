@@ -1,7 +1,8 @@
 use crate::{
-    grpc::{IGrpcProvider, GrpcProvider},
+    grpc::{GrpcProvider, IGrpcHandler},
+    p2p::{ISwarm, SwarmProvider},
     settings::{ISettings, Settings, Storage as StorageSettings},
-    storage::{local::LocalStorage, IStorage}, p2p::{Swarm, ISwarm},
+    storage::{local::LocalStorage, IStorage},
 };
 use common::Res;
 use runtime_injector::{Injector, IntoSingleton, TypedProvider};
@@ -31,17 +32,9 @@ pub fn dependency_injector() -> Res<Injector> {
         StorageSettings::Docker => todo!(),
     }
 
-    builder.provide(
-        GrpcProvider
-            .singleton()
-            .with_interface::<dyn IGrpcProvider>(),
-    );
+    builder.provide(GrpcProvider.with_interface::<dyn IGrpcHandler>());
+    builder.provide(SwarmProvider.with_interface::<dyn ISwarm>());
+    let injector = builder.build();
 
-    builder.provide(
-        Swarm
-            .singleton()
-            .with_interface::<dyn ISwarm>(),
-    );
-
-    Ok(builder.build())
+    Ok(injector)
 }

@@ -1,7 +1,7 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
-use crate::settings::ISettings;
+use crate::settings::{self, ISettings};
 use crate::storage::IStorage;
 use async_trait::async_trait;
 use base64::Engine;
@@ -12,36 +12,59 @@ use keeper_grpc::keeper_grpc_server::KeeperGrpcServer;
 use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
 use libp2p_identity::Keypair;
 use log::info;
-use runtime_injector::{interface, Service, Svc};
+use runtime_injector::{
+    interface, InjectResult, Injector, RequestInfo, Service, Svc, TypedProvider,
+};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
 interface! {
-    dyn IGrpcProvider = [
-        GrpcProvider,
+    dyn IGrpcHandler = [
+        GrpcHandler,
     ]
 }
 
+pub struct GrpcProvider;
+impl TypedProvider for GrpcProvider {
+    type Result = GrpcHandler;
+
+    fn provide_typed(
+        &mut self,
+        _injector: &Injector,
+        _request_info: &RequestInfo,
+    ) -> InjectResult<Svc<Self::Result>> {
+        let port = _injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
+        let storage: Svc<dyn IStorage> = _injector.get().unwrap();
+
+        Ok(Svc::new(GrpcHandler {
+            inner: Inner { storage },
+            port,
+        }))
+    }
+}
+
 #[async_trait]
-pub trait IGrpcProvider: Service {
+pub trait IGrpcHandler: Service {
     async fn start(&self) -> Res<()>;
 }
 
-pub struct GrpcProvider(pub Svc<dyn ISettings>, pub Svc<dyn IStorage>);
-
-struct Grpc {
+#[derive(Clone)]
+struct Inner {
     storage: Svc<dyn IStorage>,
 }
 
+pub struct GrpcHandler {
+    inner: Inner,
+    port: u16,
+}
+
 #[async_trait]
-impl IGrpcProvider for GrpcProvider {
+impl IGrpcHandler for GrpcHandler {
     async fn start(&self) -> Res<()> {
-        let grpc = Grpc {
-            storage: self.1.clone(),
-        };
-        let addr = format!("{}:{}", LOCALHOST, self.0.grpc().port)
+        // self.inner.
+        let addr = format!("{}:{}", LOCALHOST, self.port)
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
 
@@ -54,7 +77,7 @@ impl IGrpcProvider for GrpcProvider {
 
         Server::builder()
             .layer(middleware)
-            .add_service(KeeperGrpcServer::new(grpc))
+            .add_service(KeeperGrpcServer::new(self.inner.clone()))
             .serve(addr)
             .await
             .map_err(|e| ErrorKind::GrpcServerStartFailed(e))?;
@@ -64,7 +87,7 @@ impl IGrpcProvider for GrpcProvider {
 }
 
 #[async_trait]
-impl KeeperGrpc for Grpc {
+impl KeeperGrpc for Inner {
     async fn put(
         &self,
         request: Request<PutRequest>,
@@ -105,7 +128,7 @@ impl KeeperGrpc for Grpc {
     }
 }
 
-impl Grpc {
+impl GrpcHandler {
     async fn generate_keypair(&self) -> String {
         let local_key = Keypair::generate_ed25519();
         let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
