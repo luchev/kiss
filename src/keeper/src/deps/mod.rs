@@ -32,8 +32,8 @@ pub fn dependency_injector() -> Res<Injector> {
         StorageSettings::Docker => todo!(),
     }
 
-    builder.provide(GrpcProvider.with_interface::<dyn IGrpcHandler>());
-    builder.provide(SwarmProvider.with_interface::<dyn ISwarm>());
+    builder.provide(GrpcProvider.singleton().with_interface::<dyn IGrpcHandler>());
+    builder.provide(SwarmProvider.singleton().with_interface::<dyn ISwarm>());
     let injector = builder.build();
 
     Ok(injector)

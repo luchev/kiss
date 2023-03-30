@@ -19,9 +19,9 @@ use libp2p::{
 use libp2p_identity::Keypair;
 use log::info;
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, Svc, TypedProvider,
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
-use std::{time::Duration, sync::Arc};
+use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 interface! {
@@ -124,16 +124,15 @@ impl ISwarm for Swarm {
 
 pub struct SwarmProvider;
 
-impl TypedProvider for SwarmProvider {
+impl ServiceFactory<()> for SwarmProvider {
     type Result = Swarm;
 
-    fn provide_typed(
+    fn invoke(
         &mut self,
-        _injector: &Injector,
+        injector: &Injector,
         _request_info: &RequestInfo,
-    ) -> InjectResult<Svc<Self::Result>> {
-        let settings: Svc<dyn ISettings> = _injector.get().unwrap();
-
+    ) -> InjectResult<Self::Result> {
+        let settings: Svc<dyn ISettings> = injector.get().unwrap();
         let local_key = Keypair::from_protobuf_encoding(
             &base64::engine::general_purpose::STANDARD_NO_PAD
                 .decode(settings.swarm().keypair)
@@ -171,9 +170,9 @@ impl TypedProvider for SwarmProvider {
             )
             .unwrap();
 
-        Ok(Svc::new(Swarm {
+        Ok(Swarm {
             inner: Arc::new(Mutex::new(swarm)),
-        }))
+        })
     }
 }
 

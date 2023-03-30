@@ -1,7 +1,7 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
-use crate::settings::{self, ISettings};
+use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;
 use base64::Engine;
@@ -13,7 +13,7 @@ use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
 use libp2p_identity::Keypair;
 use log::info;
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, Svc, TypedProvider,
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -27,21 +27,21 @@ interface! {
 }
 
 pub struct GrpcProvider;
-impl TypedProvider for GrpcProvider {
+impl ServiceFactory<()> for GrpcProvider {
     type Result = GrpcHandler;
 
-    fn provide_typed(
+    fn invoke(
         &mut self,
-        _injector: &Injector,
+        injector: &Injector,
         _request_info: &RequestInfo,
-    ) -> InjectResult<Svc<Self::Result>> {
-        let port = _injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
-        let storage: Svc<dyn IStorage> = _injector.get().unwrap();
+    ) -> InjectResult<Self::Result> {
+        let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
+        let storage: Svc<dyn IStorage> = injector.get().unwrap();
 
-        Ok(Svc::new(GrpcHandler {
+        Ok(GrpcHandler {
             inner: Inner { storage },
             port,
-        }))
+        })
     }
 }
 
@@ -63,7 +63,6 @@ pub struct GrpcHandler {
 #[async_trait]
 impl IGrpcHandler for GrpcHandler {
     async fn start(&self) -> Res<()> {
-        // self.inner.
         let addr = format!("{}:{}", LOCALHOST, self.port)
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
@@ -109,7 +108,7 @@ impl KeeperGrpc for Inner {
 
     async fn get(
         &self,
-        request: Request<GetRequest>, // Accept request of type HelloRequest
+        request: Request<GetRequest>,
     ) -> std::result::Result<Response<GetResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.path);
@@ -122,7 +121,7 @@ impl KeeperGrpc for Inner {
                 _ => Status::unknown("Unknown storage error".to_string()),
             })?;
 
-        let reply = GetResponse { content: content };
+        let reply = GetResponse { content };
 
         Ok(Response::new(reply))
     }

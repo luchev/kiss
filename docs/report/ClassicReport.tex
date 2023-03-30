@@ -1,0 +1,80 @@
+\RequirePackage{fix-cm} % fix some latex issues see: http://texdoc.net/texmf-dist/doc/latex/base/fixltx2e.pdf
+\documentclass[ twoside,openright,titlepage,numbers=noenddot,headinclude,%1headlines,% letterpaper a4paper
+                footinclude=true,cleardoublepage=empty,abstractoff, % <--- obsolete, remove (todo)
+                BCOR=5mm,paper=a4,fontsize=11pt,%11pt,a4paper,%
+                ngerman,american,%
+                ]{scrreprt}
+\input{classicthesis-config}
+\def\myDegree{Decentralized storage system with verification}
+\def\myTitle{Decentralized storage system with verification}
+\def\mySubtitle{(KISS)}
+\addbibresource{Bibliography}
+\hyphenation{Micro-soft Web-RTC Chun-ky-Spread Ka-dem-lia Pas-try mac-OS block-chain time-stamp Et-he-re-um}
+
+\begin{document}
+\frenchspacing
+\raggedbottom
+\selectlanguage{american} % american
+\pagenumbering{arabic}
+\pagestyle{plain}
+\include{FrontBackmatter/DirtyTitlepage}
+\pagestyle{scrheadings}
+
+% \chapter{Abstract}
+% \label{cha:abstract}
+
+% \chapter{Introduction}
+% \label{cha:Introduction}
+
+% \chapter{Architecture \& Implementation}
+% \label{cha:arch-impl}
+
+\chapter{Related Work}
+\label{cha:related-work}
+The aim in this project is to build resilience against malicious peers,
+and not invent a new decentralized storage system.
+Comparison between performance between decentralized storage systems has been done before
+\cite{kadvschordvspastry} \& \cite{2019AIPC.2129b0131A}.
+The results are that Pastry is the best performer for networks with under 1000 peers, but the paper also suggests
+that Kademlia would probably outperform Pastry for larger networks.
+The results in the 2 papers differ somewhat from the results in \cite{compstudy}, which suggests that theoretically
+Chord should outperform Kademlia, but the paper does not do in-depth evaluation of networks with high churn rate
+like \cite{kadvschordvspastry}.
+Since we want to build a network to withstand disruptions, we build this project on top of Kademlia.
+This means that in terms of performance of the storage operations, the system in this project will perform the same
+as Kademlia.
+
+We can compare the approach in this project and the ARA proposal \cite{ara}.
+Both KISS and ARA rely on auditing to detect malicious peers or degradation of the network.
+Peers in ARA share information about what data they are storing and check each other.
+This is based on a list of interested peers (peers that interacted recently with a given peer).
+An issue with this approach would be if a subnet is composed entirely of malicious peers.
+Then a peer that has only malicious peers can freely adjust its credit score.
+Another problem would be generation of fake requests in order to increase the score of malicious peers,
+that store data for these requests.
+Peers in the KISS network are not as "smart" and do not have such responsibility.
+Instead, the audit is performed by an outside entity.
+This entity might be another decentralized network or a centralized authority.
+This delegates the complexity of keeping the network in check and shifts the problem elsewhere.
+KISS doesn't suffer from malicious subnets, because the Verifiers are rotated and are not necessarily
+peers that have recently interacted with a given peer.
+Also, since answering requests doesn't contribute to a peer's reputation there is no reason to flood the
+network with fake requests.
+It doesn't mean that a DoS attack against the network is impossible,
+but it will not affect the reputation/trust of the peers.
+A strategy to prevent a DoS attack can be deployed separately from the reputation system,
+and it can work independently without taking into account what is the underlying network.
+
+
+
+
+
+% \chapter{Evaluation \& Conclusion}
+% \label{cha:evaluation}
+
+\appendix
+\chapter{An appendix}
+\label{cha:an-appendix}
+
+\printbibliography
+\end{document}

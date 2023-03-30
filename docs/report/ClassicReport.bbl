@@ -1,0 +1,182 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.2 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated as
+% required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+\datalist[entry]{nyt/global//global/global}
+  \entry{2019AIPC.2129b0131A}{inproceedings}{}
+    \name{author}{3}{}{%
+      {{hash=AMAM}{%
+         family={{Ariff}},
+         familyi={A\bibinitperiod},
+         given={Mohammad Asyraff\bibnamedelima Mohamad},
+         giveni={M\bibinitperiod\bibinitdelim A\bibinitperiod\bibinitdelim
+  M\bibinitperiod},
+      }}%
+      {{hash=MS}{%
+         family={{Mohamad}},
+         familyi={M\bibinitperiod},
+         given={Suraya},
+         giveni={S\bibinitperiod},
+      }}%
+      {{hash=AAR}{%
+         family={{Amran}},
+         familyi={A\bibinitperiod},
+         given={Ahmad\bibnamedelima Roshidi},
+         giveni={A\bibinitperiod\bibinitdelim R\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{AMAMMSAAR1}
+    \strng{fullhash}{AMAMMSAAR1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{sortinit}{A}
+    \field{sortinithash}{A}
+    \field{booktitle}{5th International Conference on Green Design and
+  Manufacture (IConGDM 2019)}
+    \verb{doi}
+    \verb 10.1063/1.5118139
+    \endverb
+    \field{eid}{020131}
+    \field{pages}{020131}
+    \field{series}{American Institute of Physics Conference Series}
+    \field{title}{{A review of recent advancement in Kademlia and Chord
+  algorithm}}
+    \field{volume}{2129}
+    \field{month}{07}
+    \field{year}{2019}
+  \endentry
+
+  \entry{ara}{inproceedings}{}
+    \name{author}{2}{}{%
+      {{hash=HM}{%
+         family={Ham},
+         familyi={H\bibinitperiod},
+         given={MyungJoo},
+         giveni={M\bibinitperiod},
+      }}%
+      {{hash=AG}{%
+         family={Agha},
+         familyi={A\bibinitperiod},
+         given={Gul},
+         giveni={G\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{HMAG1}
+    \strng{fullhash}{HMAG1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{sortinit}{H}
+    \field{sortinithash}{H}
+    \field{booktitle}{Fifth IEEE International Conference on Peer-to-Peer
+  Computing (P2P'05)}
+    \verb{doi}
+    \verb 10.1109/P2P.2005.2
+    \endverb
+    \field{pages}{125\bibrangedash 132}
+    \field{title}{ARA: a robust audit to prevent free-riding in P2P networks}
+    \field{year}{2005}
+  \endentry
+
+  \entry{compstudy}{article}{}
+    \name{author}{2}{}{%
+      {{hash=KL}{%
+         family={KABRE},
+         familyi={K\bibinitperiod},
+         given={Lacine},
+         giveni={L\bibinitperiod},
+      }}%
+      {{hash=TT}{%
+         family={Tiendrebeogo},
+         familyi={T\bibinitperiod},
+         given={Telesphore},
+         giveni={T\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{KLTT1}
+    \strng{fullhash}{KLTT1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{sortinit}{K}
+    \field{sortinithash}{K}
+    \verb{doi}
+    \verb 10.5121/ijp2p.2021.12301
+    \endverb
+    \field{pages}{1\bibrangedash 22}
+    \field{title}{Comparative Study of can, Pastry, Kademlia and Chord DHTS}
+    \field{volume}{12}
+    \field{journaltitle}{International Journal of Peer to Peer Networks}
+    \field{month}{08}
+    \field{year}{2021}
+  \endentry
+
+  \entry{kadvschordvspastry}{article}{}
+    \name{author}{6}{}{%
+      {{hash=RR}{%
+         family={Ruslan},
+         familyi={R\bibinitperiod},
+         given={Rafiza},
+         giveni={R\bibinitperiod},
+      }}%
+      {{hash=ZA}{%
+         family={Zailani},
+         familyi={Z\bibinitperiod},
+         given={Ayu},
+         giveni={A\bibinitperiod},
+      }}%
+      {{hash=ZH}{%
+         family={Zukri},
+         familyi={Z\bibinitperiod},
+         given={Hidayah},
+         giveni={H\bibinitperiod},
+      }}%
+      {{hash=KNK}{%
+         family={Kamarudin},
+         familyi={K\bibinitperiod},
+         given={Nur\bibnamedelima Khairani},
+         giveni={N\bibinitperiod\bibinitdelim K\bibinitperiod},
+      }}%
+      {{hash=ESJ}{%
+         family={Elias},
+         familyi={E\bibinitperiod},
+         given={Shamsul\bibnamedelima Jamel},
+         giveni={S\bibinitperiod\bibinitdelim J\bibinitperiod},
+      }}%
+      {{hash=AR}{%
+         family={Ahmad},
+         familyi={A\bibinitperiod},
+         given={R.Badlishah},
+         giveni={R\bibinitperiod},
+      }}%
+    }
+    \strng{namehash}{RR+1}
+    \strng{fullhash}{RRZAZHKNKESJAR1}
+    \field{labelnamesource}{author}
+    \field{labeltitlesource}{title}
+    \field{sortinit}{R}
+    \field{sortinithash}{R}
+    \verb{doi}
+    \verb 10.11591/eei.v8i2.1449
+    \endverb
+    \field{title}{Routing performance of structured overlay in Distributed Hash
+  Tables (DHT) for P2P}
+    \field{volume}{8}
+    \field{journaltitle}{Bulletin of Electrical Engineering and Informatics}
+    \field{month}{03}
+    \field{year}{2019}
+  \endentry
+\enddatalist
+\endinput

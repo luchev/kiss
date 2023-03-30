@@ -1,0 +1,66 @@
+This is BibTeX, Version 0.99d (TeX Live 2022)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: ClassicReport.aux
+The style file: biblatex.bst
+A level-1 auxiliary file: FrontBackmatter/DirtyTitlepage.aux
+Reallocated glb_str_ptr (elt_size=4) to 20 items from 10.
+Reallocated global_strs (elt_size=200001) to 20 items from 10.
+Reallocated glb_str_end (elt_size=4) to 20 items from 10.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated wiz_functions (elt_size=4) to 6000 items from 3000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+Database file #1: ClassicReport-blx.bib
+Database file #2: Bibliography.bib
+Biblatex version: 3.17
+Reallocated wiz_functions (elt_size=4) to 9000 items from 6000.
+Reallocated singl_function (elt_size=4) to 100 items from 50.
+You've used 5 entries,
+            6399 wiz_defined-function locations,
+            1234 strings with 10039 characters,
+and the built_in function-call counts, 42066 in all, are:
+= -- 3426
+> -- 642
+< -- 146
++ -- 1222
+- -- 281
+* -- 3278
+:= -- 5147
+add.period$ -- 0
+call.type$ -- 5
+change.case$ -- 4
+chr.to.int$ -- 62
+cite$ -- 8
+duplicate$ -- 3973
+empty$ -- 3558
+format.name$ -- 343
+if$ -- 8440
+int.to.chr$ -- 0
+int.to.str$ -- 8
+missing$ -- 0
+newline$ -- 177
+num.names$ -- 164
+pop$ -- 1536
+preamble$ -- 1
+purify$ -- 69
+quote$ -- 0
+skip$ -- 890
+stack$ -- 0
+substring$ -- 6854
+swap$ -- 707
+text.length$ -- 168
+text.prefix$ -- 4
+top$ -- 1
+type$ -- 158
+warning$ -- 0
+while$ -- 621
+width$ -- 0
+write$ -- 173
