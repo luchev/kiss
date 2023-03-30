@@ -11,3 +11,10 @@ Cargo.lock
 data/
 .vscode/
 docs/external
+*.log
+*.blg
+*.bbl
+*.aux
+*.bib
+*.out
+*.run.xml
