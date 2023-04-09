@@ -1,7 +1,7 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
-use crate::p2p::ISwarm;
+use crate::p2p::swarm::ISwarm;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;

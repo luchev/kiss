@@ -1,4 +1,3 @@
-use common::Res;
 use tokio::sync::oneshot;
 
 pub type Bytes = Vec<u8>;
