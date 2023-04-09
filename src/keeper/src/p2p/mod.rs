@@ -1,4 +1,7 @@
-use crate::settings::ISettings;
+use crate::{
+    settings::ISettings,
+    types::{Bytes, Responder},
+};
 use async_trait::async_trait;
 use base64::Engine as _;
 use common::{ErrorKind, Res};
@@ -21,8 +24,14 @@ use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
-use std::{sync::Arc, time::Duration};
-use tokio::sync::Mutex;
+use std::time::Duration;
+use tokio::{
+    select,
+    sync::{
+        mpsc::{self},
+        oneshot, Mutex,
+    },
+};
 
 interface! {
     dyn ISwarm = [
@@ -33,93 +42,116 @@ interface! {
 #[async_trait]
 pub trait ISwarm: Service {
     async fn start(&self) -> Res<()>;
-    fn get_swarm(&self) -> Arc<Mutex<libp2p::Swarm<CombinedBehaviour>>>;
 }
 
 pub struct Swarm {
-    inner: Arc<Mutex<libp2p::Swarm<CombinedBehaviour>>>,
+    inner: Mutex<Box<libp2p::Swarm<CombinedBehaviour>>>,
+    receiver: Svc<Mutex<mpsc::Receiver<Instruction>>>,
 }
 
 #[async_trait]
 impl ISwarm for Swarm {
-    fn get_swarm(&self) -> Arc<Mutex<libp2p::Swarm<CombinedBehaviour>>> {
-        return self.inner.clone();
-    }
-
     async fn start(&self) -> Res<()> {
+        let mut swarm = self.inner.lock().await;
+        let mut receiver = self.receiver.lock().await;
         loop {
-            let event = self.inner.lock().await.select_next_some().await;
-            println!("{:?}", event);
-            match event {
-                SwarmEvent::NewListenAddr { address, .. } => {
-                    println!("Listening in {address:?}");
-                }
-                SwarmEvent::Behaviour(WireEvent::Mdns(mdns::Event::Discovered(list))) => {
-                    for (peer_id, multiaddr) in list {
-                        self.inner
-                            .lock()
-                            .await
-                            .behaviour_mut()
-                            .kademlia
-                            .add_address(&peer_id, multiaddr);
+            select! {
+                instruction = receiver.recv() => {
+                    let instruction = instruction.unwrap();
+                    info!("instruction {:?}", instruction);
+                    match instruction{
+                        Instruction::Put{key, val ,resp} => {
+                            info!("putting key {:?} val {:?}", key, val);
+                            resp.send(()).unwrap();
+                        },
+                        _ => todo!(),
                     }
-                }
-                SwarmEvent::Behaviour(WireEvent::Kademlia(
-                    KademliaEvent::OutboundQueryProgressed { result, .. },
-                )) => match result {
-                    QueryResult::GetProviders(Ok(GetProvidersOk::FoundProviders {
-                        key,
-                        providers,
-                        ..
-                    })) => {
-                        for peer in providers {
-                            println!(
-                                "Peer {peer:?} provides key {:?}",
-                                std::str::from_utf8(key.as_ref()).unwrap()
-                            );
-                        }
-                    }
-                    QueryResult::GetProviders(Err(err)) => {
-                        eprintln!("Failed to get providers: {err:?}");
-                    }
-                    QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(PeerRecord {
-                        record: Record { key, value, .. },
-                        ..
-                    }))) => {
-                        println!(
-                            "Got record {:?} {:?}",
-                            std::str::from_utf8(key.as_ref()).unwrap(),
-                            std::str::from_utf8(&value).unwrap(),
-                        );
-                    }
-                    QueryResult::GetRecord(Ok(_)) => {}
-                    QueryResult::GetRecord(Err(err)) => {
-                        eprintln!("Failed to get record: {err:?}");
-                    }
-                    QueryResult::PutRecord(Ok(PutRecordOk { key })) => {
-                        println!(
-                            "Successfully put record {:?}",
-                            std::str::from_utf8(key.as_ref()).unwrap()
-                        );
-                    }
-                    QueryResult::PutRecord(Err(err)) => {
-                        eprintln!("Failed to put record: {err:?}");
-                    }
-                    QueryResult::StartProviding(Ok(AddProviderOk { key })) => {
-                        println!(
-                            "Successfully put provider record {:?}",
-                            std::str::from_utf8(key.as_ref()).unwrap()
-                        );
-                    }
-                    QueryResult::StartProviding(Err(err)) => {
-                        eprintln!("Failed to put provider record: {err:?}");
-                    }
-                    _ => {}
                 },
-                _ => {}
+                event = swarm.select_next_some() => {
+                    info!("swarm event {:?}", event);
+                    match event {
+                        SwarmEvent::NewListenAddr { address, .. } => {
+                            info!("listening on {address:?}");
+                        }
+                        SwarmEvent::Behaviour(WireEvent::Mdns(mdns::Event::Discovered(list))) => {
+                            info!("Discovered peers: {list:?}");
+                            for (peer_id, multiaddr) in list {
+                                swarm
+                                    .behaviour_mut()
+                                    .kademlia
+                                    .add_address(&peer_id, multiaddr);
+                            }
+                        }
+                        SwarmEvent::Behaviour(WireEvent::Kademlia(
+                            KademliaEvent::OutboundQueryProgressed { result, .. },
+                        )) => match result {
+                            QueryResult::GetProviders(Ok(GetProvidersOk::FoundProviders {
+                                key,
+                                providers,
+                                ..
+                            })) => {
+                                for peer in providers {
+                                    println!(
+                                        "Peer {peer:?} provides key {:?}",
+                                        std::str::from_utf8(key.as_ref()).unwrap()
+                                    );
+                                }
+                            }
+                            QueryResult::GetProviders(Err(err)) => {
+                                eprintln!("Failed to get providers: {err:?}");
+                            }
+                            QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(PeerRecord {
+                                record: Record { key, value, .. },
+                                ..
+                            }))) => {
+                                println!(
+                                    "Got record {:?} {:?}",
+                                    std::str::from_utf8(key.as_ref()).unwrap(),
+                                    std::str::from_utf8(&value).unwrap(),
+                                );
+                            }
+                            QueryResult::GetRecord(Ok(_)) => {}
+                            QueryResult::GetRecord(Err(err)) => {
+                                eprintln!("Failed to get record: {err:?}");
+                            }
+                            QueryResult::PutRecord(Ok(PutRecordOk { key })) => {
+                                println!(
+                                    "Successfully put record {:?}",
+                                    std::str::from_utf8(key.as_ref()).unwrap()
+                                );
+                            }
+                            QueryResult::PutRecord(Err(err)) => {
+                                eprintln!("Failed to put record: {err:?}");
+                            }
+                            QueryResult::StartProviding(Ok(AddProviderOk { key })) => {
+                                println!(
+                                    "Successfully put provider record {:?}",
+                                    std::str::from_utf8(key.as_ref()).unwrap()
+                                );
+                            }
+                            QueryResult::StartProviding(Err(err)) => {
+                                eprintln!("Failed to put provider record: {err:?}");
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                }
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub enum Instruction {
+    Get {
+        key: String,
+    },
+    Put {
+        key: String,
+        val: Bytes,
+        resp: Responder<()>,
+    },
 }
 
 pub struct SwarmProvider;
@@ -133,6 +165,8 @@ impl ServiceFactory<()> for SwarmProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let settings: Svc<dyn ISettings> = injector.get().unwrap();
+        let receiver: Svc<Mutex<mpsc::Receiver<Instruction>>> = injector.get().unwrap();
+
         let local_key = Keypair::from_protobuf_encoding(
             &base64::engine::general_purpose::STANDARD_NO_PAD
                 .decode(settings.swarm().keypair)
@@ -144,7 +178,6 @@ impl ServiceFactory<()> for SwarmProvider {
 
         let local_peer_id = PeerId::from(local_key.public());
         info!("starting peer with id: {}", local_peer_id);
-        // TODO make peer id persistent
 
         let mut swarm = {
             let cfg = KademliaConfig::default()
@@ -171,7 +204,8 @@ impl ServiceFactory<()> for SwarmProvider {
             .unwrap();
 
         Ok(Swarm {
-            inner: Arc::new(Mutex::new(swarm)),
+            inner: Mutex::new(Box::new(swarm)),
+            receiver: receiver,
         })
     }
 }

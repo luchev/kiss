@@ -155,9 +155,10 @@ Cons
 Pros
 
 - Provides cover traffic. Read more under the Attacks against integrity section
+- Simple solution to code
 
 <!-- TODO -->
-TODO: Investigate if zero-knowledge proof is possible in this case
+TODO: Read https://eprint.iacr.org/2018/654.pdf
 TODO: Investigate these options in more detail
 
 ### Rotating Validator Keepers
@@ -547,3 +548,5 @@ https://www.youtube.com/watch?v=HqSXFlCwgMY
 https://www.youtube.com/watch?v=bz4Y_HwyEqM
 
 https://en.wikipedia.org/wiki/Binary-to-text_encoding
+
+https://github.com/google/trillian/blob/master/docs/papers/VerifiableDataStructures.pdf

@@ -1,0 +1,5 @@
+ledger:
+  type: immudb
+  username: immudb
+  password: immudb
+  address: 127.0.0.1:3322

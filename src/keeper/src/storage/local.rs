@@ -54,13 +54,7 @@ impl IStorage for LocalStorage {
 }
 
 impl LocalStorage {
-    pub fn constructor(path: String) -> impl Fn() -> LocalStorage {
-        move || {
-            LocalStorage::new_with_prefix(path.as_str()).unwrap()
-        }
-    }
-
-    fn new_with_prefix(prefix: &str) -> Res<Self> {
+    pub fn new(prefix: &str) -> Res<Self> {
         let object_store = local::LocalFileSystem::new_with_prefix(prefix)
             .map_err(|err| ErrorKind::LocalStorageFail(err))?;
         Ok(LocalStorage {

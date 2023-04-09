@@ -18,3 +18,5 @@ docs/external
 *.bib
 *.out
 *.run.xml
+
+submodules

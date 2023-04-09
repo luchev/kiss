@@ -1,6 +1,7 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
+use crate::p2p::ISwarm;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;
@@ -36,10 +37,11 @@ impl ServiceFactory<()> for GrpcProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
-        let storage: Svc<dyn IStorage> = injector.get().unwrap();
+        let storage = injector.get::<Svc<dyn IStorage>>().unwrap();
+        let swarm = injector.get::<Svc<dyn ISwarm>>().unwrap();
 
         Ok(GrpcHandler {
-            inner: Inner { storage },
+            inner: Inner { storage, swarm },
             port,
         })
     }
@@ -53,6 +55,7 @@ pub trait IGrpcHandler: Service {
 #[derive(Clone)]
 struct Inner {
     storage: Svc<dyn IStorage>,
+    swarm: Svc<dyn ISwarm>,
 }
 
 pub struct GrpcHandler {
@@ -102,7 +105,6 @@ impl KeeperGrpc for Inner {
             })?;
 
         let reply = PutResponse {};
-
         Ok(Response::new(reply))
     }
 
@@ -122,7 +124,6 @@ impl KeeperGrpc for Inner {
             })?;
 
         let reply = GetResponse { content };
-
         Ok(Response::new(reply))
     }
 }

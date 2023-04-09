@@ -1,11 +1,11 @@
 use std::{env, net::{IpAddr, SocketAddr}};
 
 use common::{
-    consts::{self, CONFIG_BASE_DIR},
+    consts::{self, KEEPER_CONFIG_BASE_DIR},
     ErrorKind,
 };
 use config::{Config, Environment, File};
-use runtime_injector::{interface, Service};
+use runtime_injector::{interface, Service, ServiceFactory, Injector, RequestInfo, InjectResult, Svc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -75,19 +75,21 @@ impl ISettings for Settings {
     }
 }
 
-impl Settings {
-    pub fn new() -> Self {
-        Self::constructor()()
-    }
+pub struct SettingsProvider;
+impl ServiceFactory<()> for SettingsProvider {
+    type Result = Settings;
 
-    pub fn constructor() -> impl Fn() -> Self {
-        || {
+    fn invoke(
+        &mut self,
+        _injector: &Injector,
+        _request_info: &RequestInfo,
+    ) -> InjectResult<Self::Result> {
             let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
-            Config::builder()
-                .add_source(File::with_name(consts::CONFIG_BASE))
+            Ok(Config::builder()
+                .add_source(File::with_name(consts::KEEPER_CONFIG_BASE))
                 .add_source(
-                    File::with_name(&format!("{}/{}", CONFIG_BASE_DIR, env_conf)).required(false),
+                    File::with_name(&format!("{}/{}", KEEPER_CONFIG_BASE_DIR, env_conf)).required(false),
                 )
                 .add_source(Environment::with_prefix("KISS"))
                 .build()
@@ -96,7 +98,7 @@ impl Settings {
                 .try_deserialize()
                 .map_err(|err| ErrorKind::ConfigErr(err))
                 .unwrap() // TODO remove
-        }
+            )
     }
 }
 
