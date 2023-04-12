@@ -29,7 +29,9 @@ async fn run() -> Res<()> {
     let sender: Svc<dyn ISwarmController> = injector.get().unwrap();
 
     let x = async || {
-        sender.set().await;
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let x = sender.set("key1".to_string(), "value1".as_bytes().to_vec()).await;
+        let x = sender.get("key1".to_string()).await;
         Ok(())
     };
 

@@ -3,6 +3,7 @@ use std::{error::Error as StdError, process::exit};
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
 use libp2p_identity::DecodingError;
+use libp2p_kad::{PutRecordError, GetRecordError};
 use log::error;
 
 trait ErrorHelper {
@@ -61,6 +62,18 @@ error_chain! {
         KeypairBase64DecodeError(e: base64::DecodeError) {
             description("keypair decoding error"),
             display("keypair decoding error: {}", e),
+        }
+        SwarmPutRecordError(e: PutRecordError) {
+            description("putting record to swarm failed"),
+            display("putting record to swarm failed: {}", e),
+        }
+        SwarmGetRecordError(e: GetRecordError) {
+            description("getting record from swarm failed"),
+            display("getting record from swarm failed: {}", e),
+        }
+        SwarmGetRecordUnknownError(e: String) {
+            description("getting record from swarm failed"),
+            display("getting record from swarm failed: {}", e),
         }
     }
 }

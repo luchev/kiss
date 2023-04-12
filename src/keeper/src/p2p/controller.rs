@@ -1,5 +1,7 @@
-use crate::types::{Bytes, Responder};
+use crate::types::{Bytes, Responder, OneReceiver};
 use async_trait::async_trait;
+use common::Res;
+use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
@@ -21,48 +23,68 @@ impl ServiceFactory<()> for SwarmControllerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let sender: Svc<Mutex<mpsc::Sender<Instruction>>> = injector.get().unwrap();
-        Ok(SwarmController { sender })
+        let sender: Svc<Mutex<mpsc::Sender<SwarmInstruction>>> = injector.get().unwrap();
+        Ok(SwarmController { swarm_api: sender })
     }
 }
 
 #[async_trait]
 pub trait ISwarmController: Service {
-    async fn set(&self);
+    async fn set(&self, key: String, value: Bytes) -> Res<()>;
+    async fn get(&self, key: String) -> Res<Bytes>;
 }
 
 pub struct SwarmController {
-    sender: Svc<Mutex<mpsc::Sender<Instruction>>>,
+    swarm_api: Svc<Mutex<mpsc::Sender<SwarmInstruction>>>,
 }
 
 #[async_trait]
 impl ISwarmController for SwarmController {
-    async fn set(&self) {
-        let (resp_tx, resp_rx) = oneshot::channel::<()>();
+    async fn set(&self, key: String, value: Bytes) -> Res<()> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
 
-        self.sender
+        self.swarm_api
             .lock()
             .await
-            .send(Instruction::Put {
-                key: "key1".into(),
-                val: "val1".into(),
-                resp: resp_tx,
+            .send(SwarmInstruction::Put {
+                key,
+                value,
+                resp: sender,
             })
             .await
             .unwrap();
-        let result = resp_rx.await;
-        println!("res: {:?}", result);
+        let receiving_channel = receiver.await.unwrap();
+        let result = receiving_channel.await.unwrap();
+        info!("put result: {:?}", result);
+
+        // let (sender, receiver) = oneshot::channel::<QueryId>();
+        result
+    }
+
+    async fn get(&self, key: String) -> Res<Bytes> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<Bytes>>>();
+        self.swarm_api
+            .lock()
+            .await
+            .send(SwarmInstruction::Get { key, resp: sender })
+            .await
+            .unwrap();
+        let receiving_channel = receiver.await.unwrap();
+        let result = receiving_channel.await.unwrap();
+        info!("get result: {:?}", result);
+        result
     }
 }
 
 #[derive(Debug)]
-pub enum Instruction {
+pub enum SwarmInstruction {
     Get {
         key: String,
+        resp: Responder<OneReceiver<Res<Bytes>>>,
     },
     Put {
         key: String,
-        val: Bytes,
-        resp: Responder<()>,
+        value: Bytes,
+        resp: Responder<OneReceiver<Res<()>>>,
     },
 }
