@@ -87,16 +87,16 @@ impl ILedger for ImmuLedger {
             *client = Some(
                 ImmuServiceClient::connect(format!("http://{}", self.address))
                     .await
-                    .unwrap(),
+                    .expect("Failed to connect to immudb"),
             );
         }
 
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().expect("invalid immudb client");
         let request = tonic::Request::new(LoginRequest {
             user: self.username.as_bytes().to_vec(),
             password: self.password.as_bytes().to_vec(),
         });
-        let response = client.login(request).await.unwrap();
+        let response = client.login(request).await.expect("failed to login to immudb");
 
         self.token = response.into_inner().token;
         info!("Logged into immudb");

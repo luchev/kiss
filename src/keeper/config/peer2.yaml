@@ -1,6 +1,6 @@
 storage:
   type: local
-  path: data_peer2
+  path: data/peer2
   create: true
 grpc:
   port: 5004

@@ -8,6 +8,7 @@ use tokio::sync::{mpsc, Mutex};
 
 pub mod controller;
 pub mod swarm;
+// mod store;
 
 pub fn module() -> runtime_injector::Module {
     let (sender, receiver) = mpsc::channel::<SwarmInstruction>(5);

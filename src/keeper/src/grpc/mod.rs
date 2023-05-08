@@ -1,7 +1,7 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
-use crate::p2p::swarm::ISwarm;
+use crate::p2p::controller::ISwarmController;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;
@@ -38,10 +38,10 @@ impl ServiceFactory<()> for GrpcProvider {
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
         let storage = injector.get::<Svc<dyn IStorage>>().unwrap();
-        let swarm = injector.get::<Svc<dyn ISwarm>>().unwrap();
+        let swarm_controller = injector.get::<Svc<dyn ISwarmController>>().unwrap();
 
         Ok(GrpcHandler {
-            inner: Inner { storage, swarm },
+            inner: Inner { storage, swarm_controller },
             port,
         })
     }
@@ -55,7 +55,7 @@ pub trait IGrpcHandler: Service {
 #[derive(Clone)]
 struct Inner {
     storage: Svc<dyn IStorage>,
-    swarm: Svc<dyn ISwarm>,
+    swarm_controller: Svc<dyn ISwarmController>,
 }
 
 pub struct GrpcHandler {
@@ -96,13 +96,15 @@ impl KeeperGrpc for Inner {
     ) -> std::result::Result<Response<PutResponse>, Status> {
         let request = request.into_inner();
         info!("received a put request for {}", request.path);
-        self.storage
-            .put(request.path.into(), request.content)
-            .await
-            .map_err(|e| match e.kind() {
-                ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-                _ => Status::unknown("Unknown storage error".to_string()),
-            })?;
+        let res = self.swarm_controller.set(request.path.into(), request.content).await;
+        info!("kad result {:?}", res);
+        // self.storage
+        //     .put(request.path.into(), request.content)
+        //     .await
+        //     .map_err(|e| match e.kind() {
+        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
+        //         _ => Status::unknown("Unknown storage error".to_string()),
+        //     })?;
 
         let reply = PutResponse {};
         Ok(Response::new(reply))
@@ -114,14 +116,17 @@ impl KeeperGrpc for Inner {
     ) -> std::result::Result<Response<GetResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.path);
-        let content = self
-            .storage
-            .get(request.path.into())
-            .await
-            .map_err(|e| match e.kind() {
-                ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-                _ => Status::unknown("Unknown storage error".to_string()),
-            })?;
+        let res = self.swarm_controller.get(request.path.into()).await;
+        info!("kad result {:?}", res);
+        let content = res.unwrap();
+        // let content = self
+        //     .storage
+        //     .get(request.path.into())
+        //     .await
+        //     .map_err(|e| match e.kind() {
+        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
+        //         _ => Status::unknown("Unknown storage error".to_string()),
+        //     })?;
 
         let reply = GetResponse { content };
         Ok(Response::new(reply))

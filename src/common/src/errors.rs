@@ -5,6 +5,7 @@ use error_chain::{error_chain, ExitCode};
 use libp2p_identity::DecodingError;
 use libp2p_kad::{PutRecordError, GetRecordError};
 use log::error;
+use tonic::Status;
 
 trait ErrorHelper {
     fn help(&self) -> String;
@@ -74,6 +75,10 @@ error_chain! {
         SwarmGetRecordUnknownError(e: String) {
             description("getting record from swarm failed"),
             display("getting record from swarm failed: {}", e),
+        }
+        GrpcError(e: Status) {
+            description("grpc error"),
+            display("grpc error: {}", e),
         }
     }
 }

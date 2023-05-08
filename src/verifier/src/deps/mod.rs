@@ -1,6 +1,6 @@
 use crate::{
     ledger::{ImmuLedger, LedgerProvider},
-    settings::{ISettings, SettingsProvider},
+    settings::{ISettings, SettingsProvider}, grpc::{keeper_client::{KeeperGatewayProvider, IKeeperGateway, KeeperGateway}, GrpcHandlerProvider, IGrpcHandler},
 };
 use common::Res;
 use runtime_injector::{Injector, IntoSingleton, TypedProvider};
@@ -17,6 +17,16 @@ pub fn dependency_injector() -> Res<Injector> {
         LedgerProvider
             .singleton()
             .with_interface::<Mutex<ImmuLedger>>(),
+    );
+    injector.provide(
+        KeeperGatewayProvider
+            .singleton()
+            .with_interface::<Mutex<KeeperGateway>>(),
+    );
+    injector.provide(
+        GrpcHandlerProvider
+            .singleton()
+            .with_interface::<dyn IGrpcHandler>(),
     );
 
     Ok(injector.build())

@@ -1,4 +1,23 @@
 syntax = "proto3";
 package verifier_grpc;
 
-service VerifierService { }
+message StoreRequest {
+    string name = 1;
+    bytes content = 2;
+}
+
+message StoreResponse { }
+
+message RetrieveRequest {
+    string name = 1;
+}
+
+message RetrieveResponse {
+    string name = 1;
+    bytes content = 2;
+}
+
+service VerifierGrpc {
+    rpc Store(StoreRequest) returns (StoreResponse);
+    rpc Retrieve(RetrieveRequest) returns (RetrieveResponse);
+}

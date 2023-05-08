@@ -21,6 +21,11 @@ pub enum Ledger {
     },
 }
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+pub struct KeeperGateway {
+    pub addresses: Vec<SocketAddr>,
+}
+
 impl Default for Ledger {
     fn default() -> Self {
         Self::Immudb {
@@ -31,18 +36,36 @@ impl Default for Ledger {
     }
 }
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct Grpc {
+    pub port: u16,
+}
+
 pub trait ISettings: Service {
     fn ledger(&self) -> Ledger;
+    fn grpc(&self) -> Grpc;
+    fn keeper_gateway(&self) -> KeeperGateway;
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Settings {
     pub ledger: Ledger,
+    pub grpc: Grpc,
+    pub keeper_gateway: KeeperGateway,
 }
 
 impl ISettings for Settings {
     fn ledger(&self) -> Ledger {
         self.ledger.clone()
+    }
+
+    fn grpc(&self) -> Grpc {
+        self.grpc.clone()
+    }
+
+    fn keeper_gateway(&self) -> KeeperGateway {
+        self.keeper_gateway.clone()
     }
 }
 

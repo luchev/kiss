@@ -26,13 +26,13 @@ impl ServiceFactory<()> for StorageProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let settings = injector.get::<Svc<dyn ISettings>>().unwrap().storage();
+        let settings = injector.get::<Svc<dyn ISettings>>().expect("settings not provided as dependency").storage();
 
         match settings {
             StorageSettings::Local {
                 path,
                 create: _create,
-            } => Ok(LocalStorage::new(path.as_str()).unwrap()),
+            } => Ok(LocalStorage::new(path.as_str()).expect("failed to create local storage")),
             StorageSettings::Docker => todo!(),
         }
     }
