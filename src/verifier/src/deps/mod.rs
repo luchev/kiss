@@ -1,6 +1,6 @@
 use crate::{
     ledger::{ImmuLedger, LedgerProvider},
-    settings::{ISettings, SettingsProvider}, grpc::{keeper_client::{KeeperGatewayProvider, IKeeperGateway, KeeperGateway}, GrpcHandlerProvider, IGrpcHandler},
+    settings::{ISettings, SettingsProvider}, grpc::{keeper_client::{KeeperGatewayProvider, KeeperGateway}, GrpcHandlerProvider, IGrpcHandler},
 };
 use common::Res;
 use runtime_injector::{Injector, IntoSingleton, TypedProvider};

@@ -4,28 +4,25 @@ use crate::{
     },
     settings::{ISettings, Ledger},
 };
+use async_std::task::block_on;
 use async_trait::async_trait;
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use std::net::SocketAddr;
-use tokio::sync::Mutex;
+use tokio::{runtime::Handle, sync::Mutex};
 use tonic::{metadata::MetadataMap, transport::Channel, Extensions};
 
 #[async_trait]
 pub trait ILedger: Service {
     async fn set(&mut self, key: String, value: String);
     async fn get(&mut self, key: String) -> String;
-    async fn login(&mut self);
 }
 
 #[derive(Debug)]
 pub struct ImmuLedger {
     token: String,
-    address: SocketAddr,
-    username: String,
-    password: String,
     client: Mutex<Option<ImmuServiceClient<Channel>>>,
 }
 
@@ -80,27 +77,6 @@ impl ILedger for ImmuLedger {
         let response = client.get(request).await.unwrap();
         String::from_utf8(response.into_inner().value).unwrap()
     }
-
-    async fn login(&mut self) {
-        let mut client = self.client.lock().await;
-        if client.is_none() {
-            *client = Some(
-                ImmuServiceClient::connect(format!("http://{}", self.address))
-                    .await
-                    .expect("Failed to connect to immudb"),
-            );
-        }
-
-        let client = client.as_mut().expect("invalid immudb client");
-        let request = tonic::Request::new(LoginRequest {
-            user: self.username.as_bytes().to_vec(),
-            password: self.password.as_bytes().to_vec(),
-        });
-        let response = client.login(request).await.expect("failed to login to immudb");
-
-        self.token = response.into_inner().token;
-        info!("Logged into immudb");
-    }
 }
 
 pub struct LedgerProvider;
@@ -118,13 +94,14 @@ impl ServiceFactory<()> for LedgerProvider {
                 username,
                 password,
                 address,
-            } => ImmuLedger {
-                username,
-                password,
-                address,
-                token: "".to_string(),
-                client: Mutex::new(None),
-            },
+            } => {
+                let handle = Handle::current();
+                let (client, token) = block_on(async { handle.spawn(login(address, username, password)).await.unwrap() });
+                ImmuLedger {
+                    token: token,
+                    client: Mutex::new(Some(client)),
+                }
+            }
         };
 
         Ok(Mutex::new(result))
@@ -167,4 +144,26 @@ interface! {
     dyn ILedger = [
         ImmuLedger,
     ]
+}
+
+async fn login(address: SocketAddr, username: String, password: String) -> (ImmuServiceClient<Channel>, String) {
+    let mut client = Some(
+        ImmuServiceClient::connect(format!("http://{}", address))
+            .await
+            .expect("Failed to connect to immudb"),
+    );
+
+    let client = client.as_mut().expect("invalid immudb client");
+    let request = tonic::Request::new(LoginRequest {
+        user: username.as_bytes().to_vec(),
+        password: password.as_bytes().to_vec(),
+    });
+    let response = client
+        .login(request)
+        .await
+        .expect("failed to login to immudb");
+
+    let token = response.into_inner().token;
+    info!("Logged into immudb");
+    (client.to_owned(), token)
 }
