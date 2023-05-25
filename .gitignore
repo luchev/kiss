@@ -10,3 +10,13 @@ Cargo.lock
 **/*.rs.bk
 data/
 .vscode/
+docs/external
+*.log
+*.blg
+*.bbl
+*.aux
+*.bib
+*.out
+*.run.xml
+
+submodules

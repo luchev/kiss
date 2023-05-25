@@ -1,22 +1,45 @@
-use std::path::PathBuf;
-
 use async_trait::async_trait;
-use common::errors::Result;
+use common::Res;
+use std::path::PathBuf;
 pub mod local;
-use runtime_injector::{interface, Service};
-
-use crate::types::Bytes;
-
 use self::local::LocalStorage;
+use crate::{
+    settings::{ISettings, Storage as StorageSettings},
+    types::Bytes,
+};
+use runtime_injector::{
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+};
 
 #[async_trait]
-pub trait Storage: Service {
-    async fn put(&self, path: PathBuf, data: Bytes) -> Result<()>;
-    async fn get(&self, path: PathBuf) -> Result<Bytes>;
+pub trait IStorage: Service {
+    async fn put(&self, path: PathBuf, data: Bytes) -> Res<()>;
+    async fn get(&self, path: PathBuf) -> Res<Bytes>;
+}
+
+pub struct StorageProvider;
+impl ServiceFactory<()> for StorageProvider {
+    type Result = LocalStorage;
+
+    fn invoke(
+        &mut self,
+        injector: &Injector,
+        _request_info: &RequestInfo,
+    ) -> InjectResult<Self::Result> {
+        let settings = injector.get::<Svc<dyn ISettings>>().expect("settings not provided as dependency").storage();
+
+        match settings {
+            StorageSettings::Local {
+                path,
+                create: _create,
+            } => Ok(LocalStorage::new(path.as_str()).expect("failed to create local storage")),
+            StorageSettings::Docker => todo!(),
+        }
+    }
 }
 
 interface! {
-    dyn Storage = [
+    dyn IStorage = [
         LocalStorage,
     ]
 }

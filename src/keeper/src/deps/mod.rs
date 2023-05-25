@@ -1,36 +1,26 @@
 use crate::{
-    grpc::{GrpcProvider, GrpcProviderImpl},
-    settings::{Settings, SettingsImpl, Storage as StorageSettings},
-    storage::{local::LocalStorage, Storage},
+    grpc::{GrpcProvider, IGrpcHandler},
+    p2p,
+    settings::{ISettings, SettingsProvider},
+    storage::{IStorage, StorageProvider},
 };
-use common::errors::Result;
+use common::Res;
 use runtime_injector::{Injector, IntoSingleton, TypedProvider};
 
-pub fn dependency_injector() -> Result<Injector> {
-    let settings = SettingsImpl::new()?;
-    let mut builder = Injector::builder();
-    match settings.clone().storage {
-        StorageSettings::Local { path, create: _create } => {
-            builder.provide(
-                LocalStorage::constructor(path)
-                    .singleton()
-                    .with_interface::<dyn Storage>(),
-            );
-        }
-        StorageSettings::Docker => todo!(),
-    }
-
-    builder.provide(
-        SettingsImpl::constructor()
+pub fn dependency_injector() -> Res<Injector> {
+    let mut injector = Injector::builder();
+    injector.add_module(p2p::module());
+    injector.provide(StorageProvider.singleton().with_interface::<dyn IStorage>());
+    injector.provide(
+        SettingsProvider
             .singleton()
-            .with_interface::<dyn Settings>(),
+            .with_interface::<dyn ISettings>(),
+    );
+    injector.provide(
+        GrpcProvider
+            .singleton()
+            .with_interface::<dyn IGrpcHandler>(),
     );
 
-    builder.provide(
-        GrpcProviderImpl
-            .singleton()
-            .with_interface::<dyn GrpcProvider>(),
-    );
-
-    Ok(builder.build())
+    Ok(injector.build())
 }

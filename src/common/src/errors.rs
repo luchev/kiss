@@ -2,7 +2,10 @@ use std::{error::Error as StdError, process::exit};
 
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
+use libp2p_identity::DecodingError;
+use libp2p_kad::{PutRecordError, GetRecordError};
 use log::error;
+use tonic::Status;
 
 trait ErrorHelper {
     fn help(&self) -> String;
@@ -52,6 +55,30 @@ error_chain! {
         GrpcServerStartFailed(e: tonic::transport::Error) {
             description("grpc server failed to start"),
             display("grpc server failed to start: {}", e.source().map_or("unknown transport error".to_string(), |e| e.to_string())),
+        }
+        KeypairProtobufDecodeError(e: DecodingError) {
+            description("decoding keypair error"),
+            display("decoding keypair error: {}", e),
+        }
+        KeypairBase64DecodeError(e: base64::DecodeError) {
+            description("keypair decoding error"),
+            display("keypair decoding error: {}", e),
+        }
+        SwarmPutRecordError(e: PutRecordError) {
+            description("putting record to swarm failed"),
+            display("putting record to swarm failed: {}", e),
+        }
+        SwarmGetRecordError(e: GetRecordError) {
+            description("getting record from swarm failed"),
+            display("getting record from swarm failed: {}", e),
+        }
+        SwarmGetRecordUnknownError(e: String) {
+            description("getting record from swarm failed"),
+            display("getting record from swarm failed: {}", e),
+        }
+        GrpcError(e: Status) {
+            description("grpc error"),
+            display("grpc error: {}", e),
         }
     }
 }

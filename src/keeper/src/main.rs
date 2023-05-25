@@ -1,13 +1,19 @@
+#![feature(async_closure)]
+
 mod deps;
 mod grpc;
+mod p2p;
 mod settings;
 mod storage;
 mod types;
-use common::errors::{die, Result};
+
+use common::{die, Res};
 use deps::dependency_injector;
-use grpc::GrpcProvider;
+use grpc::IGrpcHandler;
 use log::info;
+use p2p::{controller::ISwarmController, swarm::ISwarm};
 use runtime_injector::Svc;
+use tokio::try_join;
 
 #[tokio::main]
 async fn main() {
@@ -17,10 +23,19 @@ async fn main() {
     }
 }
 
-async fn run() -> Result<()> {
+async fn run() -> Res<()> {
     env_logger::init();
     let injector = dependency_injector()?;
-    let grpc_provider: Svc<dyn GrpcProvider> = injector.get().unwrap();
-    grpc_provider.start().await?;
-    Ok(())
+    let sender: Svc<dyn ISwarmController> = injector.get().unwrap();
+
+    let x = async || {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        let x = sender.set("key1".to_string(), "value1".as_bytes().to_vec()).await;
+        let x = sender.get("key1".to_string()).await;
+        Ok(())
+    };
+
+    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get().unwrap();
+    let kad: Svc<dyn ISwarm> = injector.get().unwrap();
+    try_join!(grpc_handler.start(), kad.start(), x()).map(|_| ())
 }

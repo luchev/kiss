@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use async_trait::async_trait;
-use common::errors::{ErrorKind, Result};
+use common::{ErrorKind, Res};
 use futures::StreamExt;
 use log::info;
 use object_store::{
@@ -8,7 +8,7 @@ use object_store::{
 };
 use std::fmt::{Display, Formatter};
 use crate::types::Bytes;
-use super::Storage;
+use super::IStorage;
 
 #[derive(Default)]
 pub struct LocalStorage {
@@ -26,8 +26,8 @@ impl Display for FooError {
 }
 
 #[async_trait]
-impl Storage for LocalStorage {
-    async fn put(&self, path: PathBuf, data: Bytes) -> Result<()> {
+impl IStorage for LocalStorage {
+    async fn put(&self, path: PathBuf, data: Bytes) -> Res<()> {
         info!("storing {}", path.to_str().unwrap());
         self
             .local_storage
@@ -36,7 +36,7 @@ impl Storage for LocalStorage {
             .map_err(|err| ErrorKind::StoragePutFailed(err).into())
     }
 
-    async fn get(&self, path: PathBuf) -> Result<Bytes> {
+    async fn get(&self, path: PathBuf) -> Res<Bytes> {
         info!("retrieving {}", path.to_str().unwrap());
         Ok(self
             .local_storage
@@ -54,13 +54,7 @@ impl Storage for LocalStorage {
 }
 
 impl LocalStorage {
-    pub fn constructor(path: String) -> impl Fn() -> LocalStorage {
-        move || {
-            LocalStorage::new_with_prefix(path.as_str()).unwrap()
-        }
-    }
-
-    fn new_with_prefix(prefix: &str) -> Result<Self> {
+    pub fn new(prefix: &str) -> Res<Self> {
         let object_store = local::LocalFileSystem::new_with_prefix(prefix)
             .map_err(|err| ErrorKind::LocalStorageFail(err))?;
         Ok(LocalStorage {

@@ -1,39 +1,72 @@
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
-use crate::settings::Settings;
-use crate::storage::Storage;
+use crate::p2p::controller::ISwarmController;
+use crate::settings::ISettings;
+use crate::storage::IStorage;
 use async_trait::async_trait;
+use base64::Engine;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
-use common::errors::{ErrorKind, Result};
+use common::{ErrorKind, Res};
 use keeper_grpc::keeper_grpc_server::KeeperGrpc;
 use keeper_grpc::keeper_grpc_server::KeeperGrpcServer;
 use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
+use libp2p_identity::Keypair;
 use log::info;
-use runtime_injector::{interface, Service, Svc};
+use runtime_injector::{
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-#[async_trait]
-pub trait GrpcProvider: Service {
-    async fn start(&self) -> Result<()>;
+interface! {
+    dyn IGrpcHandler = [
+        GrpcHandler,
+    ]
 }
 
-pub struct GrpcProviderImpl(pub Svc<dyn Settings>, pub Svc<dyn Storage>);
+pub struct GrpcProvider;
+impl ServiceFactory<()> for GrpcProvider {
+    type Result = GrpcHandler;
 
-struct Grpc {
-    storage: Svc<dyn Storage>,
+    fn invoke(
+        &mut self,
+        injector: &Injector,
+        _request_info: &RequestInfo,
+    ) -> InjectResult<Self::Result> {
+        let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
+        let storage = injector.get::<Svc<dyn IStorage>>().unwrap();
+        let swarm_controller = injector.get::<Svc<dyn ISwarmController>>().unwrap();
+
+        Ok(GrpcHandler {
+            inner: Inner { storage, swarm_controller },
+            port,
+        })
+    }
 }
 
 #[async_trait]
-impl GrpcProvider for GrpcProviderImpl {
-    async fn start(&self) -> Result<()> {
-        let grpc = Grpc {
-            storage: self.1.clone(),
-        };
-        let addr = format!("{}:{}", LOCALHOST, self.0.grpc().port)
+pub trait IGrpcHandler: Service {
+    async fn start(&self) -> Res<()>;
+}
+
+#[derive(Clone)]
+struct Inner {
+    storage: Svc<dyn IStorage>,
+    swarm_controller: Svc<dyn ISwarmController>,
+}
+
+pub struct GrpcHandler {
+    inner: Inner,
+    port: u16,
+}
+
+#[async_trait]
+impl IGrpcHandler for GrpcHandler {
+    async fn start(&self) -> Res<()> {
+        let addr = format!("{}:{}", LOCALHOST, self.port)
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
 
@@ -46,7 +79,7 @@ impl GrpcProvider for GrpcProviderImpl {
 
         Server::builder()
             .layer(middleware)
-            .add_service(KeeperGrpcServer::new(grpc))
+            .add_service(KeeperGrpcServer::new(self.inner.clone()))
             .serve(addr)
             .await
             .map_err(|e| ErrorKind::GrpcServerStartFailed(e))?;
@@ -56,49 +89,55 @@ impl GrpcProvider for GrpcProviderImpl {
 }
 
 #[async_trait]
-impl KeeperGrpc for Grpc {
+impl KeeperGrpc for Inner {
     async fn put(
         &self,
         request: Request<PutRequest>,
     ) -> std::result::Result<Response<PutResponse>, Status> {
         let request = request.into_inner();
         info!("received a put request for {}", request.path);
-        self.storage
-            .put(request.path.into(), request.content)
-            .await
-            .map_err(|e| match e.kind() {
-                ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-                _ => Status::unknown("Unknown storage error".to_string()),
-            })?;
+        let res = self.swarm_controller.set(request.path.into(), request.content).await;
+        info!("kad result {:?}", res);
+        // self.storage
+        //     .put(request.path.into(), request.content)
+        //     .await
+        //     .map_err(|e| match e.kind() {
+        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
+        //         _ => Status::unknown("Unknown storage error".to_string()),
+        //     })?;
 
         let reply = PutResponse {};
-
         Ok(Response::new(reply))
     }
 
     async fn get(
         &self,
-        request: Request<GetRequest>, // Accept request of type HelloRequest
+        request: Request<GetRequest>,
     ) -> std::result::Result<Response<GetResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.path);
-        let content = self
-            .storage
-            .get(request.path.into())
-            .await
-            .map_err(|e| match e.kind() {
-                ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-                _ => Status::unknown("Unknown storage error".to_string()),
-            })?;
+        let res = self.swarm_controller.get(request.path.into()).await;
+        info!("kad result {:?}", res);
+        let content = res.unwrap();
+        // let content = self
+        //     .storage
+        //     .get(request.path.into())
+        //     .await
+        //     .map_err(|e| match e.kind() {
+        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
+        //         _ => Status::unknown("Unknown storage error".to_string()),
+        //     })?;
 
-        let reply = GetResponse { content: content };
-
+        let reply = GetResponse { content };
         Ok(Response::new(reply))
     }
 }
 
-interface! {
-    dyn GrpcProvider = [
-        GrpcProviderImpl,
-    ]
+impl GrpcHandler {
+    async fn generate_keypair(&self) -> String {
+        let local_key = Keypair::generate_ed25519();
+        let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
+            .encode(local_key.to_protobuf_encoding().unwrap());
+        return encoded;
+    }
 }
