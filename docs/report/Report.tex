@@ -12,17 +12,14 @@
 \hyphenation{Micro-soft Web-RTC Chun-ky-Spread Ka-dem-lia Pas-try mac-OS block-chain time-stamp Et-he-re-um}
 
 \begin{document}
-\frenchspacing
 \raggedbottom
 \selectlanguage{american} % american
 \pagenumbering{arabic}
 \pagestyle{plain}
 \include{FrontBackmatter/DirtyTitlepage}
-\pagestyle{scrheadings}
+\begingroup
 
-\chapter{Abstract}
-\label{cha:abstract}
-
+\chapter*{Abstract}
 KISS is a decentralized storage system with verification mechanisms.
 The main goals of this system are to ensure durable replicated storage and to prevent or at least limit malicious peers' influence on the network.
 In particular, attacks that aim to disrupt the integrity and storage guarantees of a decentralized storage system.
@@ -33,9 +30,43 @@ The verifier nodes keep track of what files should be stored in the system and p
 In other words the verifier nodes are the super-users of the system that keep track of which nodes behave correctly
 and need to be rewarded or are malicious and need to be punished.
 This reward-and-punishment mechanism is what keeps the system in check.
+\vfill
+\endgroup			
 
 \chapter{Introduction}
-\label{cha:Introduction}
+
+TODO ... describe goals and expected results 
+
+\chapter{Related Work}
+
+Many decentralized storage systems have been proposed and implemented.
+Modern distributed storage systems achieve up to logarithmic time for insert, lookup, and delete operations.
+To name a few such systems - Chord \cite{chord}, Pastry \cite{pastry}, and Kademlia \cite{kademlia}.
+The main difference between these systems is the way they organize the nodes in the network.
+Chord and Pastry use a ring structure, while Kademlia uses a binary tree.
+The ring structure is more efficient in terms of routing, but it is more difficult to maintain the ring structure
+when nodes join and leave the network.
+Kademlia is more resilient to churn, but it is less efficient in terms of routing.
+Most of these systems serve as a foundation for applications that implement some kind of decentralized storage,
+but we won't go into detail about them, because they are not the focus of this project.
+
+There are also multiple proposals on how to make decentralized storage systems more resilient to malicious peers.
+To name a few - ARA \cite{ara}, Tarzan \cite{tarzan}, and S/Kademlia \cite{skademlia}.
+The main idea behind these proposals is to have some kind of auditing mechanism that checks if the peers are behaving correctly.
+ARA proposes a system where peers share information about what data they are storing and check each other.
+Tarzan focuses on anonymity of peers in the network by generating fake traffic and hiding the real traffic.
+S/Kademlia focuses on node authentication with expensive node ID generation and verifiable messages using
+public and private key cryptography.
+S/Kademlia also routes requests through multiple different nodes at the same time
+in order to reduce the chance of a request falling into a malicious subnet.
+
+Comparison between performance between decentralized storage systems has been done before
+\cite{kadvschordvspastry, 2019AIPC.2129b0131A}.
+The results are that Pastry is the best performer for networks with under 1000 peers, but the paper also suggests
+that Kademlia would probably outperform Pastry for larger networks.
+The results in the 2 papers differ somewhat from the results in \cite{compstudy}, which suggests that theoretically
+Chord should outperform Kademlia, but the paper does not do in-depth evaluation of networks with high churn rate
+like \cite{kadvschordvspastry}.
 
 \chapter{Architecture \& Implementation}
 \label{cha:arch-impl}
@@ -69,6 +100,13 @@ so we had to reverse engineer the python library and implement a Rust library.
 The Rust library is very limited as it implements only the necessary endpoints for this project.
 The library is fairly simple as it performs a login request, which returns a token and then every
 subsequent request uses this token to authenticate itself.
+
+Below we can see a diagram of the process of saving a file in the system,
+followed by a diagram of the process of retrieving a file from the system.
+
+\includegraphics[width=350pt]{kiss-store}
+
+\includegraphics[width=350pt]{kiss-retrieve}
 
 
 \section{Implementation}
@@ -289,43 +327,12 @@ async fn handle_get_record(&self, message: GetRecordResult, id: QueryId) {
 }
 \end{minted}
 
-I felt the need to put in code snippets, even if they are mostly pseudo-code,
+I felt the need to put in code snippets, even if they are mostly pseudocode,
 because it is very difficult to explain the communication between the modules in words.
 We send a channel, containing a channel, over a channel.
 This is the only way to ensure we won't deadlock and keep the whole communication asynchronous.
 
 
-\chapter{Related Work}
-\label{cha:related-work}
-
-Many decentralized storage systems have been proposed and implemented.
-Modern distributed storage systems achieve up to logarithmic time for insert, lookup, and delete operations.
-To name a few such systems - Chord \cite{chord}, Pastry \cite{pastry}, and Kademlia \cite{kademlia}.
-The main difference between these systems is the way they organize the nodes in the network.
-Chord and Pastry use a ring structure, while Kademlia uses a binary tree.
-The ring structure is more efficient in terms of routing, but it is more difficult to maintain the ring structure
-when nodes join and leave the network.
-Kademlia is more resilient to churn, but it is less efficient in terms of routing.
-Most of these systems serve as a foundation for applications that implement some kind of decentralized storage,
-but we won't go into detail about them, because they are not the focus of this project.
-
-There are also multiple proposals on how to make decentralized storage systems more resilient to malicious peers.
-To name a few - ARA \cite{ara}, Tarzan \cite{tarzan}, and S/Kademlia \cite{skademlia}.
-The main idea behind these proposals is to have some kind of auditing mechanism that checks if the peers are behaving correctly.
-ARA proposes a system where peers share information about what data they are storing and check each other.
-Tarzan focuses on anonymity of peers in the network by generating fake traffic and hiding the real traffic.
-S/Kademlia focuses on node authentication with expensive node ID generation and verifiable messages using
-public and private key cryptography.
-S/Kademlia also routes requests through multiple different nodes at the same time
-in order to reduce the chance of a request falling into a malicious subnet.
-
-Comparison between performance between decentralized storage systems has been done before
-\cite{kadvschordvspastry} \& \cite{2019AIPC.2129b0131A}.
-The results are that Pastry is the best performer for networks with under 1000 peers, but the paper also suggests
-that Kademlia would probably outperform Pastry for larger networks.
-The results in the 2 papers differ somewhat from the results in \cite{compstudy}, which suggests that theoretically
-Chord should outperform Kademlia, but the paper does not do in-depth evaluation of networks with high churn rate
-like \cite{kadvschordvspastry}.
 
 \chapter{Discussion}
 \label{cha:discussion}
@@ -365,6 +372,29 @@ and it can work independently without taking into account what is the underlying
 
 \chapter{Evaluation \& Conclusion}
 \label{cha:evaluation}
+
+Let's first discuss the language choice - Rust.
+Rust is a compiled language, so it is very fast and produces small binaries.
+Performance and size are important for the following reasons:
+\begin{itemize}
+    \item A small compiled binary means it can run on a wide range of devices, such as a Raspberry Pi or mobile devices.
+    \item A good performance is important so that the system doesn't become a burden on the user's machine.
+    \item Compiled language means no external runtimes, so the user doesn't have to install anything else.
+\end{itemize}
+
+Rust is a memory safe language, which means that it is very difficult to have memory leaks, buffer overflows, race conditions, etc.
+This means that the system will be more resilient to attacks.
+
+To give the readers some numbers about the binary size - compiling the Keeper module into a binary produces a 9MB binary.
+This is a very small size for a binary that can run a decentralized storage system and is statically linked.
+That means it has no external dependencies and can run on any machine that has a CPU.
+In comparison, a simple Hello-World Go program would compile to less than 100KB,
+but it would require a Go runtime, i.e. it will be dynamically linked to libgo.so, which is around 47MB.
+And this is without any other dependencies.
+The Keeper binary, on the other hand, uses approximately 450 crates (Rust libraries), which are statically linked and is only 9MB.
+
+TODO ... write more about the evaluation
+
 
 \appendix
 \chapter{An appendix}
