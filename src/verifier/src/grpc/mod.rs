@@ -11,7 +11,6 @@ use runtime_injector::{
 };
 use std::net::SocketAddr;
 use std::time::Duration;
-use std::{borrow::BorrowMut, ops::DerefMut};
 use crate::ledger::{ILedger};
 use tokio::sync::Mutex;
 use tonic::transport::Server;
@@ -107,13 +106,13 @@ impl VerifierGrpc for Inner {
             .keeper_gateway
             .lock()
             .await
-            .put("k1".to_string(), "value 1".to_string())
+            .put(request.name.clone(), request.content.clone())
             .await;
         if let Err(e) = res {
             return Err(Status::internal(e.to_string()));
         }
         let mut ledger = self.ledger.lock().await;
-        let res = ledger.set("k1".to_string(), "value 1".to_string()).await;
+        let res = ledger.set(request.name, request.content).await;
         match res {
             Ok(_) => Ok(Response::new(StoreResponse {})),
             Err(e) => Err(Status::internal(e.to_string())),
@@ -126,10 +125,10 @@ impl VerifierGrpc for Inner {
     ) -> std::result::Result<Response<RetrieveResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.name);
-        let res = self.keeper_gateway.lock().await.get("k1".to_string()).await;
+        let res = self.keeper_gateway.lock().await.get(request.name.clone()).await;
         match res {
             Ok(r) => Ok(Response::new(RetrieveResponse {
-                name: "key1".to_string(),
+                name: request.name,
                 content: r,
             })),
             Err(e) => Err(Status::internal(e.to_string())),

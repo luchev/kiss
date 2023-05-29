@@ -2,7 +2,7 @@ use crate::{
     immudb_grpc::{
         immu_service_client::ImmuServiceClient, KeyRequest, KeyValue, LoginRequest, SetRequest,
     },
-    settings::{ISettings, Ledger},
+    settings::{ISettings, Ledger}, types::Bytes,
 };
 use async_std::task::block_on;
 use async_trait::async_trait;
@@ -17,7 +17,7 @@ use common::{ErrorKind, Res};
 
 #[async_trait]
 pub trait ILedger: Service {
-    async fn set(&mut self, key: String, value: String) -> Res<()>;
+    async fn set(&mut self, key: String, value: Bytes) -> Res<()>;
     async fn get(&mut self, key: String) -> Res<String>;
 }
 
@@ -29,7 +29,7 @@ pub struct ImmuLedger {
 
 #[async_trait]
 impl ILedger for ImmuLedger {
-    async fn set(&mut self, key: String, value: String) -> Res<()> {
+    async fn set(&mut self, key: String, value: Bytes) -> Res<()> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
 
@@ -44,7 +44,7 @@ impl ILedger for ImmuLedger {
             SetRequest {
                 k_vs: vec![KeyValue {
                     key: key.as_bytes().to_vec(),
-                    value: value.as_bytes().to_vec(),
+                    value: value,
                     metadata: None,
                 }],
                 no_wait: false,

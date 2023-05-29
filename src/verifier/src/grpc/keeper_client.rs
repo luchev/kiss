@@ -19,7 +19,7 @@ mod keeper_grpc {
 
 #[async_trait]
 pub trait IKeeperGateway: Service {
-    async fn put(&mut self, key: String, value: String) -> Res<()>;
+    async fn put(&mut self, key: String, value: Bytes) -> Res<()>;
     async fn get(&mut self, key: String) -> Res<Bytes>;
 }
 
@@ -30,12 +30,12 @@ pub struct KeeperGateway {
 
 #[async_trait]
 impl IKeeperGateway for KeeperGateway {
-    async fn put(&mut self, key: String, value: String) -> Res<()> {
+    async fn put(&mut self, key: String, value: Bytes) -> Res<()> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
         let request = tonic::Request::new(PutRequest {
             path: key,
-            content: value.into_bytes(),
+            content: value,
         });
         let response = client.put(request).await;
         match response {
