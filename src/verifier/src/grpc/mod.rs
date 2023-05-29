@@ -1,3 +1,6 @@
+use self::keeper_client::KeeperGateway;
+use crate::grpc::keeper_client::IKeeperGateway;
+use crate::ledger::ImmuLedger;
 use crate::settings::ISettings;
 use async_trait::async_trait;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
@@ -8,12 +11,13 @@ use runtime_injector::{
 };
 use std::net::SocketAddr;
 use std::time::Duration;
+use std::{borrow::BorrowMut, ops::DerefMut};
+use crate::ledger::{ILedger};
+use tokio::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use verifier_grpc::verifier_grpc_server::{VerifierGrpc, VerifierGrpcServer};
 use verifier_grpc::{RetrieveRequest, RetrieveResponse, StoreRequest, StoreResponse};
-
-use self::keeper_client::IKeeperGateway;
 
 mod verifier_grpc {
     tonic::include_proto!("verifier_grpc");
@@ -36,12 +40,15 @@ impl ServiceFactory<()> for GrpcHandlerProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
-        let keeper_gateway = injector
-            .get::<Svc<dyn IKeeperGateway>>()
-            .expect("keeper gateway not provided");
+        let keeper_gateway: Svc<Mutex<KeeperGateway>> =
+            injector.get().expect("keeper gateway not provided");
+        let ledger: Svc<Mutex<ImmuLedger>> = injector.get().expect("ledger not provided");
 
         Ok(GrpcHandler {
-            inner: Inner { keeper_gateway },
+            inner: Inner {
+                keeper_gateway,
+                ledger,
+            },
             port,
         })
     }
@@ -54,7 +61,8 @@ pub trait IGrpcHandler: Service {
 
 #[derive(Clone)]
 struct Inner {
-    keeper_gateway: Svc<dyn IKeeperGateway>,
+    keeper_gateway: Svc<Mutex<KeeperGateway>>,
+    ledger: Svc<Mutex<ImmuLedger>>,
 }
 
 pub struct GrpcHandler {
@@ -95,9 +103,21 @@ impl VerifierGrpc for Inner {
     ) -> std::result::Result<Response<StoreResponse>, Status> {
         let request = request.into_inner();
         info!("received a store request for {}", request.name);
-        todo!();
-        // let reply = StoreResponse {};
-        // Ok(Response::new(reply))
+        let res = self
+            .keeper_gateway
+            .lock()
+            .await
+            .put("k1".to_string(), "value 1".to_string())
+            .await;
+        if let Err(e) = res {
+            return Err(Status::internal(e.to_string()));
+        }
+        let mut ledger = self.ledger.lock().await;
+        let res = ledger.set("k1".to_string(), "value 1".to_string()).await;
+        match res {
+            Ok(_) => Ok(Response::new(StoreResponse {})),
+            Err(e) => Err(Status::internal(e.to_string())),
+        }
     }
 
     async fn retrieve(
@@ -106,8 +126,13 @@ impl VerifierGrpc for Inner {
     ) -> std::result::Result<Response<RetrieveResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.name);
-        todo!();
-        // let reply = RetrieveResponse { name: "", data: vec![] };
-        // Ok(Response::new(reply))
+        let res = self.keeper_gateway.lock().await.get("k1".to_string()).await;
+        match res {
+            Ok(r) => Ok(Response::new(RetrieveResponse {
+                name: "key1".to_string(),
+                content: r,
+            })),
+            Err(e) => Err(Status::internal(e.to_string())),
+        }
     }
 }

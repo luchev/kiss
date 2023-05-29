@@ -13,11 +13,12 @@ use runtime_injector::{
 use std::net::SocketAddr;
 use tokio::{runtime::Handle, sync::Mutex};
 use tonic::{metadata::MetadataMap, transport::Channel, Extensions};
+use common::{ErrorKind, Res};
 
 #[async_trait]
 pub trait ILedger: Service {
-    async fn set(&mut self, key: String, value: String);
-    async fn get(&mut self, key: String) -> String;
+    async fn set(&mut self, key: String, value: String) -> Res<()>;
+    async fn get(&mut self, key: String) -> Res<String>;
 }
 
 #[derive(Debug)]
@@ -28,7 +29,7 @@ pub struct ImmuLedger {
 
 #[async_trait]
 impl ILedger for ImmuLedger {
-    async fn set(&mut self, key: String, value: String) {
+    async fn set(&mut self, key: String, value: String) -> Res<()> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
 
@@ -51,9 +52,10 @@ impl ILedger for ImmuLedger {
             },
         );
         let _response = client.set(request).await.unwrap();
+        Ok(())
     }
 
-    async fn get(&mut self, key: String) -> String {
+    async fn get(&mut self, key: String) -> Res<String> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
 
@@ -75,7 +77,8 @@ impl ILedger for ImmuLedger {
             },
         );
         let response = client.get(request).await.unwrap();
-        String::from_utf8(response.into_inner().value).unwrap()
+        Ok(String::from_utf8(response.into_inner().value).unwrap())
+        
     }
 }
 
@@ -150,7 +153,7 @@ async fn login(address: SocketAddr, username: String, password: String) -> (Immu
     let mut client = Some(
         ImmuServiceClient::connect(format!("http://{}", address))
             .await
-            .expect("Failed to connect to immudb"),
+            .expect("failed to connect to immudb"),
     );
 
     let client = client.as_mut().expect("invalid immudb client");
@@ -164,6 +167,6 @@ async fn login(address: SocketAddr, username: String, password: String) -> (Immu
         .expect("failed to login to immudb");
 
     let token = response.into_inner().token;
-    info!("Logged into immudb");
+    info!("logged into immudb");
     (client.to_owned(), token)
 }
