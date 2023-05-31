@@ -9,7 +9,9 @@ use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
+use sha3::{Sha3_256, Digest};
 use std::net::SocketAddr;
+use std::str::from_utf8;
 use std::time::Duration;
 use crate::ledger::{ILedger};
 use tokio::sync::Mutex;
@@ -102,19 +104,22 @@ impl VerifierGrpc for Inner {
     ) -> std::result::Result<Response<StoreResponse>, Status> {
         let request = request.into_inner();
         info!("received a store request for {}", request.name);
+        let mut hasher = Sha3_256::new();
+        hasher.update(request.content.clone());
+        let file_hash = hex::encode(hasher.finalize());
+        info!("{}", file_hash);
+        let mut ledger = self.ledger.lock().await;
+        let file_uuid = ledger.create_contract(file_hash, 60).await.unwrap();
+
         let res = self
             .keeper_gateway
             .lock()
             .await
-            .put(request.name.clone(), request.content.clone())
+            .put(file_uuid.clone(), request.content)
             .await;
-        if let Err(e) = res {
-            return Err(Status::internal(e.to_string()));
-        }
-        let mut ledger = self.ledger.lock().await;
-        let res = ledger.set(request.name, request.content).await;
+
         match res {
-            Ok(_) => Ok(Response::new(StoreResponse {})),
+            Ok(_) => Ok(Response::new(StoreResponse { name: file_uuid })),
             Err(e) => Err(Status::internal(e.to_string())),
         }
     }

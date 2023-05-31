@@ -6,7 +6,9 @@ message StoreRequest {
     bytes content = 2;
 }
 
-message StoreResponse { }
+message StoreResponse {
+    string name = 1;
+}
 
 message RetrieveRequest {
     string name = 1;
