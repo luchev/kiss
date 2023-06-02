@@ -10,7 +10,7 @@ use runtime_injector::{
 };
 use std::net::SocketAddr;
 use tokio::runtime::Handle;
-use tokio::{runtime::Runtime, sync::Mutex};
+use tokio::{sync::Mutex};
 use tonic::transport::Channel;
 
 mod keeper_grpc {

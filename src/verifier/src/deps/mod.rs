@@ -1,6 +1,11 @@
 use crate::{
+    grpc::{
+        keeper_client::{KeeperGateway, KeeperGatewayProvider},
+        GrpcHandlerProvider, IGrpcHandler,
+    },
     ledger::{ImmuLedger, LedgerProvider},
-    settings::{ISettings, SettingsProvider}, grpc::{keeper_client::{KeeperGatewayProvider, KeeperGateway}, GrpcHandlerProvider, IGrpcHandler},
+    settings::{ISettings, SettingsProvider},
+    verifier::{IVerifier, VerifierProvider},
 };
 use common::Res;
 use runtime_injector::{Injector, IntoSingleton, TypedProvider};
@@ -27,6 +32,11 @@ pub fn dependency_injector() -> Res<Injector> {
         GrpcHandlerProvider
             .singleton()
             .with_interface::<dyn IGrpcHandler>(),
+    );
+    injector.provide(
+        VerifierProvider
+            .singleton()
+            .with_interface::<dyn IVerifier>(),
     );
 
     Ok(injector.build())

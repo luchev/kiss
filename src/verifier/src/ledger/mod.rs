@@ -1,19 +1,20 @@
 use crate::{
     immudb_grpc::{
-        immu_service_client::ImmuServiceClient, CreateDatabaseRequest, KeyRequest, KeyValue,
-        LoginRequest, NamedParam, SetRequest, SqlExecRequest, SqlValue, sql_value::Value,
+        immu_service_client::ImmuServiceClient, sql_value::Value, CreateDatabaseRequest,
+        KeyRequest, KeyValue, LoginRequest, NamedParam, SetRequest, SqlExecRequest,
+        SqlQueryRequest, SqlValue,
     },
     settings::{ISettings, Ledger},
-    types::Bytes,
+    types::{Bytes, Contract},
 };
 use async_std::task::block_on;
 use async_trait::async_trait;
-use common::{ErrorKind, Res};
+use common::Res;
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
-use std::{borrow::BorrowMut, net::SocketAddr, time::{SystemTime, UNIX_EPOCH}};
+use std::{time::{SystemTime, UNIX_EPOCH}, net::SocketAddr};
 use tokio::{runtime::Handle, sync::Mutex};
 use tonic::{metadata::MetadataMap, transport::Channel, Extensions};
 use uuid::Uuid;
@@ -25,6 +26,12 @@ pub trait ILedger: Service {
     async fn create_database(&mut self, name: String) -> Res<()>;
     async fn create_contract(&mut self, file_hash: String, ttl: i64) -> Res<String>;
     async fn sql_execute(&mut self, query: String, params: Vec<NamedParam>) -> Res<()>;
+    async fn query_execute(
+        &mut self,
+        sql: String,
+        params: Vec<NamedParam>,
+    ) -> Res<Vec<Vec<SqlValue>>>;
+    async fn get_contracts(&mut self) -> Res<Vec<Contract>>;
 }
 
 #[derive(Debug)]
@@ -130,29 +137,74 @@ impl ILedger for ImmuLedger {
         Ok(())
     }
 
+    async fn query_execute(
+        &mut self,
+        sql: String,
+        params: Vec<NamedParam>,
+    ) -> Res<Vec<Vec<SqlValue>>> {
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().unwrap();
+
+        let mut map = MetadataMap::new();
+        map.insert(
+            "authorization",
+            format!("Bearer {}", self.token).parse().unwrap(),
+        );
+        let request = tonic::Request::from_parts(
+            map,
+            Extensions::default(),
+            SqlQueryRequest {
+                sql,
+                params,
+                reuse_snapshot: false,
+            },
+        );
+        let response = client.sql_query(request).await.unwrap();
+        let result: Vec<_> = response
+            .into_inner()
+            .rows
+            .into_iter()
+            .map(|row| row.values)
+            .collect();
+        Ok(result)
+    }
+
     async fn create_contract(&mut self, file_hash: String, ttl: i64) -> Res<String> {
         let file_uuid = Uuid::new_v4();
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
         let params: Vec<NamedParam> = vec![
             NamedParam {
                 name: "contract_uuid".to_string(),
-                value: Some(SqlValue{value: Some(Value::S(Uuid::new_v4().to_string()))}),
+                value: Some(SqlValue {
+                    value: Some(Value::S(Uuid::new_v4().to_string())),
+                }),
             },
             NamedParam {
                 name: "file_uuid".to_string(),
-                value: Some(SqlValue{value: Some(Value::S(file_uuid.to_string()))}),
+                value: Some(SqlValue {
+                    value: Some(Value::S(file_uuid.to_string())),
+                }),
             },
             NamedParam {
                 name: "file_hash".to_string(),
-                value: Some(SqlValue{value: Some(Value::S(file_hash))}),
+                value: Some(SqlValue {
+                    value: Some(Value::S(file_hash)),
+                }),
             },
             NamedParam {
                 name: "upload_date".to_string(),
-                value: Some(SqlValue{value: Some(Value::N(now))}),
+                value: Some(SqlValue {
+                    value: Some(Value::N(now)),
+                }),
             },
             NamedParam {
                 name: "ttl".to_string(),
-                value: Some(SqlValue{value: Some(Value::N(ttl))}),
+                value: Some(SqlValue {
+                    value: Some(Value::N(ttl)),
+                }),
             },
         ];
 
@@ -163,6 +215,38 @@ impl ILedger for ImmuLedger {
 
         let _response = self.sql_execute(sql, params).await.unwrap();
         Ok(file_uuid.to_string())
+    }
+
+    async fn get_contracts(&mut self) -> Res<Vec<Contract>> {
+        let sql = "SELECT * FROM contracts;".to_string();
+
+        let response = self.query_execute(sql, vec![]).await.unwrap();
+        let contracts: Vec<_> = response
+            .into_iter()
+            .map(|row| Contract {
+                contract_uuid: match row[0].value.as_ref().unwrap() {
+                    Value::S(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                file_uuid: match row[1].value.as_ref().unwrap() {
+                    Value::S(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                file_hash: match row[2].value.as_ref().unwrap() {
+                    Value::S(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                upload_date: match row[3].value.as_ref().unwrap() {
+                    Value::N(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                ttl: match row[4].value.as_ref().unwrap() {
+                    Value::N(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+            })
+            .collect();
+        Ok(contracts)
     }
 }
 
