@@ -108,7 +108,7 @@ impl VerifierGrpc for Inner {
         let file_hash = hex::encode(hasher.finalize());
         info!("{}", file_hash);
         let mut ledger = self.ledger.lock().await;
-        let file_uuid = ledger.create_contract(file_hash, 60).await.unwrap();
+        let file_uuid = ledger.create_contract(file_hash, request.ttl).await.unwrap();
 
         let res = self
             .keeper_gateway
