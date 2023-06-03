@@ -31,6 +31,7 @@ pub trait ILedger: Service {
         sql: String,
         params: Vec<NamedParam>,
     ) -> Res<Vec<Vec<SqlValue>>>;
+    async fn get_contract(&mut self, contract_uuid: String) -> Res<Contract>;
     async fn get_contracts(&mut self) -> Res<Vec<Contract>>;
 }
 
@@ -215,6 +216,47 @@ impl ILedger for ImmuLedger {
 
         let _response = self.sql_execute(sql, params).await.unwrap();
         Ok(file_uuid.to_string())
+    }
+
+    async fn get_contract(&mut self, file_uuid: String) -> Res<Contract> {
+        let sql = "SELECT * FROM contracts WHERE file_uuid = @file_uuid;".to_string();
+        info!("{:?}", sql);
+
+        let params: Vec<NamedParam> = vec![
+            NamedParam {
+                name: "file_uuid".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(file_uuid)),
+                }),
+            },
+        ];
+        let response = self.query_execute(sql, params).await.unwrap();
+        let contracts: Vec<_> = response
+            .into_iter()
+            .map(|row| Contract {
+                contract_uuid: match row[0].value.as_ref().unwrap() {
+                    Value::S(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                file_uuid: match row[1].value.as_ref().unwrap() {
+                    Value::S(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                file_hash: match row[2].value.as_ref().unwrap() {
+                    Value::S(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                upload_date: match row[3].value.as_ref().unwrap() {
+                    Value::N(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+                ttl: match row[4].value.as_ref().unwrap() {
+                    Value::N(x) => x.clone(),
+                    _ => panic!("unexpected type received from immudb"),
+                },
+            })
+            .collect();
+        Ok(contracts.into_iter().next().unwrap_or_default())
     }
 
     async fn get_contracts(&mut self) -> Res<Vec<Contract>> {
