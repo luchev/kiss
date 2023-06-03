@@ -7,6 +7,7 @@ use crate::storage::IStorage;
 use async_trait::async_trait;
 use base64::Engine;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
+use common::hasher::hash;
 use common::{ErrorKind, Res};
 use keeper_grpc::keeper_grpc_server::KeeperGrpc;
 use keeper_grpc::keeper_grpc_server::KeeperGrpcServer;
@@ -20,6 +21,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
+
+use self::keeper_grpc::{VerifyRequest, VerifyResponse};
 
 interface! {
     dyn IGrpcHandler = [
@@ -129,6 +132,20 @@ impl KeeperGrpc for Inner {
         //     })?;
 
         let reply = GetResponse { content };
+        Ok(Response::new(reply))
+    }
+
+    async fn verify(
+        &self,
+        request: Request<VerifyRequest>,
+    ) -> std::result::Result<Response<VerifyResponse>, Status> {
+        let request = request.into_inner();
+        info!("received a verify request for {}", request.path);
+        let content = self.swarm_controller.get(request.path.into()).await.map_err(|e| {
+            Status::not_found(format!("failed to get file from swarm: {}", e))
+        })?;
+
+        let reply = VerifyResponse { hash: hash(&content) };
         Ok(Response::new(reply))
     }
 }

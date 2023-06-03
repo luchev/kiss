@@ -16,7 +16,16 @@ message GetResponse {
     bytes content = 1;
 }
 
+message VerifyRequest {
+    string path = 1;
+}
+
+message VerifyResponse {
+    string hash = 1;
+}
+
 service KeeperGrpc {
     rpc Put(PutRequest) returns (PutResponse);
     rpc Get(GetRequest) returns (GetResponse);
+    rpc Verify(VerifyRequest) returns (VerifyResponse);
 }

@@ -13,6 +13,8 @@ use tokio::runtime::Handle;
 use tokio::{sync::Mutex};
 use tonic::transport::Channel;
 
+use self::keeper_grpc::VerifyRequest;
+
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
@@ -20,7 +22,8 @@ mod keeper_grpc {
 #[async_trait]
 pub trait IKeeperGateway: Service {
     async fn put(&mut self, key: String, value: Bytes) -> Res<()>;
-    async fn get(&mut self, key: String) -> Res<Bytes>;
+    async fn get(&mut self, path: String) -> Res<Bytes>;
+    async fn verify(&mut self, path: String) -> Res<String>;
 }
 
 #[derive(Debug)]
@@ -44,13 +47,24 @@ impl IKeeperGateway for KeeperGateway {
         }
     }
 
-    async fn get(&mut self, key: String) -> Res<Bytes> {
+    async fn get(&mut self, path: String) -> Res<Bytes> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
-        let request = tonic::Request::new(GetRequest { path: key });
+        let request = tonic::Request::new(GetRequest { path: path });
         let response = client.get(request).await;
         match response {
             Ok(res) => Ok(res.into_inner().content),
+            Err(e) => Err(ErrorKind::GrpcError(e).into()),
+        }
+    }
+
+    async fn verify(&mut self, path: String) -> Res<String> {
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().unwrap();
+        let request = tonic::Request::new(VerifyRequest { path: path });
+        let response = client.verify(request).await;
+        match response {
+            Ok(res) => Ok(res.into_inner().hash),
             Err(e) => Err(ErrorKind::GrpcError(e).into()),
         }
     }
