@@ -55,7 +55,53 @@ as shown by the evaluation.
 
 \chapter{Introduction}
 
-TODO ... describe goals and expected results 
+Peer-to-peer (p2p) networks are distributed systems where there is no central authority.
+Such networks are often used for file sharing (decentralized storage).
+Such networks are considered resilient to attacks,
+because they are distributed and usually scale to numerous nodes.
+A lot of these networks implement a Distributed Hash Table (DHT) to store the data.
+There are generally two ways to implement a DHT efficiently - 
+Chord \cite{chord}, which implements a ring structure,
+and Kademlia \cite{kademlia}, which implements a binary tree.
+
+However, there are attacks that can disrupt the integrity and
+storage guarantees of a decentralized storage system.
+For example, a malicious peer can store a file and then delete it from the system,
+or a malicious peer can store a file and then modify it.
+These attacks are possible because the peers in the network are usually not controlled.
+There are multiple extensions to such systems to make them more secure and resilient to attacks,
+which we will discuss in the Related Work section.
+
+This project proposes a system that aims to improve the resilience of a decentralized storage system
+by introducing a verification mechanism.
+
+The main goals of the system are:
+\begin{itemize}
+    \item Ensure durable replicated storage.
+    \item Prevent or at least limit malicious peers' influence on the network.
+    \item Ensure performance does not degrade by introducing the verification mechanism.
+    \item Make all parts of the system decentralized (including the verifier in the future).
+    \item Make the system easy to use and deploy.
+\end{itemize}
+
+As a side effect the system generates cover network traffic, which makes it harder to track the real traffic.
+This is not the main goal of the system, but it hides real traffic from malicious peers,
+or at least makes it harder to differentiate.
+
+The system should be able to withstand attacks from malicious peers that:
+\begin{itemize}
+    \item Store a file and then delete it.
+    \item Store a file and then modify it.
+    \item Lie about storing a file.
+    \item Many malicious peers collude and try to disrupt the network.
+    \item Many malicious peers join the network rapidly.
+    \item Many malicious peers leave the network rapidly.
+    \item Many malicious peers try to disrupt the network by flooding it with requests (DoS).
+\end{itemize}
+
+Some of these goals will be postponed for future work, 
+since the first iteration of the system will have a centralized verifier.
+
 
 \chapter{Related Work}
 
