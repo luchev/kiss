@@ -21,15 +21,35 @@
 
 \chapter*{Abstract}
 KISS is a decentralized storage system with verification mechanisms.
-The main goals of this system are to ensure durable replicated storage and to prevent or at least limit malicious peers' influence on the network.
+The main goals of this system are to ensure durable replicated storage and to prevent
+or at least limit malicious peers' influence on the network while maintaining a high level of performance.
 In particular, attacks that aim to disrupt the integrity and storage guarantees of a decentralized storage system.
-The system implements a key-value storage (aka. a distributed hash table) built on top of Kademlia in order
-to provide logarithmic time for querying.
-The nodes in the network are split into two kinds - one strictly storing files, and another taking care of indexing and validation.
-The verifier nodes keep track of what files should be stored in the system and periodically verify that these files actually exist.
-In other words the verifier nodes are the super-users of the system that keep track of which nodes behave correctly
-and need to be rewarded or are malicious and need to be punished.
-This reward-and-punishment mechanism is what keeps the system in check.
+The system implements a key-value storage (aka. a distributed hash table) like many others.
+It attempts to improve the resilience of network by introducing a verification mechanism,
+which are not present in other similar systems.
+
+The nodes in the network are split into two kinds - one strictly storing files,
+and one for indexing and validation.
+Most other systems focus on the storage part and optimizing the latency as well as balanced distribution
+of the data.
+KISS aims to build on top of that and introduce verification mechanisms that aim to stop malicious peers.
+The storage nodes implement the Kademlia protocol and store the actual data,
+while the verification nodes keep track of what data should be stored and periodically
+verify that the data is still there.
+The verifier is implemented by connecting it to a ledger storage - an instance of ImmuDB,
+where it stores metadata about the files stored in the system and transactions.
+Since all requests go through the verifier nodes, they regulate what data goes into the system, 
+what stays there, and for how long.
+In other words the verifier nodes are the super-users of the system that keep track of which
+nodes behave correctly and need to be rewarded or are malicious and need to be punished.
+
+The current iteration of the system relies on 1 verifier node for simplicity reasons.
+In the future the verifier nodes will be part of a decentralized network as well, 
+as this is a center point of failure and a bottleneck for the throughput of the system,
+as shown by the evaluation.
+
+
+
 \vfill
 \endgroup			
 
@@ -44,21 +64,27 @@ Modern distributed storage systems achieve up to logarithmic time for insert, lo
 To name a few such systems - Chord \cite{chord}, Pastry \cite{pastry}, and Kademlia \cite{kademlia}.
 The main difference between these systems is the way they organize the nodes in the network.
 Chord and Pastry use a ring structure, while Kademlia uses a binary tree.
-The ring structure is more efficient in terms of routing, but it is more difficult to maintain the ring structure
-when nodes join and leave the network.
-Kademlia is more resilient to churn, but it is less efficient in terms of routing.
+Kademlia is more resilient to churn and performs faster lookups, but generates more network traffic \cite{kadvschordvspastry}.
 Most of these systems serve as a foundation for applications that implement some kind of decentralized storage,
 but we won't go into detail about them, because they are not the focus of this project.
 
 There are also multiple proposals on how to make decentralized storage systems more resilient to malicious peers.
-To name a few - ARA \cite{ara}, Tarzan \cite{tarzan}, and S/Kademlia \cite{skademlia}.
+To name a few - ARA \cite{ara}, Freenet , and S/Kademlia \cite{skademlia}.
 The main idea behind these proposals is to have some kind of auditing mechanism that checks if the peers are behaving correctly.
-ARA proposes a system where peers share information about what data they are storing and check each other.
-Tarzan focuses on anonymity of peers in the network by generating fake traffic and hiding the real traffic.
+ARA proposes a system where peers allocate "credits" to other peers they communicate with.
+If a peer A requests files from another peer B, B gains "credits", while A informs other neighboring peers
+that B has received "credits" from A.
+Peers also share information about these "credits" with other peers and use them as auditing mechanism.
 S/Kademlia focuses on node authentication with expensive node ID generation and verifiable messages using
 public and private key cryptography.
 S/Kademlia also routes requests through multiple different nodes at the same time
 in order to reduce the chance of a request falling into a malicious subnet.
+Freenet's approach to security is to encrypt all data and route requests through multiple nodes.
+It works in a way similar to Tor - nodes in the path to the target cannot tell what other nodes are in the path,
+except for the previous and the next node.
+Nodes storing the data are also obscured in the response, so the source cannot be tracked.
+
+Tarzan focuses on anonymity of peers in the network by generating fake traffic and hiding the real traffic.
 
 Comparison between performance between decentralized storage systems has been done before
 \cite{kadvschordvspastry, 2019AIPC.2129b0131A}.
@@ -74,6 +100,8 @@ like \cite{kadvschordvspastry}.
 \section{Architecture}
 \label{sec:architecture}
 
+TODO ... add a module UML diagram
+
 The system is split into 2 components - Keeper and Verifier.
 Keepers implement the Kademlia protocol and store the actual data,
 while Verifiers keep track of what data should be stored and periodically verify that the data is still there.
@@ -85,9 +113,9 @@ Kademlia is the backbone of the Keepers as it implements the peer discovery and 
 All Kademlia communication is event-based and asynchronous.
 In order to keep track of the Kademlia messages the Keepers use a local Hash Table.
 
-The Verifiers communicate with the Keepers using GRPC.
+The Verifiers communicate with the Keepers using gRPC.
 This protocol was chosen because it is language agnostic and fast.
-The Verifiers also use GRPC to communicate with the database - ImmuDB.
+The Verifiers also use gRPC to communicate with the database - ImmuDB.
 
 ImmuDB is an immutable database that uses Merkle trees to ensure data integrity.
 The Verifiers use ImmuDB to store metadata about the files stored in the system.
@@ -190,12 +218,12 @@ This means that only one instance of each dependency will be created.
 This is good because we ensure no different instances will try to access the same resource and cause a race condition.
 But it also causes a huge pain to initialize some dependencies.
 For example, the KeeperGateway module in the Verifier,
-which is responsible for communicating with the Keepers over GRPC,
+which is responsible for communicating with the Keepers over gRPC,
 contains a Mutex<KeeperGrpcClient<\_> >.
-This is needed because the GRPC client does not implement the necessary traits to be thread-safe and mutable.
+This is needed because the gRPC client does not implement the necessary traits to be thread-safe and mutable.
 Rust is very pedantic about having mutable variables being accessed from different threads,
-so it disallows the GRPC client to be modified without a mutex.
-So we have to wrap the GRPC client in a mutex, so we can provide the KeeperGateway as a singleton dependency.
+so it disallows the gRPC client to be modified without a mutex.
+So we have to wrap the gRPC client in a mutex, so we can provide the KeeperGateway as a singleton dependency.
 But, if we want to take control of a mutex and modify the data inside, we need a mutable reference to it.
 This means that the whole KeeperGateway needs to be mutable, i.e., provided in a mutex.
 However, providing a module surrounded in a mutex breaks the idea of providing an interface,
@@ -216,8 +244,8 @@ Nothing fancy happens here.
 The storage is pretty simple as well.
 It uses the object\_store crate, which provides the necessary APIs to work with HDD storage or S3 storage.
 
-The GRPC module is implemented using the tonic crate.
-It is very well documented and explains in details how to implement a GRPC server and client.
+The gRPC module is implemented using the tonic crate.
+It is very well documented and explains in details how to implement a gRPC server and client.
 It boils down to writing a protobuf definition and then tonic generates all the boiler-plate code,
 leaving the developer to implement only the interface methods for the server and the client.
 
@@ -349,8 +377,9 @@ This will be a future work.
 
 We can compare the approach in this project and the ARA proposal \cite{ara}.
 Both KISS and ARA rely on auditing to detect malicious peers or degradation of the network.
-Peers in ARA share information about what data they are storing and check each other.
-This is based on a list of interested peers (peers that interacted recently with a given peer).
+Peers in ARA share information about the "credits" they have given to other peers.
+These "credits" are used to determine if a peer is behaving correctly, by requesting the "credits"
+from other peers that have interacted with it.
 An issue with this approach would be if a subnet is composed entirely of malicious peers.
 Then a peer that has only malicious peers can freely adjust its credit score.
 Another problem would be generation of fake requests in order to increase the score of malicious peers,
@@ -374,7 +403,8 @@ and it can work independently without taking into account what is the underlying
 \label{cha:evaluation}
 
 Let's first discuss the language choice - Rust.
-Rust is a compiled language, so it is very fast and produces small binaries.
+Rust is a compiled language that produces small statically linked binaries.
+It claims to be as fast as C/C++, memory safe, and thread-safe without a garbage collector.
 Performance and size are important for the following reasons:
 \begin{itemize}
     \item A small compiled binary means it can run on a wide range of devices, such as a Raspberry Pi or mobile devices.
@@ -382,16 +412,19 @@ Performance and size are important for the following reasons:
     \item Compiled language means no external runtimes, so the user doesn't have to install anything else.
 \end{itemize}
 
-Rust is a memory safe language, which means that it is very difficult to have memory leaks, buffer overflows, race conditions, etc.
+Rust is a memory safe language, which means that it is very difficult to have memory leaks,
+buffer overflows, race conditions, etc.
 This means that the system will be more resilient to attacks.
 
-To give the readers some numbers about the binary size - compiling the Keeper module into a binary produces a 9MB binary.
+To give the readers some numbers about the binary size - compiling
+the Keeper module into a binary produces a 9 MB binary.
 This is a very small size for a binary that can run a decentralized storage system and is statically linked.
 That means it has no external dependencies and can run on any machine that has a CPU.
-In comparison, a simple Hello-World Go program would compile to less than 100KB,
-but it would require a Go runtime, i.e. it will be dynamically linked to libgo.so, which is around 47MB.
+In comparison, a simple Hello-World Go program would compile to less than 100 KB,
+but it would require a Go runtime, i.e. it will be dynamically linked to libgo.so, which is around 47 MB.
 And this is without any other dependencies.
-The Keeper binary, on the other hand, uses approximately 450 crates (Rust libraries), which are statically linked and is only 9MB.
+The Keeper binary, on the other hand, uses approximately 450 crates (Rust libraries),
+which are statically linked and is only 9 MB.
 
 TODO ... write more about the evaluation
 
