@@ -23,16 +23,17 @@
 KISS is a decentralized storage system with verification mechanisms.
 The main goals of this system are to ensure durable replicated storage and to prevent
 or at least limit malicious peers' influence on the network while maintaining a high level of performance.
-In particular, attacks that aim to disrupt the integrity and storage guarantees of a decentralized storage system.
+In particular, attacks that aim to disrupt the integrity and
+storage guarantees of a decentralized storage system are addressed.
 The system implements a key-value storage (aka. a distributed hash table) like many others.
-It attempts to improve the resilience of network by introducing a verification mechanism,
-which are not present in other similar systems.
+It attempts to improve the resilience of the network by introducing a verification mechanism,
+which is not present in other similar systems.
 
-The nodes in the network are split into two kinds - one strictly storing files,
+The nodes in the network are split into two kinds: one strictly storing files,
 and one for indexing and validation.
 Most other systems focus on the storage part and optimizing the latency as well as balanced distribution
 of the data.
-KISS aims to build on top of that and introduce verification mechanisms that aim to stop malicious peers.
+KISS aims to build on top of that and introduces verification mechanisms that aim to stop malicious peers.
 The storage nodes implement the Kademlia protocol and store the actual data,
 while the verification nodes keep track of what data should be stored and periodically
 verify that the data is still there.
@@ -45,7 +46,7 @@ nodes behave correctly and need to be rewarded or are malicious and need to be p
 
 The current iteration of the system relies on 1 verifier node for simplicity reasons.
 In the future the verifier nodes will be part of a decentralized network as well, 
-as this is a center point of failure and a bottleneck for the throughput of the system,
+as this is a single point of failure and a bottleneck for the throughput of the system,
 as shown by the evaluation.
 
 
@@ -143,11 +144,51 @@ like \cite{kadvschordvspastry}.
 \chapter{Architecture \& Implementation}
 \label{cha:arch-impl}
 
-\section{Architecture}
-\label{sec:architecture}
+\section{Analysis}
+\label{sec:analysis}
 
 \includegraphics[width=350pt]{arch}
+\captionof{figure}{Architecture of the system}
 
+We'll start by covering the high-level architecture of the system and the decisions behind it.
+
+The language of choice for the system is Rust.
+The choice was made because Rust is thread and memory safe, which is important for a system that needs to be resilient.
+It would also tie nicely with the future implementation of decentralized Verifiers and the reward system,
+which will be implemented using a blockchain written in Rust such as Polkadot, Solana, etc.
+Unfortunately, this choice also means that time to develop would suffer,
+and not all external dependencies interface nicely with Rust, e.g., ImmuDB.
+
+Some systems implement all the functionality in one binary,
+however this makes it difficult to change the components of the system.
+Because this project is expected to undergo multiple iterations,
+it is important to be able to easily change the components of the system.
+The final version of KISS will have decentralized verifiers,
+but for the first iteration the verifier is centralized.
+Because the Keepers and Verifiers are split into separate binaries,
+it is easy to replace the centralized Verifier with a decentralized network of Verifiers.
+This allows the system to be installed in a centralized environment.
+For example, a company can install the system in their data center and use it as their storage solution.
+
+The communication between the different components of the system is done using gRPC,
+which is a high performance language agnostic remote procedure call framework.
+gRPC was chosen because it is fast and a lot of technologies support it.
+For example, ImmuDB did not have a Rust library, but it supports gRPC,
+so we could implement the calls to ImmuDB using gRPC.
+
+Apart from separation into different binaries, each binary/component is also split into modules.
+Each module is responsible for a single task.
+For example the Kademlia module is responsible for communicating with the Kademlia swarm.
+This means that communication between modules could become complex as is the case with the Kademlia module,
+which can be accessed only via the KademliaController.
+We'll cover that in more detail in the Implementation section.
+
+A dependency injector is used to initialize the modules and provide them to the other modules.
+This is achieved by defining interfaces for each module and then providing the implementations of these interfaces.
+This allows the modules to be easily replaced with other implementations.
+For example the storage module in the Keeper nodes can be either local storage, RAM storage, or S3 storage.
+
+Next, we'll discuss the different components.
 The system is split into 2 components - Keeper and Verifier.
 Keepers implement the Kademlia protocol and store the actual data,
 while Verifiers keep track of what data should be stored and periodically verify that the data is still there.
@@ -161,9 +202,10 @@ In order to keep track of the Kademlia messages the Keepers use a local Hash Tab
 
 The Verifiers communicate with the Keepers using gRPC.
 This protocol was chosen because it is language agnostic and fast.
-The Verifiers also use gRPC to communicate with the database - ImmuDB.
+The Verifiers also use gRPC to communicate with the ImmuDB
+\footnote{ImmuDB is an immutable database that uses Merkle trees to ensure data integrity. \url{https://immudb.io/}}
+database.
 
-ImmuDB is an immutable database that uses Merkle trees to ensure data integrity.
 The Verifiers use ImmuDB to store metadata about the files stored in the system.
 The metadata includes the file name, and the hash of the file's content and the expiration date of the file.
 The expiration date is used to determine when a file should be deleted from the system.
@@ -179,8 +221,10 @@ Below we can see a diagram of the process of saving a file in the system,
 followed by a diagram of the process of retrieving a file from the system.
 
 \includegraphics[width=350pt]{kiss-store}
+\captionof{figure}{Storing a file in the system}
 
 \includegraphics[width=350pt]{kiss-retrieve}
+\captionof{figure}{Retrieving a file from the system}
 
 
 \section{Implementation}
@@ -472,12 +516,120 @@ And this is without any other dependencies.
 The Keeper binary, on the other hand, uses approximately 450 crates (Rust libraries),
 which are statically linked and is only 9 MB.
 
-TODO ... write more about the evaluation
+Next, we'll discuss the performance of the system.
+Ideally we'd like to evaluate the following list of metrics:
+\begin{itemize}
+    \item System operates as expected - files are stored and retrieved correctly.
+    \item Performance of the system with increasing numbers of peers.
+    \item Performance of the system with increasing file size.
+    \item What is the hotspot in the system?
+    \item What different malicious peers does the system detect
+    \item How does the system react to malicious peers.
+\end{itemize}
 
+From this list we'll only evaluate the first 4 metrics.
 
-\appendix
-\chapter{An appendix}
-\label{cha:an-appendix}
+\section{System operates as expected}
+The system can be used from any gRPC client.
+For example, the grpcurl command line tool can be used to send requests to the system.
+Let the Verifier run at [::1]:3030.
+
+To store files:
+\begin{minted}{bash}
+grpcurl \
+    -plaintext \
+    -import-path src/common/proto \
+    -proto verifier.proto \
+    -d '{"name": "key1", "content": "dmFsdWUxCg==", "ttl": 1200}' \
+    '[::1]:3030' \
+    verifier_grpc.VerifierGrpc/Store                                   
+\end{minted}
+
+Which returns
+\begin{minted}{json}
+{
+    "name": "85f35d35-74c9-418a-b254-0324c224468c",
+}
+\end{minted}
+
+And to retrieve files:
+\begin{minted}{bash}
+grpcurl \
+    -plaintext \
+    -import-path src/common/proto \
+    -proto verifier.proto \
+    -d '{"name": "85f35d35-74c9-418a-b254-0324c224468c"}' \
+    '[::1]:3030' \
+    verifier_grpc.VerifierGrpc/Retrieve
+\end{minted}
+Which returns
+\begin{minted}{json}
+{
+    "name": "85f35d35-74c9-418a-b254-0324c224468c",
+    "content": "dmFsdWUxCg==",
+}
+\end{minted}
+
+grpcurl uses base64 encoding for the content, so the actual content is "value1".
+
+\section{Performance of the system with increasing numbers of peers}
+To evaluate the performance of the system we recorded the resources
+necessary to run the system with different numbers of peers.
+The CPU of the system spikes only in the beginning when starting the instances and then keeps negligible values.
+The RAM necessary to run each Keeper node is 2MB.
+Increasing the instances does not seem to change this number.
+There is a short spike of RAM at the beginning when the instances are started and connect to each other,
+but then it goes back to 2MB.
+To test this we started 1, 5, 100, and 1000 instances,
+with them taking 2MB, 10MB, 200MB, and 2GB of RAM respectively.
+
+\includegraphics[width=350pt]{100}
+\captionof{figure}{Starting 100 Keeper instances.}
+
+\includegraphics[width=350pt]{1000}
+\captionof{figure}{Starting 1000 Keeper instances}
+
+Storing files in the system is also expected to not slow down with time.
+To test this we stored 1000 and 100,000 files with different number of Keeper instances.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{||c c c c||} 
+ \hline
+ Number of files & Keeper instances & Time & CPU usage per instance \\ [0.5ex] 
+ \hline\hline
+ 1000 & 1 & 10.8s & 2\%  \\ 
+ 1000 & 3 & 12.4s & 2\% \\ 
+ 1000 & 10 & 13s & 2\% \\ 
+ 1000 & 100 & 16s & 2\% \\ 
+ 100,000 & 3 & 20m & 2\% \\ 
+ \hline
+\end{tabular}
+\caption{Storing files in the system with different number of Keeper instances}
+\label{table:1}
+\end{table}
+
+Storing 100,000 files in the system with a different number of Keeper nodes did not have a measurable significant
+impact on the time it took to store the files.
+From these numbers we can conclude that the system scales linearly with the number of peers for small number of peers.
+
+\section{Performance of the system with increasing file size}
+
+Increasing the file size would have impact mainly if
+the system runs on many machines in different geographical locations.
+As this is not the case, we will not evaluate this metric,
+as we would only be testing the performance of the local machine's network, and not the system itself.
+
+\section{What is the hotspot in the system?}
+
+The hotspot in the system is the Verifier.
+It is the main bottleneck that really prevents us from scaling the system or looking for another hotspot.
+Since all requests go through the Verifier, there is no way to scale the system without scaling the Verifier first,
+which is out of scope for this project's first iteration.
+
+% \appendix
+% \chapter{An appendix}
+% \label{cha:an-appendix}
 
 \printbibliography
 \end{document}
