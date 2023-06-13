@@ -37,15 +37,15 @@ KISS aims to build on top of that and introduces verification mechanisms that ai
 The storage nodes implement the Kademlia protocol and store the actual data,
 while the verification nodes keep track of what data should be stored and periodically
 verify that the data is still there.
-The verifier is implemented by connecting it to a ledger storage - an instance of ImmuDB,
+The Verifier is implemented by connecting it to a ledger storage - an instance of ImmuDB,
 where it stores metadata about the files stored in the system and transactions.
-Since all requests go through the verifier nodes, they regulate what data goes into the system, 
+Since all requests go through the Verifier nodes, they regulate what data goes into the system, 
 what stays there, and for how long.
-In other words the verifier nodes are the super-users of the system that keep track of which
+In other words, the Verifier nodes are the super-users of the system that keep track of which
 nodes behave correctly and need to be rewarded or are malicious and need to be punished.
 
-The current iteration of the system relies on 1 verifier node for simplicity reasons.
-In the future the verifier nodes will be part of a decentralized network as well, 
+The current iteration of the system relies on 1 Verifier node for simplicity reasons.
+In the future, the Verifier nodes will be part of a decentralized network as well, 
 as this is a single point of failure and a bottleneck for the throughput of the system,
 as shown by the evaluation.
 
@@ -81,13 +81,12 @@ The main goals of the system are:
     \item Ensure durable replicated storage.
     \item Prevent or at least limit malicious peers' influence on the network.
     \item Ensure performance does not degrade by introducing the verification mechanism.
-    \item Make all parts of the system decentralized (including the verifier in the future).
+    \item Make all parts of the system decentralized (including the Verifier in the future).
     \item Make the system easy to use and deploy.
 \end{itemize}
 
-As a side effect the system generates cover network traffic, which makes it harder to track the real traffic.
-This is not the main goal of the system, but it hides real traffic from malicious peers,
-or at least makes it harder to differentiate.
+As a side effect, the system generates cover network traffic, which makes it harder to track the real traffic.
+This is not the main goal of the system, but it is a nice side effect.
 
 The system should be able to withstand attacks from malicious peers that:
 \begin{itemize}
@@ -101,7 +100,7 @@ The system should be able to withstand attacks from malicious peers that:
 \end{itemize}
 
 Some of these goals will be postponed for future work, 
-since the first iteration of the system will have a centralized verifier.
+since the first iteration of the system will have a centralized Verifier.
 
 
 \chapter{Related Work}
@@ -116,7 +115,7 @@ Most of these systems serve as a foundation for applications that implement some
 but we won't go into detail about them, because they are not the focus of this project.
 
 There are also multiple proposals on how to make decentralized storage systems more resilient to malicious peers.
-To name a few - ARA \cite{ara}, Freenet , and S/Kademlia \cite{skademlia}.
+To name a few - ARA \cite{ara}, Freenet, and S/Kademlia \cite{skademlia}.
 The main idea behind these proposals is to have some kind of auditing mechanism that checks if the peers are behaving correctly.
 ARA proposes a system where peers allocate "credits" to other peers they communicate with.
 If a peer A requests files from another peer B, B gains "credits", while A informs other neighboring peers
@@ -144,13 +143,11 @@ like \cite{kadvschordvspastry}.
 \chapter{Architecture \& Implementation}
 \label{cha:arch-impl}
 
-\section{Analysis}
-\label{sec:analysis}
-
-\includegraphics[width=350pt]{arch}
-\captionof{figure}{Architecture of the system}
-
-We'll start by covering the high-level architecture of the system and the decisions behind it.
+The system is split into 2 components - Keeper and Verifier.
+Keepers implement the Kademlia protocol and store the actual data,
+while Verifiers keep track of what data should be stored and periodically verify that the data is still there.
+In the current version, there is one Verifier for simplicity reasons,
+but in the future the Verifiers will be part of a p2p network as well.
 
 The language of choice for the system is Rust.
 The choice was made because Rust is thread and memory safe, which is important for a system that needs to be resilient.
@@ -159,12 +156,22 @@ which will be implemented using a blockchain written in Rust such as Polkadot, S
 Unfortunately, this choice also means that time to develop would suffer,
 and not all external dependencies interface nicely with Rust, e.g., ImmuDB.
 
+\section{High level architecture}
+\label{sec:analysis}
+
+We'll start by covering the high-level architecture of the system and the decisions behind it,
+then we'll gradually dig deeper into the architecture of the different components,
+and finally talk about the implementation details.
+
+\includegraphics[width=350pt]{arch}
+\captionof{figure}{High level architecture of the system}
+
 Some systems implement all the functionality in one binary,
 however this makes it difficult to change the components of the system.
 Because this project is expected to undergo multiple iterations,
 it is important to be able to easily change the components of the system.
-The final version of KISS will have decentralized verifiers,
-but for the first iteration the verifier is centralized.
+The final version of KISS will have decentralized Verifiers,
+but for the first iteration, the Verifier is centralized.
 Because the Keepers and Verifiers are split into separate binaries,
 it is easy to replace the centralized Verifier with a decentralized network of Verifiers.
 This allows the system to be installed in a centralized environment.
@@ -178,27 +185,25 @@ so we could implement the calls to ImmuDB using gRPC.
 
 Apart from separation into different binaries, each binary/component is also split into modules.
 Each module is responsible for a single task.
-For example the Kademlia module is responsible for communicating with the Kademlia swarm.
-This means that communication between modules could become complex as is the case with the Kademlia module,
+For example, the Kademlia module is responsible for communicating with the Kademlia swarm.
+This means that communication between modules could become complex, as is the case with the Kademlia module,
 which can be accessed only via the KademliaController.
 We'll cover that in more detail in the Implementation section.
 
 A dependency injector is used to initialize the modules and provide them to the other modules.
 This is achieved by defining interfaces for each module and then providing the implementations of these interfaces.
 This allows the modules to be easily replaced with other implementations.
-For example the storage module in the Keeper nodes can be either local storage, RAM storage, or S3 storage.
+For example, the storage module in the Keeper nodes can be either local storage, RAM storage, or S3 storage.
 
-Next, we'll discuss the different components.
-The system is split into 2 components - Keeper and Verifier.
-Keepers implement the Kademlia protocol and store the actual data,
-while Verifiers keep track of what data should be stored and periodically verify that the data is still there.
-In the current version there is one Verifier for simplicity reasons,
-but in the future the Verifiers will be part of a p2p network as well.
+\section{Keepers}
 
 The Keepers communicate between each other using the Kademlia protocol.
 Kademlia is the backbone of the Keepers as it implements the peer discovery and routing.
 All Kademlia communication is event-based and asynchronous.
-In order to keep track of the Kademlia messages the Keepers use a local Hash Table.
+When a message is sent to a peer, the sender stores a callback
+function in the form of a channel that will be called when the peer responds.
+
+\section{Verifiers}
 
 The Verifiers communicate with the Keepers using gRPC.
 This protocol was chosen because it is language agnostic and fast.
@@ -212,13 +217,14 @@ The expiration date is used to determine when a file should be deleted from the 
 Deletion is implemented as a soft deletion - the Verifiers simply stop checking for the file's existence.
 
 There was no library that implemented an API for ImmuDB in Rust and ImmuDB did not document how to create one,
-so we had to reverse engineer the python library and implement a Rust library.
-The Rust library is very limited as it implements only the necessary endpoints for this project.
-The library is fairly simple as it performs a login request, which returns a token and then every
-subsequent request uses this token to authenticate itself.
+so we had to reverse engineer the python library and implement the API calls in Rust.
+Our implementation is very limited as it implements only the necessary endpoints for this project.
+It operates by first sending a login request and saving the token returned from that request.
+Every subsequent request uses this token to authenticate itself and access the database.
 
-Below we can see a diagram of the process of saving a file in the system,
+Below, we can see a diagram of the process of saving a file in the system,
 followed by a diagram of the process of retrieving a file from the system.
+They have a very similar flow.
 
 \includegraphics[width=350pt]{kiss-store}
 \captionof{figure}{Storing a file in the system}
@@ -336,7 +342,7 @@ It uses the object\_store crate, which provides the necessary APIs to work with 
 
 The gRPC module is implemented using the tonic crate.
 It is very well documented and explains in details how to implement a gRPC server and client.
-It boils down to writing a protobuf definition and then tonic generates all the boiler-plate code,
+It boils down to writing a protobuf definition and then tonic generates all the boilerplate code,
 leaving the developer to implement only the interface methods for the server and the client.
 
 Another pretty hard to implement module is the Kademlia module.
