@@ -1,11 +1,16 @@
-use std::{env, net::{IpAddr, SocketAddr}};
+use std::{
+    env,
+    net::{IpAddr, SocketAddr},
+};
 
 use common::{
     consts::{self, KEEPER_CONFIG_BASE_DIR},
     ErrorKind,
 };
 use config::{Config, Environment, File};
-use runtime_injector::{interface, Service, ServiceFactory, Injector, RequestInfo, InjectResult, Svc};
+use runtime_injector::{
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -43,9 +48,10 @@ pub struct Grpc {
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Swarm {
-  pub keypair: String,
-  pub port: u16,
-  pub bootstrap: Vec<SocketAddr>,
+    #[serde(default)]
+    pub keypair: Option<String>,
+    pub port: u16,
+    pub bootstrap: Vec<SocketAddr>,
 }
 
 pub trait ISettings: Service {
@@ -84,21 +90,28 @@ impl ServiceFactory<()> for SettingsProvider {
         _injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-            let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
+        let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
-            Ok(Config::builder()
+        Ok(
+            Config::builder()
                 .add_source(File::with_name(consts::KEEPER_CONFIG_BASE))
                 .add_source(
-                    File::with_name(&format!("{}/{}", KEEPER_CONFIG_BASE_DIR, env_conf)).required(false),
+                    File::with_name(&format!("{}/{}", KEEPER_CONFIG_BASE_DIR, env_conf))
+                        .required(false),
                 )
-                .add_source(Environment::with_prefix("KISS"))
+                .add_source(
+                    Environment::with_prefix("KISS")
+                        .try_parsing(true)
+                        .separator("_")
+                        .list_separator(":"),
+                )
                 .build()
                 .map_err(|err| ErrorKind::ConfigErr(err))
                 .unwrap() // TODO remove
                 .try_deserialize()
                 .map_err(|err| ErrorKind::ConfigErr(err))
-                .unwrap() // TODO remove
-            )
+                .unwrap(), // TODO remove
+        )
     }
 }
 

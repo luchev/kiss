@@ -20,3 +20,5 @@ docs/external
 *.run.xml
 
 submodules
+.DS_store
+_minted-*

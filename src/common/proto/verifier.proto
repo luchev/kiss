@@ -4,9 +4,12 @@ package verifier_grpc;
 message StoreRequest {
     string name = 1;
     bytes content = 2;
+    int64 ttl = 3;
 }
 
-message StoreResponse { }
+message StoreResponse {
+    string name = 1;
+}
 
 message RetrieveRequest {
     string name = 1;

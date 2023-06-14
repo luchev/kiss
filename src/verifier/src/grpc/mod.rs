@@ -1,21 +1,25 @@
+use self::keeper_client::KeeperGateway;
+use crate::grpc::keeper_client::IKeeperGateway;
+use crate::ledger::ILedger;
+use crate::ledger::ImmuLedger;
 use crate::settings::ISettings;
 use async_trait::async_trait;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
-use common::{ErrorKind, Res};
+use common::hasher::hash;
+use common::{hasher, ErrorKind, Res};
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use std::net::SocketAddr;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 use verifier_grpc::verifier_grpc_server::{VerifierGrpc, VerifierGrpcServer};
 use verifier_grpc::{RetrieveRequest, RetrieveResponse, StoreRequest, StoreResponse};
 
-use self::keeper_client::IKeeperGateway;
-
-mod verifier_grpc {
+pub mod verifier_grpc {
     tonic::include_proto!("verifier_grpc");
 }
 pub mod keeper_client;
@@ -36,12 +40,15 @@ impl ServiceFactory<()> for GrpcHandlerProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
-        let keeper_gateway = injector
-            .get::<Svc<dyn IKeeperGateway>>()
-            .expect("keeper gateway not provided");
+        let keeper_gateway: Svc<Mutex<KeeperGateway>> =
+            injector.get().expect("keeper gateway not provided");
+        let ledger: Svc<Mutex<ImmuLedger>> = injector.get().expect("ledger not provided");
 
         Ok(GrpcHandler {
-            inner: Inner { keeper_gateway },
+            inner: Inner {
+                keeper_gateway,
+                ledger,
+            },
             port,
         })
     }
@@ -50,11 +57,13 @@ impl ServiceFactory<()> for GrpcHandlerProvider {
 #[async_trait]
 pub trait IGrpcHandler: Service {
     async fn start(&self) -> Res<()>;
+    fn inner(&self) -> Res<Inner>;
 }
 
 #[derive(Clone)]
-struct Inner {
-    keeper_gateway: Svc<dyn IKeeperGateway>,
+pub struct Inner {
+    keeper_gateway: Svc<Mutex<KeeperGateway>>,
+    ledger: Svc<Mutex<ImmuLedger>>,
 }
 
 pub struct GrpcHandler {
@@ -85,6 +94,10 @@ impl IGrpcHandler for GrpcHandler {
 
         Ok(())
     }
+
+    fn inner(&self) -> Res<Inner> {
+        Ok(self.inner.clone())
+    }
 }
 
 #[async_trait]
@@ -95,9 +108,33 @@ impl VerifierGrpc for Inner {
     ) -> std::result::Result<Response<StoreResponse>, Status> {
         let request = request.into_inner();
         info!("received a store request for {}", request.name);
-        todo!();
-        // let reply = StoreResponse {};
-        // Ok(Response::new(reply))
+        let file_hash = hash(&request.content);
+        info!("{}", file_hash);
+        let mut ledger = self.ledger.lock().await;
+        let file_uuid = ledger
+            .create_contract(file_hash, request.ttl)
+            .await
+            .unwrap();
+        
+        info!("created contract for {}", file_uuid);
+
+        let res = self
+            .keeper_gateway
+            .lock()
+            .await
+            .put(file_uuid.clone(), request.content)
+            .await;
+
+        match res {
+            Ok(_) => {
+                info!("stored file {}", file_uuid);
+                Ok(Response::new(StoreResponse { name: file_uuid }))
+            },
+            Err(e) => {
+                info!("failed to store file {}", file_uuid);
+                Err(Status::internal(e.to_string()))
+            },
+        }
     }
 
     async fn retrieve(
@@ -106,8 +143,25 @@ impl VerifierGrpc for Inner {
     ) -> std::result::Result<Response<RetrieveResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.name);
-        todo!();
-        // let reply = RetrieveResponse { name: "", data: vec![] };
-        // Ok(Response::new(reply))
+        let mut ledger = self.ledger.lock().await;
+        let contract = ledger.get_contract(request.name.clone()).await.unwrap();
+
+        let res = self
+            .keeper_gateway
+            .lock()
+            .await
+            .get(request.name.clone())
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        let file_hash = hasher::hash(&res);
+        if file_hash != contract.file_hash {
+            return Err(Status::data_loss("file has been modified"));
+        }
+
+        Ok(Response::new(RetrieveResponse {
+            name: request.name,
+            content: res,
+        }))
     }
 }

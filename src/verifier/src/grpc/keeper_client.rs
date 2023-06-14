@@ -10,8 +10,10 @@ use runtime_injector::{
 };
 use std::net::SocketAddr;
 use tokio::runtime::Handle;
-use tokio::{runtime::Runtime, sync::Mutex};
+use tokio::{sync::Mutex};
 use tonic::transport::Channel;
+
+use self::keeper_grpc::VerifyRequest;
 
 mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
@@ -19,8 +21,9 @@ mod keeper_grpc {
 
 #[async_trait]
 pub trait IKeeperGateway: Service {
-    async fn put(&mut self, key: String, value: String) -> Res<()>;
-    async fn get(&mut self, key: String) -> Res<Bytes>;
+    async fn put(&mut self, key: String, value: Bytes) -> Res<()>;
+    async fn get(&mut self, path: String) -> Res<Bytes>;
+    async fn verify(&mut self, path: String) -> Res<String>;
 }
 
 #[derive(Debug)]
@@ -30,12 +33,12 @@ pub struct KeeperGateway {
 
 #[async_trait]
 impl IKeeperGateway for KeeperGateway {
-    async fn put(&mut self, key: String, value: String) -> Res<()> {
+    async fn put(&mut self, key: String, value: Bytes) -> Res<()> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
         let request = tonic::Request::new(PutRequest {
             path: key,
-            content: value.into_bytes(),
+            content: value,
         });
         let response = client.put(request).await;
         match response {
@@ -44,13 +47,24 @@ impl IKeeperGateway for KeeperGateway {
         }
     }
 
-    async fn get(&mut self, key: String) -> Res<Bytes> {
+    async fn get(&mut self, path: String) -> Res<Bytes> {
         let mut client = self.client.lock().await;
         let client = client.as_mut().unwrap();
-        let request = tonic::Request::new(GetRequest { path: key });
+        let request = tonic::Request::new(GetRequest { path: path });
         let response = client.get(request).await;
         match response {
             Ok(res) => Ok(res.into_inner().content),
+            Err(e) => Err(ErrorKind::GrpcError(e).into()),
+        }
+    }
+
+    async fn verify(&mut self, path: String) -> Res<String> {
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().unwrap();
+        let request = tonic::Request::new(VerifyRequest { path: path });
+        let response = client.verify(request).await;
+        match response {
+            Ok(res) => Ok(res.into_inner().hash),
             Err(e) => Err(ErrorKind::GrpcError(e).into()),
         }
     }
@@ -94,7 +108,7 @@ interface! {
 async fn connect(address: SocketAddr) -> KeeperGrpcClient<Channel> {
     let client = KeeperGrpcClient::connect(format!("http://{}", address))
         .await
-        .expect("failed to connect to keeper node on address");
+        .expect(format!("failed to connect to keeper node on address: {}", address).as_str());
 
     info!("connected to a keeper node on address {}", address);
     client

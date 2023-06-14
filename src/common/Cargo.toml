@@ -9,11 +9,13 @@ config = "0.13.3"
 env_logger = "0.10.0"
 error-chain = "0.12.4"
 exitcode = "1.1.2"
+hex = "0.4.3"
 libp2p-identity = "0.1.1"
 libp2p-kad = "0.43.1"
 log = "0.4.17"
 object_store = "0.5.5"
 rust_docker = "0.1.1"
+sha3 = "0.10.8"
 tonic = "0.8.3"
 
 [lib]

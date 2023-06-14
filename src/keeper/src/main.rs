@@ -26,16 +26,7 @@ async fn main() {
 async fn run() -> Res<()> {
     env_logger::init();
     let injector = dependency_injector()?;
-    let sender: Svc<dyn ISwarmController> = injector.get().unwrap();
-
-    let x = async || {
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        let x = sender.set("key1".to_string(), "value1".as_bytes().to_vec()).await;
-        let x = sender.get("key1".to_string()).await;
-        Ok(())
-    };
-
     let grpc_handler: Svc<dyn IGrpcHandler> = injector.get().unwrap();
     let kad: Svc<dyn ISwarm> = injector.get().unwrap();
-    try_join!(grpc_handler.start(), kad.start(), x()).map(|_| ())
+    try_join!(grpc_handler.start(), kad.start()).map(|_| ())
 }
