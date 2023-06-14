@@ -19,7 +19,7 @@ use tonic::{Request, Response, Status};
 use verifier_grpc::verifier_grpc_server::{VerifierGrpc, VerifierGrpcServer};
 use verifier_grpc::{RetrieveRequest, RetrieveResponse, StoreRequest, StoreResponse};
 
-mod verifier_grpc {
+pub mod verifier_grpc {
     tonic::include_proto!("verifier_grpc");
 }
 pub mod keeper_client;
@@ -57,10 +57,11 @@ impl ServiceFactory<()> for GrpcHandlerProvider {
 #[async_trait]
 pub trait IGrpcHandler: Service {
     async fn start(&self) -> Res<()>;
+    fn inner(&self) -> Res<Inner>;
 }
 
 #[derive(Clone)]
-struct Inner {
+pub struct Inner {
     keeper_gateway: Svc<Mutex<KeeperGateway>>,
     ledger: Svc<Mutex<ImmuLedger>>,
 }
@@ -93,6 +94,10 @@ impl IGrpcHandler for GrpcHandler {
 
         Ok(())
     }
+
+    fn inner(&self) -> Res<Inner> {
+        Ok(self.inner.clone())
+    }
 }
 
 #[async_trait]
@@ -110,6 +115,8 @@ impl VerifierGrpc for Inner {
             .create_contract(file_hash, request.ttl)
             .await
             .unwrap();
+        
+        info!("created contract for {}", file_uuid);
 
         let res = self
             .keeper_gateway
@@ -119,8 +126,14 @@ impl VerifierGrpc for Inner {
             .await;
 
         match res {
-            Ok(_) => Ok(Response::new(StoreResponse { name: file_uuid })),
-            Err(e) => Err(Status::internal(e.to_string())),
+            Ok(_) => {
+                info!("stored file {}", file_uuid);
+                Ok(Response::new(StoreResponse { name: file_uuid }))
+            },
+            Err(e) => {
+                info!("failed to store file {}", file_uuid);
+                Err(Status::internal(e.to_string()))
+            },
         }
     }
 

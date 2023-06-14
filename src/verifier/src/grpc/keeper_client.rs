@@ -108,7 +108,7 @@ interface! {
 async fn connect(address: SocketAddr) -> KeeperGrpcClient<Channel> {
     let client = KeeperGrpcClient::connect(format!("http://{}", address))
         .await
-        .expect("failed to connect to keeper node on address");
+        .expect(format!("failed to connect to keeper node on address: {}", address).as_str());
 
     info!("connected to a keeper node on address {}", address);
     client

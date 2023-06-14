@@ -260,7 +260,7 @@ impl ILedger for ImmuLedger {
     }
 
     async fn get_contracts(&mut self) -> Res<Vec<Contract>> {
-        let sql = "SELECT * FROM contracts;".to_string();
+        let sql = "SELECT * FROM contracts LIMIT 100;".to_string();
 
         let response = self.query_execute(sql, vec![]).await.unwrap();
         let contracts: Vec<_> = response

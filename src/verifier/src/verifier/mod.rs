@@ -1,10 +1,7 @@
-use std::borrow::BorrowMut;
-use std::ops::DerefMut;
 use std::time::{Instant, SystemTime};
 
 use crate::grpc::keeper_client::IKeeperGateway;
 use crate::ledger::ImmuLedger;
-use crate::types::Contract;
 use crate::{grpc::keeper_client::KeeperGateway, ledger::ILedger};
 use async_trait::async_trait;
 use common::Res;
@@ -56,8 +53,10 @@ impl IVerifier for Verifier {
     async fn start(&self) -> Res<()> {
         loop {
             info!("fetching contracts");
-            let mut ledger = self.ledger.lock().await;
-            let contracts = ledger.get_contracts().await.unwrap();
+            let contracts = {
+                let mut ledger = self.ledger.lock().await;
+                ledger.get_contracts().await.unwrap()
+            };
             let time_before_start = Instant::now();
             for contract in contracts {
                 let mut keeper_gateway = self.keeper_gateway.lock().await;

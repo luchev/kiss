@@ -1,0 +1,11 @@
+storage:
+  type: local
+  path: data/peer1
+  create: true
+grpc:
+  port: 5005
+swarm:
+  keypair: CAESQKV3dTAPB/2Wh3Ju7IuO9FN9m/4vn+PRxt+j+UQn9NeMezS6NMNptbSXBeaDXwMpfM1frWLUwKQy4XvojWkdUaU
+  port: 6060
+  bootstrap:
+    - 127.0.0.1:7070

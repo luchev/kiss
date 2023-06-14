@@ -10,7 +10,7 @@ use futures::StreamExt;
 use libp2p::{
     core::upgrade::Version,
     kad::{
-        record::Key, store::MemoryStore, GetRecordOk, GetRecordResult, Kademlia, KademliaConfig,
+        record::Key, store::{MemoryStore, MemoryStoreConfig}, GetRecordOk, GetRecordResult, Kademlia, KademliaConfig,
         KademliaEvent, PeerRecord, PutRecordResult, QueryId, QueryResult, Quorum, Record,
     },
     mdns::{self, tokio::Behaviour},
@@ -50,14 +50,15 @@ impl ServiceFactory<()> for SwarmProvider {
         let settings: Svc<dyn ISettings> = injector.get().unwrap();
         let receiver: Svc<Mutex<Receiver<SwarmInstruction>>> = injector.get().unwrap();
 
-        let local_key = Keypair::from_protobuf_encoding(
-            &base64::engine::general_purpose::STANDARD_NO_PAD
-                .decode(settings.swarm().keypair)
-                .map_err(|e| ErrorKind::KeypairBase64DecodeError(e))
-                .unwrap(), // TODO handle error
-        )
-        .map_err(|e| ErrorKind::KeypairProtobufDecodeError(e))
-        .unwrap(); // TODO handle error
+        let local_key = match settings.swarm().keypair {
+            Some(keypair) => Keypair::from_protobuf_encoding(
+                &base64::engine::general_purpose::STANDARD_NO_PAD
+                    .decode(keypair)
+                    .map_err(|e| ErrorKind::KeypairBase64DecodeError(e))
+                    .unwrap(), // TODO remove
+            ).unwrap(), // TODO remove
+            None => generate_keypair(),
+        };
 
         let local_peer_id = PeerId::from(local_key.public());
         info!("starting peer with id: {}", local_peer_id);
@@ -66,7 +67,12 @@ impl ServiceFactory<()> for SwarmProvider {
             let cfg = KademliaConfig::default()
                 .set_query_timeout(Duration::from_secs(60))
                 .to_owned();
-            let store = MemoryStore::new(local_peer_id);
+            let store = MemoryStore::with_config(local_peer_id, MemoryStoreConfig{
+                max_records: 150000,
+                max_value_bytes: 1024 * 1024 * 200,
+                max_provided_keys: 150000,
+                max_providers_per_key: 20,
+            });
             let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).unwrap();
             let kademlia = Kademlia::with_config(local_peer_id, store, cfg);
             let behaviour = CombinedBehaviour { kademlia, mdns };
@@ -294,4 +300,8 @@ impl From<mdns::Event> for WireEvent {
 pub enum WireEvent {
     Kademlia(KademliaEvent),
     Mdns(mdns::Event),
+}
+
+fn generate_keypair() -> Keypair {
+    Keypair::generate_ed25519()
 }

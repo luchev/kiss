@@ -21,3 +21,4 @@ docs/external
 
 submodules
 .DS_store
+_minted-*

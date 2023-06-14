@@ -17,10 +17,12 @@ use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
+use tokio::net::TcpListener;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
+use tokio_stream::wrappers::TcpListenerStream;
 
 use self::keeper_grpc::{VerifyRequest, VerifyResponse};
 
@@ -72,8 +74,11 @@ impl IGrpcHandler for GrpcHandler {
         let addr = format!("{}:{}", LOCALHOST, self.port)
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
+    
+        let listener = TcpListener::bind(addr).await.unwrap();
+        let real_addr = listener.local_addr().unwrap();
 
-        info!("grpc listening on {}", addr);
+        info!("grpc listening on {}", real_addr);
 
         let middleware = tower::ServiceBuilder::new()
             .timeout(Duration::from_secs(GRPC_TIMEOUT))
@@ -83,7 +88,7 @@ impl IGrpcHandler for GrpcHandler {
         Server::builder()
             .layer(middleware)
             .add_service(KeeperGrpcServer::new(self.inner.clone()))
-            .serve(addr)
+            .serve_with_incoming(TcpListenerStream::new(listener))
             .await
             .map_err(|e| ErrorKind::GrpcServerStartFailed(e))?;
 
