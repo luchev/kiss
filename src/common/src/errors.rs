@@ -1,5 +1,5 @@
 use std::{error::Error as StdError, process::exit};
-
+use std::path::PathBuf;
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
 use libp2p_identity::DecodingError;
@@ -52,6 +52,10 @@ error_chain! {
             description("retrieving file failed"),
             display("retrieving file failed: {}", e),
         }
+        StorageConvertToStreamFailed(e: object_store::Error) {
+            description("converting file to stream failed"),
+            display("converting file to stream failed: {}", e),
+        }
         GrpcServerStartFailed(e: tonic::transport::Error) {
             description("grpc server failed to start"),
             display("grpc server failed to start: {}", e.source().map_or("unknown transport error".to_string(), |e| e.to_string())),
@@ -79,6 +83,10 @@ error_chain! {
         GrpcError(e: Status) {
             description("grpc error"),
             display("grpc error: {}", e),
+        }
+        PathParsingError(e: PathBuf) {
+            description("grpc error"),
+            // display("grpc error: {}", e),
         }
     }
 }

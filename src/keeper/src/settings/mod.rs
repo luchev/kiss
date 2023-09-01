@@ -1,15 +1,12 @@
-use std::{
-    env,
-    net::{IpAddr, SocketAddr},
-};
+use std::{env, net::SocketAddr};
 
 use common::{
     consts::{self, KEEPER_CONFIG_BASE_DIR},
-    ErrorKind,
+    Er, ErrorKind,
 };
 use config::{Config, Environment, File};
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, ServiceInfo,
 };
 use serde::{Deserialize, Serialize};
 
@@ -92,26 +89,28 @@ impl ServiceFactory<()> for SettingsProvider {
     ) -> InjectResult<Self::Result> {
         let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
-        Ok(
-            Config::builder()
-                .add_source(File::with_name(consts::KEEPER_CONFIG_BASE))
-                .add_source(
-                    File::with_name(&format!("{}/{}", KEEPER_CONFIG_BASE_DIR, env_conf))
-                        .required(false),
-                )
-                .add_source(
-                    Environment::with_prefix("KISS")
-                        .try_parsing(true)
-                        .separator("_")
-                        .list_separator(":"),
-                )
-                .build()
-                .map_err(|err| ErrorKind::ConfigErr(err))
-                .unwrap() // TODO remove
-                .try_deserialize()
-                .map_err(|err| ErrorKind::ConfigErr(err))
-                .unwrap(), // TODO remove
-        )
+        Ok(Config::builder()
+            .add_source(File::with_name(consts::KEEPER_CONFIG_BASE))
+            .add_source(
+                File::with_name(&format!("{}/{}", KEEPER_CONFIG_BASE_DIR, env_conf))
+                    .required(false),
+            )
+            .add_source(
+                Environment::with_prefix("KISS")
+                    .try_parsing(true)
+                    .separator("_")
+                    .list_separator(":"),
+            )
+            .build()
+            .map_err(|err| runtime_injector::InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<SettingsProvider>(),
+                inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
+            })?
+            .try_deserialize()
+            .map_err(|err| runtime_injector::InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<SettingsProvider>(),
+                inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
+            }))?
     }
 }
 

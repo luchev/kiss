@@ -10,8 +10,10 @@ use futures::StreamExt;
 use libp2p::{
     core::upgrade::Version,
     kad::{
-        record::Key, store::{MemoryStore, MemoryStoreConfig}, GetRecordOk, GetRecordResult, Kademlia, KademliaConfig,
-        KademliaEvent, PeerRecord, PutRecordResult, QueryId, QueryResult, Quorum, Record,
+        record::Key,
+        store::{MemoryStore, MemoryStoreConfig},
+        GetRecordOk, GetRecordResult, Kademlia, KademliaConfig, KademliaEvent, PeerRecord,
+        PutRecordResult, QueryId, QueryResult, Quorum, Record,
     },
     mdns::{self, tokio::Behaviour},
     noise::NoiseAuthenticated,
@@ -47,8 +49,8 @@ impl ServiceFactory<()> for SwarmProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let settings: Svc<dyn ISettings> = injector.get().unwrap();
-        let receiver: Svc<Mutex<Receiver<SwarmInstruction>>> = injector.get().unwrap();
+        let settings: Svc<dyn ISettings> = injector.get()?;
+        let receiver: Svc<Mutex<Receiver<SwarmInstruction>>> = injector.get()?;
 
         let local_key = match settings.swarm().keypair {
             Some(keypair) => Keypair::from_protobuf_encoding(
@@ -56,7 +58,8 @@ impl ServiceFactory<()> for SwarmProvider {
                     .decode(keypair)
                     .map_err(|e| ErrorKind::KeypairBase64DecodeError(e))
                     .unwrap(), // TODO remove
-            ).unwrap(), // TODO remove
+            )
+            .unwrap(), // TODO remove
             None => generate_keypair(),
         };
 
@@ -67,12 +70,15 @@ impl ServiceFactory<()> for SwarmProvider {
             let cfg = KademliaConfig::default()
                 .set_query_timeout(Duration::from_secs(60))
                 .to_owned();
-            let store = MemoryStore::with_config(local_peer_id, MemoryStoreConfig{
-                max_records: 150000,
-                max_value_bytes: 1024 * 1024 * 200,
-                max_provided_keys: 150000,
-                max_providers_per_key: 20,
-            });
+            let store = MemoryStore::with_config(
+                local_peer_id,
+                MemoryStoreConfig {
+                    max_records: 150000,
+                    max_value_bytes: 1024 * 1024 * 200,
+                    max_provided_keys: 150000,
+                    max_providers_per_key: 20,
+                },
+            );
             let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).unwrap();
             let kademlia = Kademlia::with_config(local_peer_id, store, cfg);
             let behaviour = CombinedBehaviour { kademlia, mdns };

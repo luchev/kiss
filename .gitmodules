@@ -4,3 +4,6 @@
 [submodule "submodules/googleapis"]
 	path = submodules/googleapis
 	url = https://github.com/googleapis/googleapis
+[submodule "submodules/runtime_injector"]
+	path = submodules/runtime_injector
+	url = git@github.com:luchev/runtime_injector.git

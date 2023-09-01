@@ -1,4 +1,4 @@
-use crate::types::{Bytes, Responder, OneReceiver};
+use crate::types::{Bytes, OneReceiver, Responder};
 use async_trait::async_trait;
 use common::Res;
 use log::info;
@@ -23,7 +23,7 @@ impl ServiceFactory<()> for SwarmControllerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let sender: Svc<Mutex<mpsc::Sender<SwarmInstruction>>> = injector.get().unwrap();
+        let sender: Svc<Mutex<mpsc::Sender<SwarmInstruction>>> = injector.get()?;
         Ok(SwarmController { swarm_api: sender })
     }
 }

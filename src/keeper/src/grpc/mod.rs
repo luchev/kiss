@@ -2,6 +2,7 @@ mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
 use crate::p2p::controller::ISwarmController;
+use crate::p2p::swarm::ISwarm;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;
@@ -15,14 +16,14 @@ use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
 use libp2p_identity::Keypair;
 use log::info;
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, ServiceInfo, Svc,
 };
-use tokio::net::TcpListener;
 use std::net::SocketAddr;
 use std::time::Duration;
+use tokio::net::TcpListener;
+use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-use tokio_stream::wrappers::TcpListenerStream;
 
 use self::keeper_grpc::{VerifyRequest, VerifyResponse};
 
@@ -41,12 +42,15 @@ impl ServiceFactory<()> for GrpcProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
-        let storage = injector.get::<Svc<dyn IStorage>>().unwrap();
-        let swarm_controller = injector.get::<Svc<dyn ISwarmController>>().unwrap();
+        let port = injector.get::<Svc<dyn ISettings>>()?.grpc().port;
+        let storage = injector.get::<Svc<dyn IStorage>>()?;
+        let swarm_controller = injector.get::<Svc<dyn ISwarmController>>()?;
 
         Ok(GrpcHandler {
-            inner: Inner { storage, swarm_controller },
+            inner: Inner {
+                storage,
+                swarm_controller,
+            },
             port,
         })
     }
@@ -74,7 +78,7 @@ impl IGrpcHandler for GrpcHandler {
         let addr = format!("{}:{}", LOCALHOST, self.port)
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
-    
+
         let listener = TcpListener::bind(addr).await.unwrap();
         let real_addr = listener.local_addr().unwrap();
 
@@ -104,7 +108,10 @@ impl KeeperGrpc for Inner {
     ) -> std::result::Result<Response<PutResponse>, Status> {
         let request = request.into_inner();
         info!("received a put request for {}", request.path);
-        let res = self.swarm_controller.set(request.path.into(), request.content).await;
+        let res = self
+            .swarm_controller
+            .set(request.path.into(), request.content)
+            .await;
         info!("kad result {:?}", res);
         // self.storage
         //     .put(request.path.into(), request.content)
@@ -146,11 +153,15 @@ impl KeeperGrpc for Inner {
     ) -> std::result::Result<Response<VerifyResponse>, Status> {
         let request = request.into_inner();
         info!("received a verify request for {}", request.path);
-        let content = self.swarm_controller.get(request.path.into()).await.map_err(|e| {
-            Status::not_found(format!("failed to get file from swarm: {}", e))
-        })?;
+        let content = self
+            .swarm_controller
+            .get(request.path.into())
+            .await
+            .map_err(|e| Status::not_found(format!("failed to get file from swarm: {}", e)))?;
 
-        let reply = VerifyResponse { hash: hash(&content) };
+        let reply = VerifyResponse {
+            hash: hash(&content),
+        };
         Ok(Response::new(reply))
     }
 }
