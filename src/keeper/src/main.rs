@@ -5,8 +5,7 @@
 #![deny(clippy::indexing_slicing)]
 #![deny(clippy::expect_used)]
 #![deny(clippy::panic)]
-#![deny(clippy::todo)]
-
+// #![deny(clippy::todo)]
 
 mod deps;
 mod grpc;
@@ -19,7 +18,7 @@ use common::{die, Res};
 use deps::dependency_injector;
 use grpc::IGrpcHandler;
 use log::info;
-use p2p::{controller::ISwarmController, swarm::ISwarm};
+use p2p::swarm::ISwarm;
 use runtime_injector::Svc;
 use tokio::try_join;
 
@@ -34,7 +33,7 @@ async fn main() {
 async fn run() -> Res<()> {
     env_logger::init();
     let injector = dependency_injector()?;
-    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get().unwrap();
-    let kad: Svc<dyn ISwarm> = injector.get().unwrap();
+    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
+    let kad: Svc<dyn ISwarm> = injector.get()?;
     try_join!(grpc_handler.start(), kad.start()).map(|_| ())
 }

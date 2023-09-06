@@ -1,11 +1,10 @@
-use crate::{
-    p2p::controller::SwarmInstruction,
-    settings::ISettings,
-    types::{Bytes, OneReceiver, OneSender},
-};
+use crate::settings::ISettings;
 use async_trait::async_trait;
 use base64::Engine as _;
-use common::{ErrorKind, Res};
+use common::{
+    types::{Bytes, OneReceiver, OneSender, SwarmInstruction},
+    Er, ErrorKind, Res,
+};
 use futures::StreamExt;
 use libp2p::{
     core::upgrade::Version,
@@ -16,16 +15,16 @@ use libp2p::{
         PutRecordResult, QueryId, QueryResult, Quorum, Record,
     },
     mdns::{self, tokio::Behaviour},
-    noise::NoiseAuthenticated,
+    noise,
     swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::tokio::Transport,
-    yamux::YamuxConfig,
-    PeerId, Transport as _,
+    yamux, PeerId, Transport as _,
 };
 use libp2p_identity::Keypair;
 use log::{info, warn};
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo, Svc,
 };
 use std::{collections::HashMap, fmt::Debug, time::Duration};
 use tokio::{
@@ -56,10 +55,15 @@ impl ServiceFactory<()> for SwarmProvider {
             Some(keypair) => Keypair::from_protobuf_encoding(
                 &base64::engine::general_purpose::STANDARD_NO_PAD
                     .decode(keypair)
-                    .map_err(|e| ErrorKind::KeypairBase64DecodeError(e))
-                    .unwrap(), // TODO remove
+                    .map_err(|e| InjectError::ActivationFailed {
+                        service_info: ServiceInfo::of::<Swarm>(),
+                        inner: Box::<Er>::new(ErrorKind::KeypairBase64DecodeError(e).into()),
+                    })?,
             )
-            .unwrap(), // TODO remove
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Swarm>(),
+                inner: Box::<Er>::new(ErrorKind::KeypairBase64DecodingError(e).into()),
+            })?,
             None => generate_keypair(),
         };
 
@@ -79,13 +83,24 @@ impl ServiceFactory<()> for SwarmProvider {
                     max_providers_per_key: 20,
                 },
             );
-            let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).unwrap();
+            let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).map_err(|e| {
+                InjectError::ActivationFailed {
+                    service_info: ServiceInfo::of::<Swarm>(),
+                    inner: Box::<Er>::new(ErrorKind::BehaviourInitFailed(e).into()),
+                }
+            })?;
+
             let kademlia = Kademlia::with_config(local_peer_id, store, cfg);
             let behaviour = CombinedBehaviour { kademlia, mdns };
             let transport = Transport::default()
                 .upgrade(Version::V1)
-                .authenticate(NoiseAuthenticated::xx(&local_key).unwrap())
-                .multiplex(YamuxConfig::default())
+                .authenticate(noise::Config::new(&local_key).map_err(|e| {
+                    InjectError::ActivationFailed {
+                        service_info: ServiceInfo::of::<Swarm>(),
+                        inner: Box::<Er>::new(ErrorKind::NoiseInitFailed(e).into()),
+                    }
+                })?)
+                .multiplex(yamux::Config::default())
                 .boxed();
             SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id).build()
         };
@@ -94,9 +109,15 @@ impl ServiceFactory<()> for SwarmProvider {
             .listen_on(
                 format!("/ip4/0.0.0.0/tcp/{}", settings.swarm().port)
                     .parse()
-                    .unwrap(),
+                    .map_err(|e| InjectError::ActivationFailed {
+                        service_info: ServiceInfo::of::<Swarm>(),
+                        inner: Box::<Er>::new(ErrorKind::IpParseFailed(e).into()),
+                    })?,
             )
-            .unwrap();
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Swarm>(),
+                inner: Box::<Er>::new(ErrorKind::SwarmListenFailed(e).into()),
+            })?;
 
         Ok(Swarm {
             inner: Mutex::new(swarm),
@@ -130,10 +151,10 @@ impl ISwarm for Swarm {
         loop {
             select! {
                 instruction = receiver.recv() => {
-                    self.handle_controller_event(instruction, &mut swarm).await;
+                    self.handle_controller_event(instruction, &mut swarm).await?;
                 },
                 event = swarm.select_next_some() => {
-                    self.handle_swarm_event(event, &mut swarm).await;
+                    self.handle_swarm_event(event, &mut swarm).await?;
                 }
             }
         }
@@ -145,7 +166,7 @@ impl Swarm {
         &self,
         event: SwarmEvent<WireEvent, SwarmError>,
         swarm: &mut MutexGuard<'t, libp2p::Swarm<CombinedBehaviour>>,
-    ) {
+    ) -> Res<()> {
         info!("swarm event {:?}", event);
         match event {
             SwarmEvent::NewListenAddr { address, .. } => {
@@ -163,67 +184,54 @@ impl Swarm {
             SwarmEvent::Behaviour(WireEvent::Kademlia(
                 KademliaEvent::OutboundQueryProgressed { result, id, .. },
             )) => match result {
-                QueryResult::GetRecord(message) => self.handle_get_record(message, id).await,
-                QueryResult::PutRecord(result) => self.handle_put_record(result, id).await,
+                QueryResult::GetRecord(message) => self.handle_get_record(message, id).await?,
+                QueryResult::PutRecord(result) => self.handle_put_record(result, id).await?,
                 _ => warn!("unhandled query result: {:?}", result),
             },
             _ => {}
         }
+        Ok(())
     }
 
-    async fn handle_get_record(&self, message: GetRecordResult, id: QueryId) {
+    async fn handle_get_record(&self, message: GetRecordResult, id: QueryId) -> Res<()> {
         let response_channel = match self.queries.lock().await.remove(&id) {
             Some(QueryResponse::Get { sender }) => sender,
-            _ => {
-                warn!("invalid response channel for query id {:?}", id);
-                return;
-            }
+            _ => Err(ErrorKind::InvalidResponseChannel(id))?,
         };
 
         match message {
             Ok(GetRecordOk::FoundRecord(PeerRecord {
                 record: Record { value, .. },
                 ..
-            })) => response_channel
-                .send(Ok(value))
-                .expect("swarm response channel closed"),
-            Ok(_) => response_channel
-                .send(Err(ErrorKind::SwarmGetRecordUnknownError(
-                    "unexpected GetRecord result".to_string(),
-                )
-                .into()))
-                .expect("swarm response channel closed"),
-            Err(err) => response_channel
-                .send(Err(ErrorKind::SwarmGetRecordError(err).into()))
-                .expect("swarm response channel closed"),
+            })) => response_channel.send(Ok(value))?,
+            Ok(_) => response_channel.send(Err(ErrorKind::SwarmGetRecordUnknownError(
+                "unexpected GetRecord result".to_string(),
+            )
+            .into()))?,
+            Err(err) => response_channel.send(Err(ErrorKind::SwarmGetRecordError(err).into()))?,
         };
+        Ok(())
     }
 
-    async fn handle_put_record(&self, message: PutRecordResult, id: QueryId) {
+    async fn handle_put_record(&self, message: PutRecordResult, id: QueryId) -> Res<()> {
         let response_channel = match self.queries.lock().await.remove(&id) {
             Some(QueryResponse::Put { sender }) => sender,
-            _ => {
-                warn!("invalid response channel for query id {:?}", id);
-                return;
-            }
+            _ => Err(ErrorKind::InvalidResponseChannel(id))?,
         };
 
         match message {
-            Ok(_) => response_channel
-                .send(Ok(()))
-                .expect("swarm response channel closed"),
-            Err(err) => response_channel
-                .send(Err(ErrorKind::SwarmPutRecordError(err).into()))
-                .expect("swarm response channel closed"),
+            Ok(_) => response_channel.send(Ok(()))?,
+            Err(err) => response_channel.send(Err(ErrorKind::SwarmPutRecordError(err).into()))?,
         };
+        Ok(())
     }
 
     async fn handle_controller_event<'a>(
         &self,
         instruction: Option<SwarmInstruction>,
         swarm: &mut MutexGuard<'a, libp2p::Swarm<CombinedBehaviour>>,
-    ) {
-        let instruction = instruction.expect("instruction is always valid");
+    ) -> Res<()> {
+        let instruction = instruction.ok_or(ErrorKind::MissingInstruction)?;
         info!("instruction {:?}", instruction);
         match instruction {
             SwarmInstruction::Put { key, value, resp } => {
@@ -241,7 +249,7 @@ impl Swarm {
         key: String,
         value: Vec<u8>,
         resp: OneSender<OneReceiver<Res<()>>>,
-    ) {
+    ) -> Res<()> {
         info!("putting key {:?} val {:?}", key, value);
         let key = Key::new(&key);
         let record = Record {
@@ -251,17 +259,17 @@ impl Swarm {
             expires: None,
         };
         let (sender, receiver) = oneshot::channel::<Res<()>>();
-        resp.send(receiver).unwrap();
+        resp.send(receiver)?;
         // TODO this might have a race condition where the query is not yet in the map
         let query_id = swarm
             .behaviour_mut()
             .kademlia
-            .put_record(record, Quorum::One)
-            .unwrap();
+            .put_record(record, Quorum::One)?;
         self.queries
             .lock()
             .await
             .insert(query_id, QueryResponse::Put { sender });
+        Ok(())
     }
 
     async fn handle_controller_get<'t>(
@@ -269,17 +277,18 @@ impl Swarm {
         swarm: &mut MutexGuard<'t, libp2p::Swarm<CombinedBehaviour>>,
         key: String,
         resp: OneSender<OneReceiver<Res<Bytes>>>,
-    ) {
+    ) -> Res<()> {
         info!("getting key {:?}", key);
         let key = Key::new(&key);
         let (sender, receiver) = oneshot::channel::<Res<Bytes>>();
-        resp.send(receiver).unwrap();
+        resp.send(receiver)?;
 
         let query_id = swarm.behaviour_mut().kademlia.get_record(key);
         self.queries
             .lock()
             .await
             .insert(query_id, QueryResponse::Get { sender });
+        Ok(())
     }
 }
 

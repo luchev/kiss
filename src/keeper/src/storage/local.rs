@@ -1,7 +1,6 @@
 use super::IStorage;
-use crate::types::Bytes;
 use async_trait::async_trait;
-use common::{ErrorKind, Res};
+use common::{types::Bytes, ErrorKind, Res};
 use futures::TryStreamExt;
 use log::info;
 use object_store::{

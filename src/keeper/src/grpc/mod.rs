@@ -2,21 +2,18 @@ mod keeper_grpc {
     tonic::include_proto!("keeper_grpc");
 }
 use crate::p2p::controller::ISwarmController;
-use crate::p2p::swarm::ISwarm;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;
-use base64::Engine;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
 use common::hasher::hash;
 use common::{ErrorKind, Res};
 use keeper_grpc::keeper_grpc_server::KeeperGrpc;
 use keeper_grpc::keeper_grpc_server::KeeperGrpcServer;
 use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
-use libp2p_identity::Keypair;
 use log::info;
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, ServiceInfo, Svc,
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -79,22 +76,21 @@ impl IGrpcHandler for GrpcHandler {
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
 
-        let listener = TcpListener::bind(addr).await.unwrap();
-        let real_addr = listener.local_addr().unwrap();
+        let listener = TcpListener::bind(addr).await?;
+        let real_addr = listener.local_addr()?;
 
         info!("grpc listening on {}", real_addr);
 
         let middleware = tower::ServiceBuilder::new()
             .timeout(Duration::from_secs(GRPC_TIMEOUT))
-            .layer(tonic::service::interceptor(|req| Ok(req)))
+            .layer(tonic::service::interceptor(Ok))
             .into_inner();
 
         Server::builder()
             .layer(middleware)
             .add_service(KeeperGrpcServer::new(self.inner.clone()))
             .serve_with_incoming(TcpListenerStream::new(listener))
-            .await
-            .map_err(|e| ErrorKind::GrpcServerStartFailed(e))?;
+            .await?;
 
         Ok(())
     }
@@ -110,7 +106,7 @@ impl KeeperGrpc for Inner {
         info!("received a put request for {}", request.path);
         let res = self
             .swarm_controller
-            .set(request.path.into(), request.content)
+            .set(request.path, request.content)
             .await;
         info!("kad result {:?}", res);
         // self.storage
@@ -131,9 +127,10 @@ impl KeeperGrpc for Inner {
     ) -> std::result::Result<Response<GetResponse>, Status> {
         let request = request.into_inner();
         info!("received a get request for {}", request.path);
-        let res = self.swarm_controller.get(request.path.into()).await;
+        let res = self.swarm_controller.get(request.path).await;
         info!("kad result {:?}", res);
-        let content = res.unwrap();
+        let content =
+            res.map_err(|e| Status::not_found(format!("failed getting from swarm: {}", e)))?;
         // let content = self
         //     .storage
         //     .get(request.path.into())
@@ -155,7 +152,7 @@ impl KeeperGrpc for Inner {
         info!("received a verify request for {}", request.path);
         let content = self
             .swarm_controller
-            .get(request.path.into())
+            .get(request.path)
             .await
             .map_err(|e| Status::not_found(format!("failed to get file from swarm: {}", e)))?;
 
@@ -166,11 +163,13 @@ impl KeeperGrpc for Inner {
     }
 }
 
-impl GrpcHandler {
-    async fn generate_keypair(&self) -> String {
-        let local_key = Keypair::generate_ed25519();
-        let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
-            .encode(local_key.to_protobuf_encoding().unwrap());
-        return encoded;
-    }
-}
+// use base64::Engine;
+// use libp2p_identity::Keypair;
+// impl GrpcHandler {
+//     async fn generate_keypair(&self) -> String {
+//         let local_key = Keypair::generate_ed25519();
+//         let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
+//             .encode(local_key.to_protobuf_encoding().unwrap());
+//         return encoded;
+//     }
+// }

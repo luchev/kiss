@@ -1,11 +1,17 @@
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
 use libp2p_identity::DecodingError;
-use libp2p_kad::{GetRecordError, PutRecordError};
+use libp2p_kad::{store, GetRecordError, PutRecordError, QueryId};
 use log::error;
 use std::path::PathBuf;
-use std::{error::Error as StdError, process::exit};
+use std::result;
+use std::{error::Error as StdError, io, process::exit};
+use tokio::sync::mpsc::error::SendError;
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::error::RecvError;
 use tonic::Status;
+
+use crate::types::{Bytes, SwarmInstruction};
 
 trait ErrorHelper {
     fn help(&self) -> String;
@@ -44,6 +50,18 @@ error_chain! {
         NoiseInitFailed(e: libp2p::noise::Error) { display("p2p noise init failed: {}", e) }
         IpParseFailed(e: libp2p::multiaddr::Error) { display("p2p ip address failed: {}", e) }
         SwarmListenFailed(e: libp2p::TransportError<std::io::Error>) { display("p2p listen failed: {}", e) }
+        IoError(e: io::Error) { display("io error: {}", e) }
+        TonicTransportError(e: tonic::transport::Error) { display("tonic transport error: {}", e) }
+        SwarmOperationFailed(e: SendError<SwarmInstruction>) { display("swarm operation failed: {}", e) }
+        SendPutReceiverFailed { display("send put receiver failed") }
+        SendGetReceiverFailed { display("send get receiver failed") }
+        ChannelReceiveError(e: RecvError) { display("channel receive failed: {}", e) }
+        KademliaStoreError(e: store::Error) { display("kademlia store error: {}", e) }
+        InjectorError(e: String) { display("injector error: {}", e) }
+        InvalidResponseChannel(e: QueryId) { display("invalid response channel for query id {:?}", e) }
+        MissingInstruction { display("no instruction provided") }
+        SendingVectorResultFailed { display("sending vector result failed") }
+        SendingEmptyResultFailed { display("sending empty result failed") }
     }
 }
 
@@ -77,4 +95,64 @@ pub fn die(err: Error) {
     error!("{}", err);
     error!("{}", err.help());
     exit(err.code());
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        ErrorKind::IoError(e).into()
+    }
+}
+
+impl From<tonic::transport::Error> for Error {
+    fn from(e: tonic::transport::Error) -> Self {
+        ErrorKind::TonicTransportError(e).into()
+    }
+}
+
+impl From<SendError<SwarmInstruction>> for Error {
+    fn from(e: SendError<SwarmInstruction>) -> Self {
+        ErrorKind::SwarmOperationFailed(e).into()
+    }
+}
+
+impl From<result::Result<Vec<u8>, Error>> for Error {
+    fn from(_: result::Result<Vec<u8>, Error>) -> Self {
+        ErrorKind::SendingVectorResultFailed.into()
+    }
+}
+
+impl From<result::Result<(), Error>> for Error {
+    fn from(_: result::Result<(), Error>) -> Self {
+        ErrorKind::SendingEmptyResultFailed.into()
+    }
+}
+
+impl From<RecvError> for Error {
+    fn from(e: RecvError) -> Self {
+        ErrorKind::ChannelReceiveError(e).into()
+    }
+}
+
+impl From<oneshot::Receiver<std::result::Result<(), Error>>> for Error {
+    fn from(_: oneshot::Receiver<std::result::Result<(), Error>>) -> Self {
+        ErrorKind::SendPutReceiverFailed.into()
+    }
+}
+
+impl From<store::Error> for Error {
+    fn from(e: store::Error) -> Self {
+        ErrorKind::KademliaStoreError(e).into()
+    }
+}
+
+impl From<oneshot::Receiver<result::Result<Bytes, Error>>> for Error {
+    fn from(_: oneshot::Receiver<result::Result<Bytes, Error>>) -> Self {
+        ErrorKind::SendGetReceiverFailed.into()
+    }
+}
+
+impl From<runtime_injector::InjectError> for Error {
+    fn from(e: runtime_injector::InjectError) -> Self {
+        ErrorKind::InjectorError(e.to_string()).into()
+    }
 }

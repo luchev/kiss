@@ -6,7 +6,8 @@ use common::{
 };
 use config::{Config, Environment, File};
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, ServiceInfo,
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo,
 };
 use serde::{Deserialize, Serialize};
 
@@ -102,13 +103,13 @@ impl ServiceFactory<()> for SettingsProvider {
                     .list_separator(":"),
             )
             .build()
-            .map_err(|err| runtime_injector::InjectError::ActivationFailed {
-                service_info: ServiceInfo::of::<SettingsProvider>(),
+            .map_err(|err| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Settings>(),
                 inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
             })?
             .try_deserialize()
-            .map_err(|err| runtime_injector::InjectError::ActivationFailed {
-                service_info: ServiceInfo::of::<SettingsProvider>(),
+            .map_err(|err| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Settings>(),
                 inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
             }))?
     }
