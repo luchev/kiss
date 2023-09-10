@@ -1,16 +1,12 @@
-mod keeper_grpc {
-    tonic::include_proto!("keeper_grpc");
-}
 use crate::p2p::controller::ISwarmController;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use async_trait::async_trait;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
+use common::grpc::keeper_grpc::keeper_grpc_server::{KeeperGrpc, KeeperGrpcServer};
+use common::grpc::keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
 use common::hasher::hash;
 use common::{ErrorKind, Res};
-use keeper_grpc::keeper_grpc_server::KeeperGrpc;
-use keeper_grpc::keeper_grpc_server::KeeperGrpcServer;
-use keeper_grpc::{GetRequest, GetResponse, PutRequest, PutResponse};
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
@@ -22,7 +18,7 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 
-use self::keeper_grpc::{VerifyRequest, VerifyResponse};
+use common::grpc::keeper_grpc::{VerifyRequest, VerifyResponse};
 
 interface! {
     dyn IGrpcHandler = [

@@ -293,7 +293,7 @@ impl Swarm {
 }
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "WireEvent")]
+#[behaviour(to_swarm = "WireEvent")]
 pub struct CombinedBehaviour {
     kademlia: Kademlia<MemoryStore>,
     mdns: Behaviour,

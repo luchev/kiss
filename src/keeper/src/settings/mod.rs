@@ -90,7 +90,7 @@ impl ServiceFactory<()> for SettingsProvider {
     ) -> InjectResult<Self::Result> {
         let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
-        Ok(Config::builder()
+        Config::builder()
             .add_source(File::with_name(consts::KEEPER_CONFIG_BASE))
             .add_source(
                 File::with_name(&format!("{}/{}", KEEPER_CONFIG_BASE_DIR, env_conf))
@@ -111,7 +111,7 @@ impl ServiceFactory<()> for SettingsProvider {
             .map_err(|err| InjectError::ActivationFailed {
                 service_info: ServiceInfo::of::<Settings>(),
                 inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
-            }))?
+            })
     }
 }
 
