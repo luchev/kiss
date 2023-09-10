@@ -1,3 +1,4 @@
+use crate::grpc::immudb_grpc::SqlValue;
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
 use libp2p_identity::DecodingError;
@@ -5,10 +6,14 @@ use libp2p_kad::{store, GetRecordError, PutRecordError, QueryId};
 use log::error;
 use std::path::PathBuf;
 use std::result;
+use std::string::FromUtf8Error;
+use std::time::SystemTimeError;
 use std::{error::Error as StdError, io, process::exit};
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
+use tokio::task::JoinError;
+use tonic::metadata::errors::InvalidMetadataValue;
 use tonic::Status;
 
 use crate::types::{Bytes, SwarmInstruction};
@@ -51,6 +56,7 @@ error_chain! {
         IpParseFailed(e: libp2p::multiaddr::Error) { display("p2p ip address failed: {}", e) }
         SwarmListenFailed(e: libp2p::TransportError<std::io::Error>) { display("p2p listen failed: {}", e) }
         IoError(e: io::Error) { display("io error: {}", e) }
+        StdError(e: String) { display("io error: {}", e) }
         TonicTransportError(e: tonic::transport::Error) { display("tonic transport error: {}", e) }
         SwarmOperationFailed(e: SendError<SwarmInstruction>) { display("swarm operation failed: {}", e) }
         SendPutReceiverFailed { display("send put receiver failed") }
@@ -62,6 +68,16 @@ error_chain! {
         MissingInstruction { display("no instruction provided") }
         SendingVectorResultFailed { display("sending vector result failed") }
         SendingEmptyResultFailed { display("sending empty result failed") }
+        MutexIsEmpty { display("mutex not initialized correctly and is empty when unwrapping") }
+        SettingsAddressesAreEmpty { display("settings addresses should have at least 1 address") }
+        KeeperClientConnectionError { display("keeper client failed to connect") }
+        JoinError(e: JoinError) { display("join error: {}", e) }
+        InvalidTonicMetadataValue(e: InvalidMetadataValue) { display("invalid metadata: {}", e) }
+        FailedTonicRequest(e: tonic::Status) { display("failed tonic request: {}", e) }
+        MutexIsNotMutable { display("mutex not initialized correctly and is not mutable") }
+        FailedConvertingFromUtf8(e: FromUtf8Error) { display("failed converting from utf-8: {}", e) }
+        SystemTimeError(e: SystemTimeError) { display("system time error: {}", e) }
+        InvalidSqlRow(e: SqlValue) { display("invalid sql row: {:?}", e) }
     }
 }
 
@@ -154,5 +170,35 @@ impl From<oneshot::Receiver<result::Result<Bytes, Error>>> for Error {
 impl From<runtime_injector::InjectError> for Error {
     fn from(e: runtime_injector::InjectError) -> Self {
         ErrorKind::InjectorError(e.to_string()).into()
+    }
+}
+
+impl From<InvalidMetadataValue> for Error {
+    fn from(e: InvalidMetadataValue) -> Self {
+        ErrorKind::InvalidTonicMetadataValue(e).into()
+    }
+}
+
+impl From<tonic::Status> for Error {
+    fn from(e: tonic::Status) -> Self {
+        ErrorKind::FailedTonicRequest(e).into()
+    }
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(e: FromUtf8Error) -> Self {
+        ErrorKind::FailedConvertingFromUtf8(e).into()
+    }
+}
+
+impl From<SystemTimeError> for Error {
+    fn from(e: SystemTimeError) -> Self {
+        ErrorKind::SystemTimeError(e).into()
+    }
+}
+
+impl From<SqlValue> for Error {
+    fn from(e: SqlValue) -> Self {
+        ErrorKind::InvalidSqlRow(e).into()
     }
 }

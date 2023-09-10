@@ -1,6 +1,7 @@
 #![recursion_limit = "256"]
 pub mod consts;
 mod errors;
+pub mod grpc;
 pub mod hasher;
 pub mod types;
 
