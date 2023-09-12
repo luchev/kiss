@@ -5,6 +5,8 @@ use crate::ledger::ImmuLedger;
 use crate::settings::ISettings;
 use async_trait::async_trait;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
+use common::grpc::verifier_grpc::verifier_grpc_server::{VerifierGrpc, VerifierGrpcServer};
+use common::grpc::verifier_grpc::{RetrieveRequest, RetrieveResponse, StoreRequest, StoreResponse};
 use common::hasher::hash;
 use common::{hasher, ErrorKind, Res};
 use log::info;
@@ -16,12 +18,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
-use verifier_grpc::verifier_grpc_server::{VerifierGrpc, VerifierGrpcServer};
-use verifier_grpc::{RetrieveRequest, RetrieveResponse, StoreRequest, StoreResponse};
 
-pub mod verifier_grpc {
-    tonic::include_proto!("verifier_grpc");
-}
 pub mod keeper_client;
 
 interface! {
@@ -39,10 +36,9 @@ impl ServiceFactory<()> for GrpcHandlerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let port = injector.get::<Svc<dyn ISettings>>().unwrap().grpc().port;
-        let keeper_gateway: Svc<Mutex<KeeperGateway>> =
-            injector.get().expect("keeper gateway not provided");
-        let ledger: Svc<Mutex<ImmuLedger>> = injector.get().expect("ledger not provided");
+        let port = injector.get::<Svc<dyn ISettings>>()?.grpc().port;
+        let keeper_gateway: Svc<Mutex<KeeperGateway>> = injector.get()?;
+        let ledger: Svc<Mutex<ImmuLedger>> = injector.get()?;
 
         Ok(GrpcHandler {
             inner: Inner {
@@ -82,7 +78,7 @@ impl IGrpcHandler for GrpcHandler {
 
         let middleware = tower::ServiceBuilder::new()
             .timeout(Duration::from_secs(GRPC_TIMEOUT))
-            .layer(tonic::service::interceptor(|req| Ok(req)))
+            .layer(tonic::service::interceptor(Ok))
             .into_inner();
 
         Server::builder()
@@ -90,7 +86,7 @@ impl IGrpcHandler for GrpcHandler {
             .add_service(VerifierGrpcServer::new(self.inner.clone()))
             .serve(addr)
             .await
-            .map_err(|e| ErrorKind::GrpcServerStartFailed(e))?;
+            .map_err(ErrorKind::GrpcServerStartFailed)?;
 
         Ok(())
     }
@@ -114,8 +110,8 @@ impl VerifierGrpc for Inner {
         let file_uuid = ledger
             .create_contract(file_hash, request.ttl)
             .await
-            .unwrap();
-        
+            .map_err(|e| Status::unknown(e.to_string()))?;
+
         info!("created contract for {}", file_uuid);
 
         let res = self
@@ -129,11 +125,11 @@ impl VerifierGrpc for Inner {
             Ok(_) => {
                 info!("stored file {}", file_uuid);
                 Ok(Response::new(StoreResponse { name: file_uuid }))
-            },
+            }
             Err(e) => {
                 info!("failed to store file {}", file_uuid);
                 Err(Status::internal(e.to_string()))
-            },
+            }
         }
     }
 
@@ -144,7 +140,10 @@ impl VerifierGrpc for Inner {
         let request = request.into_inner();
         info!("received a get request for {}", request.name);
         let mut ledger = self.ledger.lock().await;
-        let contract = ledger.get_contract(request.name.clone()).await.unwrap();
+        let contract = ledger
+            .get_contract(request.name.clone())
+            .await
+            .map_err(|e| Status::unknown(e.to_string()))?;
 
         let res = self
             .keeper_gateway

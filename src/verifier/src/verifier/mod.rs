@@ -1,4 +1,4 @@
-use std::time::{Instant, SystemTime};
+use std::time::Instant;
 
 use crate::grpc::keeper_client::IKeeperGateway;
 use crate::ledger::ImmuLedger;
@@ -27,9 +27,8 @@ impl ServiceFactory<()> for VerifierProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let keeper_gateway: Svc<Mutex<KeeperGateway>> =
-            injector.get().expect("keeper gateway not provided");
-        let ledger: Svc<Mutex<ImmuLedger>> = injector.get().expect("ledger not provided");
+        let keeper_gateway: Svc<Mutex<KeeperGateway>> = injector.get()?;
+        let ledger: Svc<Mutex<ImmuLedger>> = injector.get()?;
 
         Ok(Verifier {
             keeper_gateway,
@@ -55,7 +54,7 @@ impl IVerifier for Verifier {
             info!("fetching contracts");
             let contracts = {
                 let mut ledger = self.ledger.lock().await;
-                ledger.get_contracts().await.unwrap()
+                ledger.get_contracts().await?
             };
             let time_before_start = Instant::now();
             for contract in contracts {
@@ -65,13 +64,13 @@ impl IVerifier for Verifier {
                     info!("file {} not found in swarm, {}", contract.file_uuid, e);
                     continue;
                 }
-                if hash_in_swarm.unwrap() != contract.file_hash {
+                if hash_in_swarm? != contract.file_hash {
                     info!("hashes are not equal for file {}", contract.file_uuid);
                 }
             }
-            tokio::time::sleep_until(tokio::time::Instant::from_std(Instant::from(
+            tokio::time::sleep_until(tokio::time::Instant::from_std(
                 time_before_start + Duration::minutes(1),
-            )))
+            ))
             .await;
         }
     }

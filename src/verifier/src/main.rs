@@ -37,7 +37,7 @@ async fn main() {
 async fn run() -> Res<()> {
     env_logger::init();
     let injector = dependency_injector()?;
-    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get().unwrap();
-    let verifier: Svc<dyn IVerifier> = injector.get().unwrap();
+    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
+    let verifier: Svc<dyn IVerifier> = injector.get()?;
     try_join!(grpc_handler.start(), verifier.start()).map(|_| ())
 }

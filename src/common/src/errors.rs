@@ -77,7 +77,8 @@ error_chain! {
         MutexIsNotMutable { display("mutex not initialized correctly and is not mutable") }
         FailedConvertingFromUtf8(e: FromUtf8Error) { display("failed converting from utf-8: {}", e) }
         SystemTimeError(e: SystemTimeError) { display("system time error: {}", e) }
-        InvalidSqlRow(e: SqlValue) { display("invalid sql row: {:?}", e) }
+        InvalidSqlRow(e: Vec<SqlValue>) { display("invalid sql row: {:?}", e) }
+        InvalidSql { display("invalid sql") }
     }
 }
 
@@ -197,8 +198,8 @@ impl From<SystemTimeError> for Error {
     }
 }
 
-impl From<SqlValue> for Error {
-    fn from(e: SqlValue) -> Self {
-        ErrorKind::InvalidSqlRow(e).into()
-    }
-}
+// impl From<&Vec<SqlValue>> for Error {
+//     fn from(e: &Vec<SqlValue>) -> Self {
+//         ErrorKind::InvalidSqlRow(e.clone()).into()
+//     }
+// }
