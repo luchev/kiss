@@ -7,6 +7,3 @@
 [submodule "submodules/runtime_injector"]
 	path = submodules/runtime_injector
 	url = git@github.com:luchev/runtime_injector.git
-[submodule "runtime_injector"]
-	path = runtime_injector
-	url = git@github.com:luchev/runtime_injector.git
