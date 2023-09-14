@@ -1,23 +1,27 @@
-use crate::{
-    immudb_grpc::{
-        immu_service_client::ImmuServiceClient, sql_value::Value, CreateDatabaseRequest,
-        KeyRequest, KeyValue, LoginRequest, NamedParam, SetRequest, SqlExecRequest,
-        SqlQueryRequest, SqlValue,
-    },
-    settings::{ISettings, Ledger},
-    types::{Bytes, Contract},
-};
 use async_std::task::block_on;
 use async_trait::async_trait;
-use common::Res;
+use common::grpc::immudb_grpc::{
+    immu_service_client::ImmuServiceClient, sql_value::Value, CreateDatabaseRequest, KeyRequest,
+    KeyValue, LoginRequest, NamedParam, SetRequest, SqlExecRequest, SqlQueryRequest, SqlValue,
+};
+use common::{
+    types::{Bytes, Contract},
+    Er, ErrorKind, Res,
+};
 use log::info;
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo, Svc,
 };
-use std::{time::{SystemTime, UNIX_EPOCH}, net::SocketAddr};
+use std::{
+    net::SocketAddr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tokio::{runtime::Handle, sync::Mutex};
 use tonic::{metadata::MetadataMap, transport::Channel, Extensions};
 use uuid::Uuid;
+
+use crate::settings::{ISettings, Ledger};
 
 #[async_trait]
 pub trait ILedger: Service {
@@ -45,39 +49,33 @@ pub struct ImmuLedger {
 impl ILedger for ImmuLedger {
     async fn set(&mut self, key: String, value: Bytes) -> Res<()> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
 
         let mut map = MetadataMap::new();
-        map.insert(
-            "authorization",
-            format!("Bearer {}", self.token).parse().unwrap(),
-        );
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
         let request = tonic::Request::from_parts(
             map,
             Extensions::default(),
             SetRequest {
                 k_vs: vec![KeyValue {
                     key: key.as_bytes().to_vec(),
-                    value: value,
+                    value,
                     metadata: None,
                 }],
                 no_wait: false,
                 preconditions: vec![],
             },
         );
-        let _response = client.set(request).await.unwrap();
+        let _response = client.set(request).await?;
         Ok(())
     }
 
     async fn get(&mut self, key: String) -> Res<String> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
 
         let mut map = MetadataMap::new();
-        map.insert(
-            "authorization",
-            format!("Bearer {}", self.token).parse().unwrap(),
-        );
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
 
         let request = tonic::Request::from_parts(
             map,
@@ -90,19 +88,16 @@ impl ILedger for ImmuLedger {
                 since_tx: 0,
             },
         );
-        let response = client.get(request).await.unwrap();
-        Ok(String::from_utf8(response.into_inner().value).unwrap())
+        let response = client.get(request).await?;
+        Ok(String::from_utf8(response.into_inner().value)?)
     }
 
     async fn create_database(&mut self, name: String) -> Res<()> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
 
         let mut map = MetadataMap::new();
-        map.insert(
-            "authorization",
-            format!("Bearer {}", self.token).parse().unwrap(),
-        );
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
         let request = tonic::Request::from_parts(
             map,
             Extensions::default(),
@@ -112,19 +107,16 @@ impl ILedger for ImmuLedger {
                 if_not_exists: true,
             },
         );
-        let _response = client.create_database_v2(request).await.unwrap();
+        let _response = client.create_database_v2(request).await?;
         Ok(())
     }
 
     async fn sql_execute(&mut self, sql: String, params: Vec<NamedParam>) -> Res<()> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
 
         let mut map = MetadataMap::new();
-        map.insert(
-            "authorization",
-            format!("Bearer {}", self.token).parse().unwrap(),
-        );
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
         let request = tonic::Request::from_parts(
             map,
             Extensions::default(),
@@ -134,7 +126,7 @@ impl ILedger for ImmuLedger {
                 no_wait: false,
             },
         );
-        let _response = client.sql_exec(request).await.unwrap();
+        let _response = client.sql_exec(request).await?;
         Ok(())
     }
 
@@ -144,13 +136,10 @@ impl ILedger for ImmuLedger {
         params: Vec<NamedParam>,
     ) -> Res<Vec<Vec<SqlValue>>> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
 
         let mut map = MetadataMap::new();
-        map.insert(
-            "authorization",
-            format!("Bearer {}", self.token).parse().unwrap(),
-        );
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
         let request = tonic::Request::from_parts(
             map,
             Extensions::default(),
@@ -160,7 +149,7 @@ impl ILedger for ImmuLedger {
                 reuse_snapshot: false,
             },
         );
-        let response = client.sql_query(request).await.unwrap();
+        let response = client.sql_query(request).await?;
         let result: Vec<_> = response
             .into_inner()
             .rows
@@ -172,10 +161,7 @@ impl ILedger for ImmuLedger {
 
     async fn create_contract(&mut self, file_hash: String, ttl: i64) -> Res<String> {
         let file_uuid = Uuid::new_v4();
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
         let params: Vec<NamedParam> = vec![
             NamedParam {
                 name: "contract_uuid".to_string(),
@@ -214,7 +200,7 @@ impl ILedger for ImmuLedger {
                 VALUES (@contract_uuid, @file_uuid, @file_hash, @upload_date, @ttl);"
             .to_string();
 
-        let _response = self.sql_execute(sql, params).await.unwrap();
+        let _response = self.sql_execute(sql, params).await?;
         Ok(file_uuid.to_string())
     }
 
@@ -222,73 +208,90 @@ impl ILedger for ImmuLedger {
         let sql = "SELECT * FROM contracts WHERE file_uuid = @file_uuid;".to_string();
         info!("{:?}", sql);
 
-        let params: Vec<NamedParam> = vec![
-            NamedParam {
-                name: "file_uuid".to_string(),
-                value: Some(SqlValue {
-                    value: Some(Value::S(file_uuid)),
-                }),
+        let params: Vec<NamedParam> = vec![NamedParam {
+            name: "file_uuid".to_string(),
+            value: Some(SqlValue {
+                value: Some(Value::S(file_uuid)),
+            }),
+        }];
+        let response = self.query_execute(sql, params).await?;
+        let row = response.first().ok_or(ErrorKind::InvalidSql)?;
+        Ok(Contract {
+            contract_uuid: match row.get(0).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::S(x)),
+                }) => x.to_owned(),
+                _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
             },
-        ];
-        let response = self.query_execute(sql, params).await.unwrap();
-        let contracts: Vec<_> = response
-            .into_iter()
-            .map(|row| Contract {
-                contract_uuid: match row[0].value.as_ref().unwrap() {
-                    Value::S(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                file_uuid: match row[1].value.as_ref().unwrap() {
-                    Value::S(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                file_hash: match row[2].value.as_ref().unwrap() {
-                    Value::S(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                upload_date: match row[3].value.as_ref().unwrap() {
-                    Value::N(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                ttl: match row[4].value.as_ref().unwrap() {
-                    Value::N(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-            })
-            .collect();
-        Ok(contracts.into_iter().next().unwrap_or_default())
+            file_uuid: match row.get(1).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::S(x)),
+                }) => x.to_owned(),
+                _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+            },
+            file_hash: match row.get(2).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::S(x)),
+                }) => x.to_owned(),
+                _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+            },
+            upload_date: match row.get(3).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::N(x)),
+                }) => x.to_owned(),
+                _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+            },
+            ttl: match row.get(4).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::N(x)),
+                }) => x.to_owned(),
+                _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+            },
+        })
     }
 
     async fn get_contracts(&mut self) -> Res<Vec<Contract>> {
         let sql = "SELECT * FROM contracts LIMIT 100;".to_string();
 
-        let response = self.query_execute(sql, vec![]).await.unwrap();
-        let contracts: Vec<_> = response
+        let response = self.query_execute(sql, vec![]).await?;
+        let contracts: Res<Vec<_>> = response
             .into_iter()
-            .map(|row| Contract {
-                contract_uuid: match row[0].value.as_ref().unwrap() {
-                    Value::S(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                file_uuid: match row[1].value.as_ref().unwrap() {
-                    Value::S(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                file_hash: match row[2].value.as_ref().unwrap() {
-                    Value::S(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                upload_date: match row[3].value.as_ref().unwrap() {
-                    Value::N(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
-                ttl: match row[4].value.as_ref().unwrap() {
-                    Value::N(x) => x.clone(),
-                    _ => panic!("unexpected type received from immudb"),
-                },
+            .map(|row| {
+                Ok(Contract {
+                    contract_uuid: match row.get(0).as_ref() {
+                        Some(SqlValue {
+                            value: Some(Value::S(x)),
+                        }) => x.to_owned(),
+                        _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+                    },
+                    file_uuid: match row.get(1).as_ref() {
+                        Some(SqlValue {
+                            value: Some(Value::S(x)),
+                        }) => x.to_owned(),
+                        _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+                    },
+                    file_hash: match row.get(2).as_ref() {
+                        Some(SqlValue {
+                            value: Some(Value::S(x)),
+                        }) => x.to_owned(),
+                        _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+                    },
+                    upload_date: match row.get(3).as_ref() {
+                        Some(SqlValue {
+                            value: Some(Value::N(x)),
+                        }) => x.to_owned(),
+                        _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+                    },
+                    ttl: match row.get(4).as_ref() {
+                        Some(SqlValue {
+                            value: Some(Value::N(x)),
+                        }) => x.to_owned(),
+                        _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+                    },
+                })
             })
             .collect();
-        Ok(contracts)
+        Ok(contracts?)
     }
 }
 
@@ -301,7 +304,7 @@ impl ServiceFactory<()> for LedgerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let settings = injector.get::<Svc<dyn ISettings>>().unwrap().ledger();
+        let settings = injector.get::<Svc<dyn ISettings>>()?.ledger();
         let result = match settings {
             Ledger::Immudb {
                 username,
@@ -309,12 +312,19 @@ impl ServiceFactory<()> for LedgerProvider {
                 address,
             } => {
                 let handle = Handle::current();
-                let (client, token) = block_on(async {
-                    handle
-                        .spawn(login(address, username, password))
-                        .await
-                        .unwrap()
-                });
+                let (client, token) = match block_on(async {
+                    handle.spawn(login(address, username, password)).await
+                }) {
+                    Ok(Ok(x)) => x,
+                    Ok(Err(e)) => Err(InjectError::ActivationFailed {
+                        service_info: ServiceInfo::of::<ImmuLedger>(),
+                        inner: Box::<Er>::new(e),
+                    })?,
+                    Err(e) => Err(InjectError::ActivationFailed {
+                        service_info: ServiceInfo::of::<ImmuLedger>(),
+                        inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
+                    })?,
+                };
 
                 ImmuLedger {
                     token: token,
@@ -324,8 +334,15 @@ impl ServiceFactory<()> for LedgerProvider {
         };
 
         let handle = Handle::current();
-        let ledger =
-            block_on(async { handle.spawn(create_contract_table(result)).await.unwrap() }).unwrap();
+        let ledger = block_on(async { handle.spawn(create_contract_table(result)).await })
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<ImmuLedger>(),
+                inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
+            })?
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<ImmuLedger>(),
+                inner: Box::<Er>::new(e),
+            })?;
 
         Ok(Mutex::new(ledger))
     }
@@ -341,26 +358,19 @@ async fn login(
     address: SocketAddr,
     username: String,
     password: String,
-) -> (ImmuServiceClient<Channel>, String) {
-    let mut client = Some(
-        ImmuServiceClient::connect(format!("http://{}", address))
-            .await
-            .expect("failed to connect to immudb"),
-    );
+) -> Res<(ImmuServiceClient<Channel>, String)> {
+    let mut client = Some(ImmuServiceClient::connect(format!("http://{}", address)).await?);
 
-    let client = client.as_mut().expect("invalid immudb client");
+    let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
     let request = tonic::Request::new(LoginRequest {
         user: username.as_bytes().to_vec(),
         password: password.as_bytes().to_vec(),
     });
-    let response = client
-        .login(request)
-        .await
-        .expect("failed to login to immudb");
+    let response = client.login(request).await?;
 
     let token = response.into_inner().token;
     info!("logged into immudb");
-    (client.to_owned(), token)
+    Ok((client.to_owned(), token))
 }
 
 async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
@@ -374,6 +384,6 @@ async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
         );"
     .to_string();
 
-    let _response = ledger.sql_execute(query, vec![]).await.unwrap();
+    ledger.sql_execute(query, vec![]).await?;
     Ok(ledger)
 }

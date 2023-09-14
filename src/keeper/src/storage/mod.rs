@@ -1,14 +1,12 @@
 use async_trait::async_trait;
-use common::Res;
+use common::{types::Bytes, Er, Res};
 use std::path::PathBuf;
 pub mod local;
 use self::local::LocalStorage;
-use crate::{
-    settings::{ISettings, Storage as StorageSettings},
-    types::Bytes,
-};
+use crate::settings::{ISettings, Storage as StorageSettings};
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo, Svc,
 };
 
 #[async_trait]
@@ -26,13 +24,18 @@ impl ServiceFactory<()> for StorageProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let settings = injector.get::<Svc<dyn ISettings>>().expect("settings not provided as dependency").storage();
+        let settings = injector.get::<Svc<dyn ISettings>>()?.storage();
 
         match settings {
             StorageSettings::Local {
                 path,
                 create: _create,
-            } => Ok(LocalStorage::new(path.as_str()).expect("failed to create local storage")),
+            } => Ok(LocalStorage::new(path.as_str()).map_err(|err| {
+                InjectError::ActivationFailed {
+                    service_info: ServiceInfo::of::<LocalStorage>(),
+                    inner: Box::<Er>::new(err),
+                }
+            })?),
             StorageSettings::Docker => todo!(),
         }
     }

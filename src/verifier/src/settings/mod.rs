@@ -5,10 +5,13 @@ use std::{
 
 use common::{
     consts::{self, VERIFIER_CONFIG_BASE_DIR},
-    ErrorKind,
+    Er, ErrorKind,
 };
 use config::{Config, Environment, File};
-use runtime_injector::{interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory};
+use runtime_injector::{
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -80,21 +83,23 @@ impl ServiceFactory<()> for SettingsProvider {
     ) -> InjectResult<Self::Result> {
         let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
-        Ok(
-            Config::builder()
-                .add_source(File::with_name(consts::VERIFIER_CONFIG_BASE))
-                .add_source(
-                    File::with_name(&format!("{}/{}", VERIFIER_CONFIG_BASE_DIR, env_conf))
-                        .required(false),
-                )
-                .add_source(Environment::with_prefix("KISS"))
-                .build()
-                .map_err(|err| ErrorKind::ConfigErr(err))
-                .unwrap() // TODO remove
-                .try_deserialize()
-                .map_err(|err| ErrorKind::ConfigErr(err))
-                .unwrap(), // TODO remove
-        )
+        Config::builder()
+            .add_source(File::with_name(consts::VERIFIER_CONFIG_BASE))
+            .add_source(
+                File::with_name(&format!("{}/{}", VERIFIER_CONFIG_BASE_DIR, env_conf))
+                    .required(false),
+            )
+            .add_source(Environment::with_prefix("KISS"))
+            .build()
+            .map_err(|err| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Settings>(),
+                inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
+            })?
+            .try_deserialize()
+            .map_err(|err| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Settings>(),
+                inner: Box::<Er>::new(ErrorKind::ConfigErr(err).into()),
+            })
     }
 }
 

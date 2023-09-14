@@ -10,14 +10,35 @@ env_logger = "0.10.0"
 error-chain = "0.12.4"
 exitcode = "1.1.2"
 hex = "0.4.3"
-libp2p-identity = "0.1.1"
-libp2p-kad = "0.43.1"
+libp2p = { version = "0.52.3", features = [
+    "kad",
+    "tokio",
+    "tcp",
+    "tls",
+    "dns",
+    "noise",
+    "websocket",
+    "yamux",
+    "mdns",
+    "macros",
+] }
+libp2p-identity = "0.2.3"
+libp2p-kad = "0.44.4"
 log = "0.4.17"
-object_store = "0.5.5"
+object_store = "0.7.0"
 rust_docker = "0.1.1"
 sha3 = "0.10.8"
-tonic = "0.8.3"
+tokio = { version = "1.26.0", features = ["full"] }
+runtime_injector = { version = "0.4.0", path = "../../submodules/runtime_injector/crates/runtime_injector" }
+tonic = "0.10.0"
+futures = "0.3.4"
+prost = "0.12.0"
+prost-types = "0.12.0"
 
 [lib]
 name = "common"
 path = "src/lib.rs"
+
+[build-dependencies]
+tonic-build = { version = "0.10.0", features = ["prost"] }
+futures-core = "0.3.28"

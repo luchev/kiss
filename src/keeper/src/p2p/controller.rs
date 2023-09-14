@@ -1,6 +1,6 @@
-use crate::types::{Bytes, Responder, OneReceiver};
 use async_trait::async_trait;
-use common::Res;
+use common::types::{Bytes, OneReceiver};
+use common::{types::SwarmInstruction, Res};
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
@@ -23,7 +23,7 @@ impl ServiceFactory<()> for SwarmControllerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let sender: Svc<Mutex<mpsc::Sender<SwarmInstruction>>> = injector.get().unwrap();
+        let sender: Svc<Mutex<mpsc::Sender<SwarmInstruction>>> = injector.get()?;
         Ok(SwarmController { swarm_api: sender })
     }
 }
@@ -51,10 +51,9 @@ impl ISwarmController for SwarmController {
                 value,
                 resp: sender,
             })
-            .await
-            .unwrap();
-        let receiving_channel = receiver.await.unwrap();
-        let result = receiving_channel.await.unwrap();
+            .await?;
+        let receiving_channel = receiver.await?;
+        let result = receiving_channel.await?;
         info!("put result: {:?}", result);
 
         // let (sender, receiver) = oneshot::channel::<QueryId>();
@@ -67,24 +66,10 @@ impl ISwarmController for SwarmController {
             .lock()
             .await
             .send(SwarmInstruction::Get { key, resp: sender })
-            .await
-            .unwrap();
-        let receiving_channel = receiver.await.unwrap();
-        let result = receiving_channel.await.unwrap();
+            .await?;
+        let receiving_channel = receiver.await?;
+        let result = receiving_channel.await?;
         info!("get result: {:?}", result);
         result
     }
-}
-
-#[derive(Debug)]
-pub enum SwarmInstruction {
-    Get {
-        key: String,
-        resp: Responder<OneReceiver<Res<Bytes>>>,
-    },
-    Put {
-        key: String,
-        value: Bytes,
-        resp: Responder<OneReceiver<Res<()>>>,
-    },
 }

@@ -1,3 +1,11 @@
+#![deny(clippy::unwrap_in_result)]
+#![deny(clippy::get_unwrap)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::indexing_slicing)]
+#![deny(clippy::expect_used)]
+#![deny(clippy::panic)]
+#![deny(clippy::todo)]
+
 mod deps;
 mod grpc;
 mod ledger;
@@ -29,7 +37,7 @@ async fn main() {
 async fn run() -> Res<()> {
     env_logger::init();
     let injector = dependency_injector()?;
-    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get().unwrap();
-    let verifier: Svc<dyn IVerifier> = injector.get().unwrap();
+    let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
+    let verifier: Svc<dyn IVerifier> = injector.get()?;
     try_join!(grpc_handler.start(), verifier.start()).map(|_| ())
 }

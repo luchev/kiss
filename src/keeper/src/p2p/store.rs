@@ -1,11 +1,11 @@
-use libp2p::kad::store::{RecordStore, Result, Error};
-use libp2p::kad::{kbucket, Record, ProviderRecord, K_VALUE};
 use libp2p::kad::record::Key;
+use libp2p::kad::store::{Error, RecordStore, Result};
+use libp2p::kad::{kbucket, ProviderRecord, Record, K_VALUE};
 use libp2p_identity::PeerId;
+use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
 use std::iter;
-use smallvec::SmallVec;
 
 /// In-memory implementation of a `RecordStore`.
 pub struct MemoryStore {
@@ -197,7 +197,11 @@ impl RecordStore for MemoryStore {
 mod tests {
     use std::borrow::Cow;
 
-    use libp2p::{multihash::{Code, Multihash}, kad::{ProviderRecord, kbucket, Record, store::RecordStore}, PeerId};
+    use libp2p::{
+        kad::{kbucket, store::RecordStore, ProviderRecord, Record},
+        multihash::{Code, Multihash},
+        PeerId,
+    };
     use quickcheck::quickcheck;
     use rand::prelude::*;
 

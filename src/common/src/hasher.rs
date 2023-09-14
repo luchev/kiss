@@ -1,4 +1,4 @@
-use sha3::{Sha3_256, Digest};
+use sha3::{Digest, Sha3_256};
 
 use crate::types::Bytes;
 

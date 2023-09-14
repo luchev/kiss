@@ -1,23 +1,20 @@
-use crate::{settings::ISettings, types::Bytes};
+use crate::settings::ISettings;
 use async_trait::async_trait;
-use common::{ErrorKind, Res};
+use common::grpc::keeper_grpc::keeper_grpc_client::KeeperGrpcClient;
+use common::grpc::keeper_grpc::VerifyRequest;
+use common::grpc::keeper_grpc::{GetRequest, PutRequest};
+use common::types::Bytes;
+use common::{Er, ErrorKind, Res};
 use futures::executor::block_on;
-use keeper_grpc::keeper_grpc_client::KeeperGrpcClient;
-use keeper_grpc::{GetRequest, PutRequest};
 use log::info;
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo, Svc,
 };
 use std::net::SocketAddr;
 use tokio::runtime::Handle;
-use tokio::{sync::Mutex};
+use tokio::sync::Mutex;
 use tonic::transport::Channel;
-
-use self::keeper_grpc::VerifyRequest;
-
-mod keeper_grpc {
-    tonic::include_proto!("keeper_grpc");
-}
 
 #[async_trait]
 pub trait IKeeperGateway: Service {
@@ -35,7 +32,7 @@ pub struct KeeperGateway {
 impl IKeeperGateway for KeeperGateway {
     async fn put(&mut self, key: String, value: Bytes) -> Res<()> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsEmpty)?;
         let request = tonic::Request::new(PutRequest {
             path: key,
             content: value,
@@ -49,8 +46,8 @@ impl IKeeperGateway for KeeperGateway {
 
     async fn get(&mut self, path: String) -> Res<Bytes> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
-        let request = tonic::Request::new(GetRequest { path: path });
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsEmpty)?;
+        let request = tonic::Request::new(GetRequest { path });
         let response = client.get(request).await;
         match response {
             Ok(res) => Ok(res.into_inner().content),
@@ -60,8 +57,8 @@ impl IKeeperGateway for KeeperGateway {
 
     async fn verify(&mut self, path: String) -> Res<String> {
         let mut client = self.client.lock().await;
-        let client = client.as_mut().unwrap();
-        let request = tonic::Request::new(VerifyRequest { path: path });
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsEmpty)?;
+        let request = tonic::Request::new(VerifyRequest { path });
         let response = client.verify(request).await;
         match response {
             Ok(res) => Ok(res.into_inner().hash),
@@ -80,16 +77,25 @@ impl ServiceFactory<()> for KeeperGatewayProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let settings = injector
-            .get::<Svc<dyn ISettings>>()
-            .expect("settings were not provided")
-            .keeper_gateway();
-        if settings.addresses.len() == 0 {
-            panic!("no keeper nodes were provided");
-        }
-        let address = settings.addresses[0];
+        let settings = injector.get::<Svc<dyn ISettings>>()?.keeper_gateway();
+        let address = settings
+            .addresses
+            .first()
+            .ok_or(InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<KeeperGateway>(),
+                inner: Box::<Er>::new(ErrorKind::SettingsAddressesAreEmpty.into()),
+            })?;
         let handle = Handle::current();
-        let client = block_on(async { handle.spawn(connect(address)).await.unwrap() });
+        // let client = block_on(async { connect(*address)(|x| handle.spawn(x)) });
+        let client = block_on(async { handle.spawn(connect(*address)).await })
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<KeeperGateway>(),
+                inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
+            })?
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<KeeperGateway>(),
+                inner: Box::<Er>::new(e),
+            })?;
 
         let result = KeeperGateway {
             client: Mutex::new(Some(client)),
@@ -105,11 +111,9 @@ interface! {
     ]
 }
 
-async fn connect(address: SocketAddr) -> KeeperGrpcClient<Channel> {
-    let client = KeeperGrpcClient::connect(format!("http://{}", address))
+async fn connect(address: SocketAddr) -> Res<KeeperGrpcClient<Channel>> {
+    info!("connecting to a keeper node on address {}", address);
+    KeeperGrpcClient::connect(format!("http://{}", address))
         .await
-        .expect(format!("failed to connect to keeper node on address: {}", address).as_str());
-
-    info!("connected to a keeper node on address {}", address);
-    client
+        .map_err(Er::from)
 }
