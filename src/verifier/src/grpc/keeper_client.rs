@@ -25,15 +25,32 @@ pub trait IKeeperGateway: Service {
 
 #[derive(Debug)]
 pub struct KeeperGateway {
-    client: Mutex<Option<KeeperGrpcClient<Channel>>>,
-    addresses: Mutex<Vec<SocketAddr>>,
+    client: Option<KeeperGrpcClient<Channel>>,
+    addresses: Vec<SocketAddr>,
+}
+
+impl KeeperGateway {
+    async fn get_client(&mut self) -> Res<&mut KeeperGrpcClient<Channel>> {
+        if self.client.is_none() {
+            for address in self.addresses.iter() {
+                let new_client = try_connect(*address).await;
+                if new_client.is_some() {
+                    self.client = new_client;
+                    break;
+                }
+            }
+        }
+        match self.client.as_mut() {
+            Some(x) => Ok(x),
+            None => Err(ErrorKind::GrpcClientIsEmpty.into()),
+        }
+    }
 }
 
 #[async_trait]
 impl IKeeperGateway for KeeperGateway {
     async fn put(&mut self, key: String, value: Bytes) -> Res<()> {
-        let mut client = self.client.lock().await;
-        let client = client.as_mut().ok_or(ErrorKind::MutexIsEmpty)?;
+        let client = self.get_client().await?;
         let request = tonic::Request::new(PutRequest {
             path: key,
             content: value,
@@ -46,8 +63,7 @@ impl IKeeperGateway for KeeperGateway {
     }
 
     async fn get(&mut self, path: String) -> Res<Bytes> {
-        let mut client = self.client.lock().await;
-        let client = client.as_mut().ok_or(ErrorKind::MutexIsEmpty)?;
+        let client = self.get_client().await?;
         let request = tonic::Request::new(GetRequest { path });
         let response = client.get(request).await;
         match response {
@@ -57,8 +73,7 @@ impl IKeeperGateway for KeeperGateway {
     }
 
     async fn verify(&mut self, path: String) -> Res<String> {
-        let mut client = self.client.lock().await;
-        let client = client.as_mut().ok_or(ErrorKind::MutexIsEmpty)?;
+        let client = self.get_client().await?;
         let request = tonic::Request::new(VerifyRequest { path });
         let response = client.verify(request).await;
         match response {
@@ -92,8 +107,8 @@ impl ServiceFactory<()> for KeeperGatewayProvider {
         };
 
         let result = KeeperGateway {
-            client: Mutex::new(client),
-            addresses: Mutex::new(settings.addresses),
+            client,
+            addresses: settings.addresses,
         };
 
         Ok(Mutex::new(result))

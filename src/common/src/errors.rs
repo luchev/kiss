@@ -69,6 +69,7 @@ error_chain! {
         SendingVectorResultFailed { display("sending vector result failed") }
         SendingEmptyResultFailed { display("sending empty result failed") }
         MutexIsEmpty { display("mutex not initialized correctly and is empty when unwrapping") }
+        GrpcClientIsEmpty { display("grpc client is not connected") }
         SettingsAddressesAreEmpty { display("settings addresses should have at least 1 address") }
         KeeperClientConnectionError { display("keeper client failed to connect") }
         JoinError(e: JoinError) { display("join error: {}", e) }
