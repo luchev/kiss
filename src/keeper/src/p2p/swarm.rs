@@ -188,6 +188,25 @@ impl Swarm {
                 QueryResult::PutRecord(result) => self.handle_put_record(result, id).await?,
                 _ => warn!("unhandled query result: {:?}", result),
             },
+            SwarmEvent::Behaviour(WireEvent::Kademlia(KademliaEvent::InboundRequest {
+                request,
+            })) => match request {
+                libp2p::kad::InboundRequest::FindNode { num_closer_peers } => todo!(),
+                libp2p::kad::InboundRequest::GetProvider {
+                    num_closer_peers,
+                    num_provider_peers,
+                } => todo!(),
+                libp2p::kad::InboundRequest::AddProvider { record } => todo!(),
+                libp2p::kad::InboundRequest::GetRecord {
+                    num_closer_peers,
+                    present_locally,
+                } => todo!(),
+                libp2p::kad::InboundRequest::PutRecord {
+                    source,
+                    connection,
+                    record,
+                } => todo!(),
+            },
             _ => {}
         }
         Ok(())
@@ -214,6 +233,7 @@ impl Swarm {
     }
 
     async fn handle_put_record(&self, message: PutRecordResult, id: QueryId) -> Res<()> {
+        info!("put record: {:?}", message);
         let response_channel = match self.queries.lock().await.remove(&id) {
             Some(QueryResponse::Put { sender }) => sender,
             _ => Err(ErrorKind::InvalidResponseChannel(id))?,
@@ -264,7 +284,7 @@ impl Swarm {
         let query_id = swarm
             .behaviour_mut()
             .kademlia
-            .put_record(record, Quorum::One)?;
+            .put_record(record, Quorum::Majority)?;
         self.queries
             .lock()
             .await
