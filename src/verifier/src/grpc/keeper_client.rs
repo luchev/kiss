@@ -6,7 +6,7 @@ use common::grpc::keeper_grpc::{GetRequest, PutRequest};
 use common::types::Bytes;
 use common::{Er, ErrorKind, Res};
 use futures::executor::block_on;
-use log::info;
+use log::{info, warn};
 use runtime_injector::{
     interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
     ServiceInfo, Svc,
@@ -26,6 +26,7 @@ pub trait IKeeperGateway: Service {
 #[derive(Debug)]
 pub struct KeeperGateway {
     client: Mutex<Option<KeeperGrpcClient<Channel>>>,
+    addresses: Mutex<Vec<SocketAddr>>,
 }
 
 #[async_trait]
@@ -78,27 +79,21 @@ impl ServiceFactory<()> for KeeperGatewayProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let settings = injector.get::<Svc<dyn ISettings>>()?.keeper_gateway();
-        let address = settings
-            .addresses
-            .first()
-            .ok_or(InjectError::ActivationFailed {
-                service_info: ServiceInfo::of::<KeeperGateway>(),
-                inner: Box::<Er>::new(ErrorKind::SettingsAddressesAreEmpty.into()),
-            })?;
-        let handle = Handle::current();
-        // let client = block_on(async { connect(*address)(|x| handle.spawn(x)) });
-        let client = block_on(async { handle.spawn(connect(*address)).await })
-            .map_err(|e| InjectError::ActivationFailed {
-                service_info: ServiceInfo::of::<KeeperGateway>(),
-                inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
+        let client = if let Some(address) = settings.addresses.first() {
+            let handle = Handle::current();
+            block_on(async { handle.spawn(try_connect(*address)).await }).map_err(|e| {
+                InjectError::ActivationFailed {
+                    service_info: ServiceInfo::of::<KeeperGateway>(),
+                    inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
+                }
             })?
-            .map_err(|e| InjectError::ActivationFailed {
-                service_info: ServiceInfo::of::<KeeperGateway>(),
-                inner: Box::<Er>::new(e),
-            })?;
+        } else {
+            None
+        };
 
         let result = KeeperGateway {
-            client: Mutex::new(Some(client)),
+            client: Mutex::new(client),
+            addresses: Mutex::new(settings.addresses),
         };
 
         Ok(Mutex::new(result))
@@ -116,4 +111,15 @@ async fn connect(address: SocketAddr) -> Res<KeeperGrpcClient<Channel>> {
     KeeperGrpcClient::connect(format!("http://{}", address))
         .await
         .map_err(Er::from)
+}
+
+async fn try_connect(address: SocketAddr) -> Option<KeeperGrpcClient<Channel>> {
+    info!("connecting to a keeper node on address {}", address);
+    match KeeperGrpcClient::connect(format!("http://{}", address)).await {
+        Ok(x) => Some(x),
+        Err(e) => {
+            warn!("failed connecting to node {} with error: {}", address, e);
+            None
+        }
+    }
 }
