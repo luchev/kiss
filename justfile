@@ -4,8 +4,8 @@ keeper1: release-keeper
 keeper2: release-keeper
     ENV=peer2 RUST_LOG=info ./target/release/keeper
 
-verifier: release-verifier release-common
-    RUST_LOG=info ./target/release/verifier
+verifier: debug-common
+    cargo run --package verifier
 
 cargo-verifier:
     RUST_LOG=info cargo run --package verifier

@@ -45,10 +45,20 @@ pub struct Grpc {
     pub port: u16,
 }
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct Swarm {
+    #[serde(default)]
+    pub keypair: Option<String>,
+    pub port: u16,
+    pub bootstrap: Vec<SocketAddr>,
+}
+
 pub trait ISettings: Service {
     fn ledger(&self) -> Ledger;
     fn grpc(&self) -> Grpc;
     fn keeper_gateway(&self) -> KeeperGateway;
+    fn swarm(&self) -> Swarm;
 }
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
@@ -56,6 +66,7 @@ pub struct Settings {
     pub ledger: Ledger,
     pub grpc: Grpc,
     pub keeper_gateway: KeeperGateway,
+    pub swarm: Swarm,
 }
 
 impl ISettings for Settings {
@@ -69,6 +80,10 @@ impl ISettings for Settings {
 
     fn keeper_gateway(&self) -> KeeperGateway {
         self.keeper_gateway.clone()
+    }
+
+    fn swarm(&self) -> Swarm {
+        self.swarm.clone()
     }
 }
 

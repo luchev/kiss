@@ -9,6 +9,7 @@
 mod deps;
 mod grpc;
 mod ledger;
+mod p2p;
 mod settings;
 mod types;
 mod verifier;
@@ -32,8 +33,18 @@ async fn main() {
 
 async fn run() -> Res<()> {
     env_logger::init();
+    // info!("-- KEY: {:?}", generate_keypair());
     let injector = dependency_injector()?;
     let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
     let verifier: Svc<dyn IVerifier> = injector.get()?;
     try_join!(grpc_handler.start(), verifier.start()).map(|_| ())
+}
+
+use base64::Engine;
+use libp2p_identity::Keypair;
+fn generate_keypair() -> Res<String> {
+    let local_key = Keypair::generate_ed25519();
+    let encoded =
+        base64::engine::general_purpose::STANDARD_NO_PAD.encode(local_key.to_protobuf_encoding()?);
+    Ok(encoded)
 }

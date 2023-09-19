@@ -198,8 +198,8 @@ impl From<SystemTimeError> for Error {
     }
 }
 
-// impl From<&Vec<SqlValue>> for Error {
-//     fn from(e: &Vec<SqlValue>) -> Self {
-//         ErrorKind::InvalidSqlRow(e.clone()).into()
-//     }
-// }
+impl From<libp2p_identity::DecodingError> for Error {
+    fn from(e: libp2p_identity::DecodingError) -> Self {
+        ErrorKind::KeypairBase64DecodingError(e).into()
+    }
+}
