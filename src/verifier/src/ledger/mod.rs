@@ -305,7 +305,7 @@ impl ServiceFactory<()> for LedgerProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let settings = injector.get::<Svc<dyn ISettings>>()?.ledger();
-        let result = match settings {
+        let ledger = match settings {
             Ledger::Immudb {
                 username,
                 password,
@@ -327,14 +327,14 @@ impl ServiceFactory<()> for LedgerProvider {
                 };
 
                 ImmuLedger {
-                    token: token,
+                    token,
                     client: Mutex::new(Some(client)),
                 }
             }
         };
 
         let handle = Handle::current();
-        let ledger = block_on(async { handle.spawn(create_contract_table(result)).await })
+        let ledger = block_on(async { handle.spawn(create_contract_table(ledger)).await })
             .map_err(|e| InjectError::ActivationFailed {
                 service_info: ServiceInfo::of::<ImmuLedger>(),
                 inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),

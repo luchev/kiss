@@ -22,10 +22,6 @@ use verifier::IVerifier;
 
 use crate::grpc::IGrpcHandler;
 
-pub mod immudb_grpc {
-    tonic::include_proto!("immudb.schema");
-}
-
 #[tokio::main]
 async fn main() {
     match run().await {
