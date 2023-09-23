@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 use crate::Res;
+use libp2p_identity::PeerId;
 use tokio::sync::oneshot;
 
 pub type Bytes = Vec<u8>;
@@ -16,6 +19,10 @@ pub enum SwarmInstruction {
         key: String,
         value: Bytes,
         resp: Responder<OneReceiver<Res<()>>>,
+    },
+    GetProviders {
+        key: String,
+        resp: Responder<OneReceiver<Res<HashSet<PeerId>>>>,
     },
 }
 

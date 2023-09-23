@@ -4,6 +4,10 @@ use crate::{
         GrpcHandlerProvider, IGrpcHandler,
     },
     ledger::{ImmuLedger, LedgerProvider},
+    p2p::{
+        self,
+        controller::{ISwarmController, SwarmControllerProvider},
+    },
     settings::{ISettings, SettingsProvider},
     verifier::{IVerifier, VerifierProvider},
 };
@@ -38,6 +42,7 @@ pub fn dependency_injector() -> Res<Injector> {
             .singleton()
             .with_interface::<dyn IVerifier>(),
     );
+    injector.add_module(p2p::module());
 
     Ok(injector.build())
 }

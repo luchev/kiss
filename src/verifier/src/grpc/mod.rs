@@ -2,11 +2,16 @@ use self::keeper_client::KeeperGateway;
 use crate::grpc::keeper_client::IKeeperGateway;
 use crate::ledger::ILedger;
 use crate::ledger::ImmuLedger;
+use crate::p2p::controller::ISwarmController;
+use crate::p2p::controller::SwarmController;
 use crate::settings::ISettings;
 use async_trait::async_trait;
 use common::consts::{GRPC_TIMEOUT, LOCALHOST};
 use common::grpc::verifier_grpc::verifier_grpc_server::{VerifierGrpc, VerifierGrpcServer};
-use common::grpc::verifier_grpc::{RetrieveRequest, RetrieveResponse, StoreRequest, StoreResponse};
+use common::grpc::verifier_grpc::{
+    GetProvidersRequest, GetProvidersResponse, RetrieveRequest, RetrieveResponse, StoreRequest,
+    StoreResponse,
+};
 use common::hasher::hash;
 use common::{hasher, ErrorKind, Res};
 use log::info;
@@ -36,16 +41,13 @@ impl ServiceFactory<()> for GrpcHandlerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let port = injector.get::<Svc<dyn ISettings>>()?.grpc().port;
-        let keeper_gateway: Svc<Mutex<KeeperGateway>> = injector.get()?;
-        let ledger: Svc<Mutex<ImmuLedger>> = injector.get()?;
-
         Ok(GrpcHandler {
             inner: Inner {
-                keeper_gateway,
-                ledger,
+                keeper_gateway: injector.get::<Svc<Mutex<KeeperGateway>>>()?,
+                ledger: injector.get::<Svc<Mutex<ImmuLedger>>>()?,
+                swarm_controller: injector.get::<Svc<SwarmController>>()?,
             },
-            port,
+            port: injector.get::<Svc<dyn ISettings>>()?.grpc().port,
         })
     }
 }
@@ -60,6 +62,7 @@ pub trait IGrpcHandler: Service {
 pub struct Inner {
     keeper_gateway: Svc<Mutex<KeeperGateway>>,
     ledger: Svc<Mutex<ImmuLedger>>,
+    swarm_controller: Svc<SwarmController>,
 }
 
 pub struct GrpcHandler {
@@ -162,5 +165,23 @@ impl VerifierGrpc for Inner {
             name: request.name,
             content: res,
         }))
+    }
+
+    async fn get_providers(
+        &self,
+        request: Request<GetProvidersRequest>,
+    ) -> std::result::Result<Response<GetProvidersResponse>, Status> {
+        let request = request.into_inner();
+        info!("received a get providers request for {}", request.name);
+        self.swarm_controller
+            .get_providers(request.name.clone())
+            .await
+            .map_err(|e| Status::internal(e.to_string()))
+            .map(|providers| {
+                Ok(Response::new(GetProvidersResponse {
+                    name: request.name,
+                    providers: providers.into_iter().map(|x| x.to_string()).collect(),
+                }))
+            })?
     }
 }

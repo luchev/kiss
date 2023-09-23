@@ -20,7 +20,17 @@ message RetrieveResponse {
     bytes content = 2;
 }
 
+message GetProvidersRequest {
+    string name = 1;
+}
+
+message GetProvidersResponse {
+    string name = 1;
+    repeated string providers = 2;
+}
+
 service VerifierGrpc {
     rpc Store(StoreRequest) returns (StoreResponse);
     rpc Retrieve(RetrieveRequest) returns (RetrieveResponse);
+    rpc GetProviders(GetProvidersRequest) returns (GetProvidersResponse);
 }
