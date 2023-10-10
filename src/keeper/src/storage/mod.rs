@@ -1,6 +1,7 @@
 use async_trait::async_trait;
-use common::{types::Bytes, Er, Res};
-use std::path::PathBuf;
+use common::{types::Bytes, Er, ErrorKind, Res};
+use libp2p::kad::Record;
+use std::path::{Path, PathBuf};
 pub mod local;
 use self::local::LocalStorage;
 use crate::settings::{ISettings, Storage as StorageSettings};
@@ -9,9 +10,12 @@ use runtime_injector::{
     ServiceInfo, Svc,
 };
 
+use libp2p::kad::record::Key;
+use std::str;
+
 #[async_trait]
 pub trait IStorage: Service {
-    async fn put(&self, path: PathBuf, data: Bytes) -> Res<()>;
+    async fn put(&self, data: Record) -> Res<()>;
     async fn get(&self, path: PathBuf) -> Res<Bytes>;
 }
 
@@ -39,6 +43,12 @@ impl ServiceFactory<()> for StorageProvider {
             StorageSettings::Docker => todo!(),
         }
     }
+}
+
+fn key_to_path(key: &Key) -> Res<PathBuf> {
+    Ok(PathBuf::from(
+        str::from_utf8(&key.to_vec()).map_err(|e| ErrorKind::Utf8Error)?,
+    ))
 }
 
 interface! {

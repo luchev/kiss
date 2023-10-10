@@ -1,20 +1,28 @@
+use common::{ErrorKind, Res};
+use futures::executor::block_on;
 use libp2p::kad::record::Key;
 use libp2p::kad::store::{Error, RecordStore, Result};
-use libp2p::kad::{kbucket, ProviderRecord, Record, K_VALUE};
+use libp2p::kad::{KBucketKey, ProviderRecord, Record, K_VALUE};
 use libp2p_identity::PeerId;
+use log::info;
+use runtime_injector::Svc;
 use smallvec::SmallVec;
 use std::borrow::Cow;
 use std::collections::{hash_map, hash_set, HashMap, HashSet};
-use std::iter;
+use std::path::PathBuf;
+use std::{iter, str};
+use tokio::runtime::Handle;
 
-/// In-memory implementation of a `RecordStore`.
-pub struct MemoryStore {
+use crate::storage::IStorage;
+
+/// Local implementation of a `RecordStore`.
+pub struct LocalStore {
     /// The identity of the peer owning the store.
-    local_key: kbucket::Key<PeerId>,
+    local_key: KBucketKey<PeerId>,
     /// The configuration of the store.
-    config: MemoryStoreConfig,
+    config: LocalStoreConfig,
     /// The stored (regular) records.
-    records: HashMap<Key, Record>,
+    records: Svc<dyn IStorage>,
     /// The stored provider records.
     providers: HashMap<Key, SmallVec<[ProviderRecord; K_VALUE.get()]>>,
     /// The set of all provider records for the node identified by `local_key`.
@@ -23,9 +31,9 @@ pub struct MemoryStore {
     provided: HashSet<ProviderRecord>,
 }
 
-/// Configuration for a `MemoryStore`.
+/// Configuration for a `LocalStore`.
 #[derive(Debug, Clone)]
-pub struct MemoryStoreConfig {
+pub struct LocalStoreConfig {
     /// The maximum number of records.
     pub max_records: usize,
     /// The maximum size of record values, in bytes.
@@ -39,7 +47,7 @@ pub struct MemoryStoreConfig {
     pub max_provided_keys: usize,
 }
 
-impl Default for MemoryStoreConfig {
+impl Default for LocalStoreConfig {
     fn default() -> Self {
         Self {
             max_records: 1024,
@@ -50,33 +58,30 @@ impl Default for MemoryStoreConfig {
     }
 }
 
-impl MemoryStore {
-    /// Creates a new `MemoryRecordStore` with a default configuration.
-    pub fn new(local_id: PeerId) -> Self {
-        Self::with_config(local_id, Default::default())
-    }
-
-    /// Creates a new `MemoryRecordStore` with the given configuration.
-    pub fn with_config(local_id: PeerId, config: MemoryStoreConfig) -> Self {
-        MemoryStore {
-            local_key: kbucket::Key::from(local_id),
+impl LocalStore {
+    /// Creates a new `LocalRecordStore` with the given configuration.
+    pub fn with_config(
+        local_id: PeerId,
+        config: LocalStoreConfig,
+        storage: Svc<dyn IStorage>,
+    ) -> Self {
+        LocalStore {
+            local_key: KBucketKey::from(local_id),
             config,
-            records: HashMap::default(),
+            records: storage,
             provided: HashSet::default(),
             providers: HashMap::default(),
         }
     }
-
-    /// Retains the records satisfying a predicate.
-    pub fn retain<F>(&mut self, f: F)
-    where
-        F: FnMut(&Key, &mut Record) -> bool,
-    {
-        self.records.retain(f);
-    }
 }
 
-impl RecordStore for MemoryStore {
+fn key_to_path(key: &Key) -> Res<PathBuf> {
+    Ok(PathBuf::from(
+        str::from_utf8(&key.to_vec()).map_err(|e| ErrorKind::Utf8Error)?,
+    ))
+}
+
+impl RecordStore for LocalStore {
     type RecordsIter<'a> =
         iter::Map<hash_map::Values<'a, Key, Record>, fn(&'a Record) -> Cow<'a, Record>>;
 
@@ -86,37 +91,34 @@ impl RecordStore for MemoryStore {
     >;
 
     fn get(&self, k: &Key) -> Option<Cow<'_, Record>> {
-        self.records.get(k).map(Cow::Borrowed)
+        match key_to_path(k) {
+            Ok(path) => todo!(),
+            Err(_) => None,
+        }
     }
 
     fn put(&mut self, r: Record) -> Result<()> {
         if r.value.len() >= self.config.max_value_bytes {
             return Err(Error::ValueTooLarge);
         }
-
-        let num_records = self.records.len();
-
-        match self.records.entry(r.key.clone()) {
-            hash_map::Entry::Occupied(mut e) => {
-                e.insert(r);
-            }
-            hash_map::Entry::Vacant(e) => {
-                if num_records >= self.config.max_records {
-                    return Err(Error::MaxRecords);
-                }
-                e.insert(r);
-            }
-        }
-
+        info!("storing {:?}", r.key.clone());
+        let handle = Handle::current();
+        let records = self.records.clone();
+        match block_on(async { handle.spawn(async move { records.put(r).await }).await }) {
+            Ok(Ok(x)) => Ok(x),
+            Ok(Err(_)) => Err(Error::MaxRecords),
+            Err(_) => Err(Error::MaxRecords),
+        }?;
         Ok(())
     }
 
     fn remove(&mut self, k: &Key) {
-        self.records.remove(k);
+        // self.records.remove(k);
     }
 
     fn records(&self) -> Self::RecordsIter<'_> {
-        self.records.values().map(Cow::Borrowed)
+        // self.records.values().map(Cow::Borrowed)
+        todo!()
     }
 
     fn add_provider(&mut self, record: ProviderRecord) -> Result<()> {
@@ -136,14 +138,17 @@ impl RecordStore for MemoryStore {
 
         if let Some(i) = providers.iter().position(|p| p.provider == record.provider) {
             // In-place update of an existing provider record.
-            providers.as_mut()[i] = record;
+            match providers.get_mut(i) {
+                Some(x) => *x = record,
+                None => todo!(),
+            };
         } else {
             // It is a new provider record for that key.
             let local_key = self.local_key.clone();
-            let key = kbucket::Key::new(record.key.clone());
-            let provider = kbucket::Key::from(record.provider);
+            let key = KBucketKey::new(record.key.clone());
+            let provider = KBucketKey::from(record.provider);
             if let Some(i) = providers.iter().position(|p| {
-                let pk = kbucket::Key::from(p.provider);
+                let pk = KBucketKey::from(p.provider);
                 provider.distance(&key) < pk.distance(&key)
             }) {
                 // Insert the new provider.
@@ -189,123 +194,6 @@ impl RecordStore for MemoryStore {
             if providers.is_empty() {
                 e.remove();
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::borrow::Cow;
-
-    use libp2p::{
-        kad::{kbucket, store::RecordStore, ProviderRecord, Record},
-        multihash::{Code, Multihash},
-        PeerId,
-    };
-    use quickcheck::quickcheck;
-    use rand::prelude::*;
-
-    use crate::p2p::store::MemoryStore;
-
-    fn random_multihash() -> Multihash {
-        Multihash::wrap(Code::Sha2_256.into(), &rand::thread_rng().gen::<[u8; 32]>()).unwrap()
-    }
-
-    fn distance(r: &ProviderRecord) -> kbucket::Distance {
-        kbucket::Key::new(r.key.clone()).distance(&kbucket::Key::from(r.provider))
-    }
-
-    #[test]
-    fn put_get_remove_record() {
-        fn prop(r: Record) {
-            let mut store = MemoryStore::new(PeerId::random());
-            assert!(store.put(r.clone()).is_ok());
-            assert_eq!(Some(Cow::Borrowed(&r)), store.get(&r.key));
-            store.remove(&r.key);
-            assert!(store.get(&r.key).is_none());
-        }
-        quickcheck(prop as fn(_))
-    }
-
-    #[test]
-    fn add_get_remove_provider() {
-        fn prop(r: ProviderRecord) {
-            let mut store = MemoryStore::new(PeerId::random());
-            assert!(store.add_provider(r.clone()).is_ok());
-            assert!(store.providers(&r.key).contains(&r));
-            store.remove_provider(&r.key, &r.provider);
-            assert!(!store.providers(&r.key).contains(&r));
-        }
-        quickcheck(prop as fn(_))
-    }
-
-    #[test]
-    fn providers_ordered_by_distance_to_key() {
-        fn prop(providers: Vec<kbucket::Key<PeerId>>) -> bool {
-            let mut store = MemoryStore::new(PeerId::random());
-            let key = Key::from(random_multihash());
-
-            let mut records = providers
-                .into_iter()
-                .map(|p| ProviderRecord::new(key.clone(), p.into_preimage(), Vec::new()))
-                .collect::<Vec<_>>();
-
-            for r in &records {
-                assert!(store.add_provider(r.clone()).is_ok());
-            }
-
-            records.sort_by_key(distance);
-            records.truncate(store.config.max_providers_per_key);
-
-            records == store.providers(&key).to_vec()
-        }
-
-        quickcheck(prop as fn(_) -> _)
-    }
-
-    #[test]
-    fn provided() {
-        let id = PeerId::random();
-        let mut store = MemoryStore::new(id);
-        let key = random_multihash();
-        let rec = ProviderRecord::new(key, id, Vec::new());
-        assert!(store.add_provider(rec.clone()).is_ok());
-        assert_eq!(
-            vec![Cow::Borrowed(&rec)],
-            store.provided().collect::<Vec<_>>()
-        );
-        store.remove_provider(&rec.key, &id);
-        assert_eq!(store.provided().count(), 0);
-    }
-
-    #[test]
-    fn update_provider() {
-        let mut store = MemoryStore::new(PeerId::random());
-        let key = random_multihash();
-        let prv = PeerId::random();
-        let mut rec = ProviderRecord::new(key, prv, Vec::new());
-        assert!(store.add_provider(rec.clone()).is_ok());
-        assert_eq!(vec![rec.clone()], store.providers(&rec.key).to_vec());
-        rec.expires = Some(Instant::now());
-        assert!(store.add_provider(rec.clone()).is_ok());
-        assert_eq!(vec![rec.clone()], store.providers(&rec.key).to_vec());
-    }
-
-    #[test]
-    fn max_provided_keys() {
-        let mut store = MemoryStore::new(PeerId::random());
-        for _ in 0..store.config.max_provided_keys {
-            let key = random_multihash();
-            let prv = PeerId::random();
-            let rec = ProviderRecord::new(key, prv, Vec::new());
-            let _ = store.add_provider(rec);
-        }
-        let key = random_multihash();
-        let prv = PeerId::random();
-        let rec = ProviderRecord::new(key, prv, Vec::new());
-        match store.add_provider(rec) {
-            Err(Error::MaxProvidedKeys) => {}
-            _ => panic!("Unexpected result"),
         }
     }
 }

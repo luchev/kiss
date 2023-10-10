@@ -1,19 +1,24 @@
-use super::IStorage;
+use super::{key_to_path, IStorage};
 use async_trait::async_trait;
 use common::{types::Bytes, ErrorKind, Res};
 use futures::TryStreamExt;
+use libp2p::kad::Record;
 use log::info;
 use object_store::{
     local::{self, LocalFileSystem},
     path::Path,
     ObjectStore,
 };
-use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 #[derive(Default)]
 pub struct LocalStorage {
     local_storage: LocalFileSystem,
+    records: HashMap<String, Record>,
 }
 
 #[derive(Debug)]
@@ -28,13 +33,14 @@ impl Display for FooError {
 
 #[async_trait]
 impl IStorage for LocalStorage {
-    async fn put(&self, path: PathBuf, data: Bytes) -> Res<()> {
-        let path = path
-            .to_str()
-            .ok_or_else(|| ErrorKind::PathParsingError(path.clone()))?;
-        info!("storing {}", path);
+    async fn put(&self, data: Record) -> Res<()> {
+        let path = key_to_path(&data.key)?;
+        info!("storing {}", path.clone().display());
         self.local_storage
-            .put(&Path::from(path), data.into())
+            .put(
+                &Path::from(path.to_str().ok_or(ErrorKind::InvalidRecordName)?),
+                data.value.into(),
+            )
             .await
             .map_err(|err| ErrorKind::StoragePutFailed(err).into())
     }
@@ -58,14 +64,34 @@ impl IStorage for LocalStorage {
             .flatten()
             .collect::<Bytes>())
     }
+
+    // fn sync_put(&self, data: Record) -> Res<()> {
+    //     let handle = Handle::current();
+    //     match block_on(async { handle.spawn(self.put(data)).await }) {
+    //         Ok(Ok(x)) => Ok(x),
+    //         Ok(Err(_)) => Err(ErrorKind::AsyncExecutionFailed.into()),
+    //         Err(e) => Err(ErrorKind::JoinError(e).into()),
+    //     }
+    // }
 }
 
 impl LocalStorage {
     pub fn new(prefix: &str) -> Res<Self> {
+        // match self.records.entry(r.key.clone()) {
+        //     hash_map::Entry::Occupied(mut e) => {
+        //         e.insert(r);
+        //     }
+        //     hash_map::Entry::Vacant(e) => {
+        //         if num_records >= self.config.max_records {
+        //             return Err(Error::MaxRecords);
+        //         }
+        //         e.insert(r);
+        //     }
         let object_store =
             local::LocalFileSystem::new_with_prefix(prefix).map_err(ErrorKind::LocalStorageFail)?;
         Ok(LocalStorage {
             local_storage: object_store,
+            records: HashMap::new(),
         })
     }
 }

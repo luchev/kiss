@@ -77,10 +77,13 @@ error_chain! {
         FailedTonicRequest(e: tonic::Status) { display("failed tonic request: {}", e) }
         MutexIsNotMutable { display("mutex not initialized correctly and is not mutable") }
         FailedConvertingFromUtf8(e: FromUtf8Error) { display("failed converting from utf-8: {}", e) }
+        Utf8Error { display("failed converting from utf-8") }
         SystemTimeError(e: SystemTimeError) { display("system time error: {}", e) }
         InvalidSqlRow(e: Vec<SqlValue>) { display("invalid sql row: {:?}", e) }
         InvalidSql { display("invalid sql") }
         NoProvidersFound { display("no providers found") }
+        InvalidRecordName { display("invalid record name") }
+        AsyncExecutionFailed { display("async execution failed") }
         InvalidSwarmInstruction(e: SwarmInstruction) { display("invalid swarm instruction: {:?}", e) }
     }
 }

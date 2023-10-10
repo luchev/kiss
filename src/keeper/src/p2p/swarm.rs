@@ -1,4 +1,8 @@
-use crate::settings::ISettings;
+use crate::{
+    p2p::store::{LocalStore, LocalStoreConfig},
+    settings::ISettings,
+    storage::IStorage,
+};
 use async_trait::async_trait;
 use base64::Engine as _;
 use common::{
@@ -9,10 +13,8 @@ use futures::StreamExt;
 use libp2p::{
     core::upgrade::Version,
     kad::{
-        record::Key,
-        store::{MemoryStore, MemoryStoreConfig},
-        GetRecordOk, GetRecordResult, Kademlia, KademliaConfig, KademliaEvent, PeerRecord,
-        PutRecordResult, QueryId, QueryResult, Quorum, Record,
+        record::Key, store::MemoryStore, GetRecordOk, GetRecordResult, Kademlia, KademliaConfig,
+        KademliaEvent, PeerRecord, PutRecordResult, QueryId, QueryResult, Quorum, Record,
     },
     mdns::{self, tokio::Behaviour},
     noise,
@@ -50,6 +52,7 @@ impl ServiceFactory<()> for SwarmProvider {
     ) -> InjectResult<Self::Result> {
         let settings: Svc<dyn ISettings> = injector.get()?;
         let receiver: Svc<Mutex<Receiver<SwarmInstruction>>> = injector.get()?;
+        let storage: Svc<dyn IStorage> = injector.get()?;
 
         let local_key = match settings.swarm().keypair {
             Some(keypair) => Keypair::from_protobuf_encoding(
@@ -74,14 +77,15 @@ impl ServiceFactory<()> for SwarmProvider {
             let cfg = KademliaConfig::default()
                 .set_query_timeout(Duration::from_secs(60))
                 .to_owned();
-            let store = MemoryStore::with_config(
+            let store = LocalStore::with_config(
                 local_peer_id,
-                MemoryStoreConfig {
+                LocalStoreConfig {
                     max_records: 150000,
                     max_value_bytes: 1024 * 1024 * 200,
                     max_provided_keys: 150000,
                     max_providers_per_key: 20,
                 },
+                storage,
             );
             let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).map_err(|e| {
                 InjectError::ActivationFailed {
@@ -240,6 +244,7 @@ impl Swarm {
             SwarmInstruction::Get { key, resp } => {
                 self.handle_controller_get(swarm, key, resp).await
             }
+            _ => Err(ErrorKind::InvalidSwarmInstruction(instruction))?,
         }
     }
 
@@ -295,7 +300,7 @@ impl Swarm {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "WireEvent")]
 pub struct CombinedBehaviour {
-    kademlia: Kademlia<MemoryStore>,
+    kademlia: Kademlia<LocalStore>,
     mdns: Behaviour,
 }
 
