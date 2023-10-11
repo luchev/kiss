@@ -13,8 +13,10 @@ use futures::StreamExt;
 use libp2p::{
     core::upgrade::Version,
     kad::{
-        record::Key, store::MemoryStore, GetRecordOk, GetRecordResult, Kademlia, KademliaConfig,
-        KademliaEvent, PeerRecord, PutRecordResult, QueryId, QueryResult, Quorum, Record,
+        record::Key,
+        store::{MemoryStore, MemoryStoreConfig},
+        GetRecordOk, GetRecordResult, Kademlia, KademliaConfig, KademliaEvent, PeerRecord,
+        PutRecordResult, QueryId, QueryResult, Quorum, Record,
     },
     mdns::{self, tokio::Behaviour},
     noise,
@@ -77,16 +79,26 @@ impl ServiceFactory<()> for SwarmProvider {
             let cfg = KademliaConfig::default()
                 .set_query_timeout(Duration::from_secs(60))
                 .to_owned();
-            let store = LocalStore::with_config(
+            let store = MemoryStore::with_config(
                 local_peer_id,
-                LocalStoreConfig {
+                MemoryStoreConfig {
                     max_records: 150000,
                     max_value_bytes: 1024 * 1024 * 200,
                     max_provided_keys: 150000,
                     max_providers_per_key: 20,
                 },
-                storage,
             );
+
+            // let store = LocalStore::with_config(
+            //     local_peer_id,
+            //     LocalStoreConfig {
+            //         max_records: 150000,
+            //         max_value_bytes: 1024 * 1024 * 200,
+            //         max_provided_keys: 150000,
+            //         max_providers_per_key: 20,
+            //     },
+            //     storage,
+            // );
             let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).map_err(|e| {
                 InjectError::ActivationFailed {
                     service_info: ServiceInfo::of::<Swarm>(),
@@ -300,7 +312,8 @@ impl Swarm {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "WireEvent")]
 pub struct CombinedBehaviour {
-    kademlia: Kademlia<LocalStore>,
+    kademlia: Kademlia<MemoryStore>,
+    // kademlia: Kademlia<LocalStore>,
     mdns: Behaviour,
 }
 
