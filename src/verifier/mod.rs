@@ -1,10 +1,8 @@
 use std::time::Instant;
 
-use crate::grpc::keeper_client::IKeeperGateway;
-use crate::ledger::ImmuLedger;
-use crate::{grpc::keeper_client::KeeperGateway, ledger::ILedger};
+use crate::ledger::{ILedger, ImmuLedger};
+use crate::util::Res;
 use async_trait::async_trait;
-use common::Res;
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
@@ -27,13 +25,8 @@ impl ServiceFactory<()> for VerifierProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let keeper_gateway: Svc<Mutex<KeeperGateway>> = injector.get()?;
         let ledger: Svc<Mutex<ImmuLedger>> = injector.get()?;
-
-        Ok(Verifier {
-            keeper_gateway,
-            ledger,
-        })
+        Ok(Verifier { ledger })
     }
 }
 
@@ -43,7 +36,6 @@ pub trait IVerifier: Service {
 }
 
 pub struct Verifier {
-    keeper_gateway: Svc<Mutex<KeeperGateway>>,
     ledger: Svc<Mutex<ImmuLedger>>,
 }
 
@@ -58,8 +50,9 @@ impl IVerifier for Verifier {
             };
             let time_before_start = Instant::now();
             for contract in contracts {
-                let mut keeper_gateway = self.keeper_gateway.lock().await;
-                let hash_in_swarm = keeper_gateway.verify(contract.file_uuid.clone()).await;
+                // let mut keeper_gateway = self.keeper_gateway.lock().await;
+                // let hash_in_swarm = keeper_gateway.verify(contract.file_uuid.clone()).await;
+                let hash_in_swarm: Res<String> = Ok("".to_string()); // TODO-FIX ME
                 if let Err(e) = hash_in_swarm {
                     info!("file {} not found in swarm, {}", contract.file_uuid, e);
                     continue;

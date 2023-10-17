@@ -1,3 +1,6 @@
+run:
+    RUST_LOG=info cargo run
+
 keeper1: release-keeper
     ENV=peer1 RUST_LOG=info ./target/release/keeper
 

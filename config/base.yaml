@@ -1,0 +1,20 @@
+storage:
+  type: local
+  path: data/
+  create: true
+grpc:
+  port: 2000
+swarm:
+  keypair: CAESQKV3dTAPB/2Wh3Ju7IuO9FN9m/4vn+PRxt+j+UQn9NeMezS6NMNptbSXBeaDXwMpfM1frWLUwKQy4XvojWkdUaU
+  port: 6060
+  bootstrap:
+    - 127.0.0.1:7070
+    - 127.0.0.1:6060
+ledger:
+  type: immudb
+  username: immudb
+  password: immudb
+  address: 127.0.0.1:3322
+keeper_gateway:
+  addresses:
+    - '[::1]:5006'

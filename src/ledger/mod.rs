@@ -1,13 +1,13 @@
-use async_std::task::block_on;
-use async_trait::async_trait;
-use common::grpc::immudb_grpc::{
+use crate::util::grpc::immudb_grpc::{
     immu_service_client::ImmuServiceClient, sql_value::Value, CreateDatabaseRequest, KeyRequest,
     KeyValue, LoginRequest, NamedParam, SetRequest, SqlExecRequest, SqlQueryRequest, SqlValue,
 };
-use common::{
+use crate::util::{
     types::{Bytes, Contract},
     Er, ErrorKind, Res,
 };
+use async_std::task::block_on;
+use async_trait::async_trait;
 use log::info;
 use runtime_injector::{
     interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
