@@ -5,6 +5,16 @@ version: 2.1
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/configuration-reference/#jobs
 jobs:
+  build:
+    docker:
+      - image: alpine
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies and build project
+          command: cargo build
+      - sonarcloud/scan
+
   say-hello:
     # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
     # See: https://circleci.com/docs/configuration-reference/#executor-job
@@ -17,6 +27,9 @@ jobs:
       - run:
           name: "Say hello"
           command: "echo Hello, World!"
+
+orbs:
+  sonarcloud: sonarsource/sonarcloud@2.0.0
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
