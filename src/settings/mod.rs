@@ -54,7 +54,6 @@ pub trait ISettings: Service {
     fn grpc(&self) -> Grpc;
     fn swarm(&self) -> Swarm;
     fn ledger(&self) -> Ledger;
-    fn keeper_gateway(&self) -> KeeperGateway;
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -65,11 +64,6 @@ pub enum Ledger {
         password: String,
         address: SocketAddr,
     },
-}
-
-#[derive(Default, Debug, Deserialize, Serialize, Clone)]
-pub struct KeeperGateway {
-    pub addresses: Vec<SocketAddr>,
 }
 
 impl Default for Ledger {
@@ -94,7 +88,6 @@ pub struct Settings {
     pub grpc: Grpc,
     pub swarm: Swarm,
     pub ledger: Ledger,
-    pub keeper_gateway: KeeperGateway,
 }
 
 impl ISettings for Settings {
@@ -112,10 +105,6 @@ impl ISettings for Settings {
 
     fn ledger(&self) -> Ledger {
         self.ledger.clone()
-    }
-
-    fn keeper_gateway(&self) -> KeeperGateway {
-        self.keeper_gateway.clone()
     }
 }
 

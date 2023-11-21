@@ -34,8 +34,11 @@ impl ServiceFactory<()> for SwarmControllerProvider {
 #[async_trait]
 pub trait ISwarmController: Service {
     async fn set(&self, key: String, value: Bytes) -> Res<()>;
+    async fn put_to(&self, key: String, value: Bytes, peers: Vec<PeerId>) -> Res<()>;
     async fn get(&self, key: String) -> Res<Bytes>;
     async fn get_providers(&self, key: String) -> Res<HashSet<PeerId>>;
+    async fn get_closest_peers(&self, key: String) -> Res<Vec<PeerId>>;
+    async fn start_providing(&self, key: String) -> Res<()>;
 }
 
 pub struct SwarmController {
@@ -50,7 +53,7 @@ impl ISwarmController for SwarmController {
         self.swarm_api
             .lock()
             .await
-            .send(SwarmInstruction::Put {
+            .send(SwarmInstruction::PutLocal {
                 key,
                 value,
                 resp: sender,
@@ -61,6 +64,41 @@ impl ISwarmController for SwarmController {
         info!("put result: {:?}", result);
 
         // let (sender, receiver) = oneshot::channel::<QueryId>();
+        result
+    }
+
+    async fn put_to(&self, key: String, value: Bytes, peer_ids: Vec<PeerId>) -> Res<()> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
+
+        self.swarm_api
+            .lock()
+            .await
+            .send(SwarmInstruction::PutRemote {
+                key,
+                value,
+                resp: sender,
+                remotes: peer_ids,
+            })
+            .await?;
+        let receiving_channel = receiver.await?;
+        let result = receiving_channel.await?;
+        info!("put to result: {:?}", result);
+
+        // let (sender, receiver) = oneshot::channel::<QueryId>();
+        result
+    }
+
+    async fn start_providing(&self, key: String) -> Res<()> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
+
+        self.swarm_api
+            .lock()
+            .await
+            .send(SwarmInstruction::StartProviding { key, resp: sender })
+            .await?;
+        let receiving_channel = receiver.await?;
+        let result = receiving_channel.await?;
+        info!("start providing: {:?}", result);
         result
     }
 
@@ -86,7 +124,20 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("get peers result: {:?}", result);
+        info!("get providers result: {:?}", result);
+        result
+    }
+
+    async fn get_closest_peers(&self, key: String) -> Res<Vec<PeerId>> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<Vec<PeerId>>>>();
+        self.swarm_api
+            .lock()
+            .await
+            .send(SwarmInstruction::GetClosestPeers { key, resp: sender })
+            .await?;
+        let receiving_channel = receiver.await?;
+        let result = receiving_channel.await?;
+        info!("get closest peers result: {:?}", result);
         result
     }
 }

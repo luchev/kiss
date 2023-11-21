@@ -8,6 +8,7 @@ use runtime_injector::{constant, define_module, IntoSingleton};
 use tokio::sync::{mpsc, Mutex};
 
 pub mod controller;
+mod memorystore;
 mod store;
 pub mod swarm;
 

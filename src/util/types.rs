@@ -15,14 +15,28 @@ pub enum SwarmInstruction {
         key: String,
         resp: Responder<OneReceiver<Res<Bytes>>>,
     },
-    Put {
+    PutLocal {
         key: String,
         value: Bytes,
+        resp: Responder<OneReceiver<Res<()>>>,
+    },
+    PutRemote {
+        key: String,
+        value: Bytes,
+        remotes: Vec<PeerId>,
+        resp: Responder<OneReceiver<Res<()>>>,
+    },
+    StartProviding {
+        key: String,
         resp: Responder<OneReceiver<Res<()>>>,
     },
     GetProviders {
         key: String,
         resp: Responder<OneReceiver<Res<HashSet<PeerId>>>>,
+    },
+    GetClosestPeers {
+        key: String,
+        resp: Responder<OneReceiver<Res<Vec<PeerId>>>>,
     },
 }
 

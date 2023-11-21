@@ -3,9 +3,7 @@ storage:
   path: data/peer1
   create: true
 grpc:
-  port: 5005
+  port: 3000
 swarm:
-  keypair: CAESQKV3dTAPB/2Wh3Ju7IuO9FN9m/4vn+PRxt+j+UQn9NeMezS6NMNptbSXBeaDXwMpfM1frWLUwKQy4XvojWkdUaU
-  port: 6060
-  bootstrap:
-    - 127.0.0.1:7070
+  keypair: CAESQEdHJnpx77wIwwUZEYvjGD8p6q6tz5U6OCjsGkTqGcl3tPoPzuoW7C1/w3DfmXDFLUwWIJkBcUbb1IfNwsWveiE
+  port: 8802

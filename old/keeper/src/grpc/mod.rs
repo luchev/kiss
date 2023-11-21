@@ -159,13 +159,13 @@ impl KeeperGrpc for Inner {
     }
 }
 
-// use base64::Engine;
-// use libp2p_identity::Keypair;
-// impl GrpcHandler {
-//     async fn generate_keypair(&self) -> String {
-//         let local_key = Keypair::generate_ed25519();
-//         let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
-//             .encode(local_key.to_protobuf_encoding().unwrap());
-//         return encoded;
-//     }
-// }
+use base64::Engine;
+use libp2p_identity::Keypair;
+impl GrpcHandler {
+    async fn generate_keypair(&self) -> String {
+        let local_key = Keypair::generate_ed25519();
+        let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
+            .encode(local_key.to_protobuf_encoding().unwrap());
+        return encoded;
+    }
+}

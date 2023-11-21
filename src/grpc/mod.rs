@@ -7,16 +7,18 @@ use crate::util::grpc::kiss_grpc::kiss_service_server::KissService;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissServiceServer;
 use crate::util::grpc::kiss_grpc::{
     GetProvidersRequest, GetProvidersResponse, RetrieveRequest, RetrieveResponse, StoreRequest,
-    StoreResponse, VerifyRequest, VerifyResponse,
+    StoreResponse, VerifyRequest, VerifyResponse, *,
 };
 use crate::util::hasher::{self, hash};
 use crate::util::{ErrorKind, Res};
 use async_trait::async_trait;
+use libp2p_identity::PeerId;
 use log::info;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
@@ -166,7 +168,7 @@ impl KissService for Inner {
             .swarm_controller
             .set(file_uuid.clone(), request.content)
             .await;
-        info!("kad result {:?}", res);
+        info!("put finished: {:?}", res);
         // self.storage
         //     .put(request.path.into(), request.content)
         //     .await
@@ -200,7 +202,7 @@ impl KissService for Inner {
             .map_err(|e| Status::unknown(e.to_string()))?;
 
         let res = self.swarm_controller.get(request.name.clone()).await;
-        info!("kad result {:?}", res);
+        info!("get finished: {:?}", res);
         let content =
             res.map_err(|e| Status::not_found(format!("failed getting from swarm: {}", e)))?;
 
@@ -220,15 +222,35 @@ impl KissService for Inner {
         request: Request<GetProvidersRequest>,
     ) -> std::result::Result<Response<GetProvidersResponse>, Status> {
         let request = request.into_inner();
-        info!("received a get providers request for {}", request.name);
+        info!("get providers request: {}", request.name);
         self.swarm_controller
             .get_providers(request.name.clone())
             .await
             .map_err(|e| Status::internal(e.to_string()))
             .map(|providers| {
+                info!("get providers result: {:?}", providers);
                 Ok(Response::new(GetProvidersResponse {
                     name: request.name,
                     providers: providers.into_iter().map(|x| x.to_string()).collect(),
+                }))
+            })?
+    }
+
+    async fn get_closest_peers(
+        &self,
+        request: Request<GetClosestPeersRequest>,
+    ) -> std::result::Result<Response<GetClosestPeersResponse>, Status> {
+        let request = request.into_inner();
+        info!("received a get closest peers request for {}", request.uuid);
+        self.swarm_controller
+            .get_closest_peers(request.uuid.clone())
+            .await
+            .map_err(|e| Status::internal(e.to_string()))
+            .map(|peers| {
+                info!("get closest peers result: {:?}", peers);
+                Ok(Response::new(GetClosestPeersResponse {
+                    uuid: request.uuid,
+                    peer_uuids: peers.into_iter().map(|x| x.to_string()).collect(),
                 }))
             })?
     }
@@ -249,5 +271,63 @@ impl KissService for Inner {
             hash: hash(&content),
         };
         Ok(Response::new(reply))
+    }
+
+    async fn start_providing(
+        &self,
+        request: Request<StartProvidingRequest>,
+    ) -> std::result::Result<Response<StartProvidingResponse>, Status> {
+        let request = request.into_inner();
+        info!("received a get providers request for {}", request.uuid);
+        self.swarm_controller
+            .start_providing(request.uuid.clone())
+            .await
+            .map_err(|e| Status::internal(e.to_string()))
+            .map(|()| Ok(Response::new(StartProvidingResponse { uuid: request.uuid })))?
+    }
+
+    async fn put_to(
+        &self,
+        request: Request<PutToRequest>,
+    ) -> std::result::Result<Response<PutToResponse>, Status> {
+        let request = request.into_inner();
+        let file_hash = hash(&request.content);
+        let mut ledger = self.ledger.lock().await;
+        let file_uuid = ledger
+            .create_contract(file_hash, request.ttl)
+            .await
+            .map_err(|e| Status::unknown(e.to_string()))?;
+
+        info!("created contract for {}", file_uuid);
+
+        let peer_uuids: Result<Vec<_>, Status> = request
+            .peer_uuids
+            .iter()
+            .map(|x| PeerId::from_str(x).map_err(|e| Status::invalid_argument(e.to_string())))
+            .collect();
+
+        let res = self
+            .swarm_controller
+            .put_to(file_uuid.clone(), request.content, peer_uuids?)
+            .await;
+        info!("put to finished: {:?}", res);
+        // self.storage
+        //     .put(request.path.into(), request.content)
+        //     .await
+        //     .map_err(|e| match e.kind() {
+        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
+        //         _ => Status::unknown("Unknown storage error".to_string()),
+        //     })?;
+
+        match res {
+            Ok(_) => {
+                info!("stored file {}", file_uuid);
+                Ok(Response::new(PutToResponse { uuid: file_uuid }))
+            }
+            Err(e) => {
+                info!("failed to store file {}", file_uuid);
+                Err(Status::internal(e.to_string()))
+            }
+        }
     }
 }

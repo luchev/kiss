@@ -2,7 +2,10 @@ use crate::util::grpc::immudb_grpc::SqlValue;
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
 use libp2p_identity::{DecodingError, PeerId};
-use libp2p_kad::{store, GetProvidersError, GetRecordError, PutRecordError, QueryId};
+use libp2p_kad::{
+    store, AddProviderError, GetClosestPeersError, GetProvidersError, GetRecordError,
+    PutRecordError, QueryId,
+};
 use log::error;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -50,6 +53,8 @@ error_chain! {
         SwarmPutRecordError(e: PutRecordError) { display("putting record to swarm failed: {}", e) }
         SwarmGetRecordError(e: GetRecordError) { display("getting record from swarm failed: {}", e) }
         SwarmGetProvidersError(e: GetProvidersError) { display("getting providers failed: {}", e) }
+        SwarmStartProvidingError(e: AddProviderError) { display("add provider failed: {}", e) }
+        SwarmGetClosestPeersError(e: GetClosestPeersError) { display("get closest peers failed: {}", e) }
         SwarmGetRecordUnknownError(e: String) { display("getting record from swarm failed: {}", e) }
         GrpcError(e: Status) { display("grpc error: {}", e) }
         PathParsingError(e: PathBuf) { display("unable to parse path: {}", e.display()) }
@@ -85,6 +90,7 @@ error_chain! {
         InvalidRecordName { display("invalid record name") }
         AsyncExecutionFailed { display("async execution failed") }
         InvalidSwarmInstruction(e: SwarmInstruction) { display("invalid swarm instruction: {:?}", e) }
+        InvalidNonZeroUsize { display("invalid non-zero usize ") }
     }
 }
 
@@ -219,5 +225,17 @@ impl From<libp2p_identity::DecodingError> for Error {
 impl From<result::Result<HashSet<PeerId>, Error>> for Error {
     fn from(_: result::Result<HashSet<PeerId>, Error>) -> Self {
         ErrorKind::SendingResultFailed.into()
+    }
+}
+
+impl From<result::Result<Vec<PeerId>, Error>> for Error {
+    fn from(_: result::Result<Vec<PeerId>, Error>) -> Self {
+        ErrorKind::SendingResultFailed.into()
+    }
+}
+
+impl From<oneshot::Receiver<std::result::Result<Vec<PeerId>, Error>>> for Error {
+    fn from(_: oneshot::Receiver<std::result::Result<Vec<PeerId>, Error>>) -> Self {
+        ErrorKind::SendReceiverFailed.into()
     }
 }
