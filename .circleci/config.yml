@@ -16,7 +16,7 @@ jobs:
       - checkout
       - run:
           name: Run tests
-          command: cargo test
+          command: cargo test --package keeper
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/configuration-reference/#workflows
