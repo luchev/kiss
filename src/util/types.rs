@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::Res;
 use libp2p_identity::PeerId;
 use tokio::sync::oneshot;
+use uuid::Uuid;
 
 pub type Bytes = Vec<u8>;
 pub type Responder<T> = oneshot::Sender<T>;
@@ -35,7 +36,7 @@ pub enum SwarmInstruction {
         resp: Responder<OneReceiver<Res<HashSet<PeerId>>>>,
     },
     GetClosestPeers {
-        key: String,
+        key: Uuid,
         resp: Responder<OneReceiver<Res<Vec<PeerId>>>>,
     },
 }

@@ -1,10 +1,8 @@
+// use crate::p2p::memorystore::{MemoryStore, MemoryStoreConfig};
 use crate::settings::ISettings;
-use crate::{
-    p2p::memorystore::{MemoryStore, MemoryStoreConfig},
-    util::{
-        types::{Bytes, OneReceiver, OneSender, SwarmInstruction},
-        Er, ErrorKind, Res,
-    },
+use crate::util::{
+    types::{Bytes, OneReceiver, OneSender, SwarmInstruction},
+    Er, ErrorKind, Res,
 };
 use async_trait::async_trait;
 use base64::Engine as _;
@@ -22,11 +20,12 @@ use libp2p::{
     yamux, PeerId, Transport as _,
 };
 use libp2p_identity::Keypair;
+use libp2p_kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p_kad::{
     AddProviderOk, AddProviderResult, GetClosestPeersOk, GetClosestPeersResult, GetProvidersOk,
-    GetProvidersResult, RoutingUpdate,
+    GetProvidersResult, Mode, RoutingUpdate,
 };
-use log::{info, warn};
+use log::{debug, info, warn};
 use runtime_injector::{
     interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
     ServiceInfo, Svc,
@@ -40,6 +39,7 @@ use tokio::{
     select,
     sync::{mpsc::Receiver, oneshot, Mutex, MutexGuard},
 };
+use uuid::Uuid;
 
 interface! {
     dyn ISwarm = [
@@ -86,12 +86,13 @@ impl ServiceFactory<()> for SwarmProvider {
                 .to_owned();
             let store = MemoryStore::with_config(
                 local_peer_id,
-                MemoryStoreConfig {
-                    max_records: 150000,
-                    max_value_bytes: 1024 * 1024 * 200,
-                    max_provided_keys: 150000,
-                    max_providers_per_key: 5,
-                },
+                MemoryStoreConfig::default(),
+                // MemoryStoreConfig {
+                //     max_records: 150000,
+                //     max_value_bytes: 1024 * 1024 * 200,
+                //     max_provided_keys: 150000,
+                //     max_providers_per_key: 5,
+                // },
             );
 
             // let store = LocalStore::with_config(
@@ -111,7 +112,8 @@ impl ServiceFactory<()> for SwarmProvider {
                 }
             })?;
 
-            let kademlia = Kademlia::with_config(local_peer_id, store, cfg);
+            let mut kademlia = Kademlia::with_config(local_peer_id, store, cfg);
+            kademlia.set_mode(Some(Mode::Server));
             let behaviour = CombinedBehaviour { kademlia, mdns };
             let transport = Transport::default()
                 .upgrade(Version::V1)
@@ -237,6 +239,9 @@ impl Swarm {
                 KademliaEvent::RoutingUpdated { .. } => {
                     info!("routing updated",);
                 }
+                KademliaEvent::InboundRequest { request, .. } => {
+                    info!("inbound request: {:?}", request);
+                }
                 _ => warn!("unhandled kademlia event: {:?}", event),
             },
             _ => {}
@@ -295,7 +300,11 @@ impl Swarm {
     async fn handle_get_record(&self, message: GetRecordResult, id: QueryId) -> Res<()> {
         let response_channel = match self.queries.lock().await.remove(&id) {
             Some(QueryResponse::Get { sender }) => sender,
-            _ => Err(ErrorKind::InvalidResponseChannel(id))?,
+            _ => {
+                info!("channel already closed for query: {:?}", id);
+                return Ok(());
+                // Err(ErrorKind::InvalidResponseChannel(id))?
+            }
         };
 
         match message {
@@ -404,7 +413,7 @@ impl Swarm {
     async fn handle_controller_get_closest_peers<'t>(
         &self,
         swarm: &mut MutexGuard<'t, libp2p::Swarm<CombinedBehaviour>>,
-        key: String,
+        key: Uuid,
         resp: OneSender<OneReceiver<Res<Vec<PeerId>>>>,
     ) -> Res<()> {
         info!("getting closest to: {:?}", key);
@@ -498,7 +507,7 @@ impl Swarm {
         key: String,
         resp: OneSender<OneReceiver<Res<Bytes>>>,
     ) -> Res<()> {
-        info!("getting key {:?}", key);
+        debug!("kad get key {:?}", key);
         let key = Key::new(&key);
         let (sender, receiver) = oneshot::channel::<Res<Bytes>>();
         resp.send(receiver)?;

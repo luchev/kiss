@@ -9,6 +9,7 @@ use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use tokio::sync::{mpsc, oneshot, Mutex};
+use uuid::Uuid;
 
 interface! {
     dyn ISwarmController = [
@@ -33,11 +34,11 @@ impl ServiceFactory<()> for SwarmControllerProvider {
 
 #[async_trait]
 pub trait ISwarmController: Service {
-    async fn set(&self, key: String, value: Bytes) -> Res<()>;
+    async fn put(&self, key: String, value: Bytes) -> Res<()>;
     async fn put_to(&self, key: String, value: Bytes, peers: Vec<PeerId>) -> Res<()>;
     async fn get(&self, key: String) -> Res<Bytes>;
     async fn get_providers(&self, key: String) -> Res<HashSet<PeerId>>;
-    async fn get_closest_peers(&self, key: String) -> Res<Vec<PeerId>>;
+    async fn get_closest_peers(&self, key: Uuid) -> Res<Vec<PeerId>>;
     async fn start_providing(&self, key: String) -> Res<()>;
 }
 
@@ -47,7 +48,7 @@ pub struct SwarmController {
 
 #[async_trait]
 impl ISwarmController for SwarmController {
-    async fn set(&self, key: String, value: Bytes) -> Res<()> {
+    async fn put(&self, key: String, value: Bytes) -> Res<()> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
 
         self.swarm_api
@@ -128,7 +129,7 @@ impl ISwarmController for SwarmController {
         result
     }
 
-    async fn get_closest_peers(&self, key: String) -> Res<Vec<PeerId>> {
+    async fn get_closest_peers(&self, key: Uuid) -> Res<Vec<PeerId>> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<Vec<PeerId>>>>();
         self.swarm_api
             .lock()

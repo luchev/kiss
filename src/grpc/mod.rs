@@ -13,7 +13,7 @@ use crate::util::hasher::{self, hash};
 use crate::util::{ErrorKind, Res};
 use async_trait::async_trait;
 use libp2p_identity::PeerId;
-use log::info;
+use log::{debug, info};
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
@@ -25,6 +25,7 @@ use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
 interface! {
     dyn IGrpcHandler = [
@@ -153,34 +154,37 @@ impl KissService for Inner {
         request: Request<StoreRequest>,
     ) -> std::result::Result<Response<StoreResponse>, Status> {
         let request = request.into_inner();
-        info!("received a store request for {}", request.name);
+        debug!("store request for {}", request.name);
+
         let file_hash = hash(&request.content);
-        info!("{}", file_hash);
+        debug!("{}", file_hash);
+
+        let file_uuid = Uuid::new_v4();
+
+        let closest = self.swarm_controller.get_closest_peers(file_uuid).await;
+        info!("closest peers: {:?}", closest);
+
         let mut ledger = self.ledger.lock().await;
-        let file_uuid = ledger
-            .create_contract(file_hash, request.ttl)
+        ledger
+            .create_contract(file_uuid, file_hash, request.ttl)
             .await
             .map_err(|e| Status::unknown(e.to_string()))?;
 
-        info!("created contract for {}", file_uuid);
+        debug!("created contract for {}", file_uuid);
 
         let res = self
             .swarm_controller
-            .set(file_uuid.clone(), request.content)
+            .put(file_uuid.clone().to_string(), request.content)
             .await;
-        info!("put finished: {:?}", res);
-        // self.storage
-        //     .put(request.path.into(), request.content)
-        //     .await
-        //     .map_err(|e| match e.kind() {
-        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-        //         _ => Status::unknown("Unknown storage error".to_string()),
-        //     })?;
+
+        debug!("put finished: {:?}", res);
 
         match res {
             Ok(_) => {
                 info!("stored file {}", file_uuid);
-                Ok(Response::new(StoreResponse { name: file_uuid }))
+                Ok(Response::new(StoreResponse {
+                    name: file_uuid.to_string(),
+                }))
             }
             Err(e) => {
                 info!("failed to store file {}", file_uuid);
@@ -241,9 +245,12 @@ impl KissService for Inner {
         request: Request<GetClosestPeersRequest>,
     ) -> std::result::Result<Response<GetClosestPeersResponse>, Status> {
         let request = request.into_inner();
-        info!("received a get closest peers request for {}", request.uuid);
+        debug!("get closest peers request for {}", request.uuid);
+        let file_uuid = Uuid::from_str(request.uuid.as_str())
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
         self.swarm_controller
-            .get_closest_peers(request.uuid.clone())
+            .get_closest_peers(file_uuid)
             .await
             .map_err(|e| Status::internal(e.to_string()))
             .map(|peers| {
@@ -293,8 +300,9 @@ impl KissService for Inner {
         let request = request.into_inner();
         let file_hash = hash(&request.content);
         let mut ledger = self.ledger.lock().await;
-        let file_uuid = ledger
-            .create_contract(file_hash, request.ttl)
+        let file_uuid = Uuid::new_v4();
+        ledger
+            .create_contract(file_uuid, file_hash, request.ttl)
             .await
             .map_err(|e| Status::unknown(e.to_string()))?;
 
@@ -308,21 +316,16 @@ impl KissService for Inner {
 
         let res = self
             .swarm_controller
-            .put_to(file_uuid.clone(), request.content, peer_uuids?)
+            .put_to(file_uuid.clone().to_string(), request.content, peer_uuids?)
             .await;
         info!("put to finished: {:?}", res);
-        // self.storage
-        //     .put(request.path.into(), request.content)
-        //     .await
-        //     .map_err(|e| match e.kind() {
-        //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-        //         _ => Status::unknown("Unknown storage error".to_string()),
-        //     })?;
 
         match res {
             Ok(_) => {
                 info!("stored file {}", file_uuid);
-                Ok(Response::new(PutToResponse { uuid: file_uuid }))
+                Ok(Response::new(PutToResponse {
+                    uuid: file_uuid.to_string(),
+                }))
             }
             Err(e) => {
                 info!("failed to store file {}", file_uuid);

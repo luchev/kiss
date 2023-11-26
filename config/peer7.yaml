@@ -1,0 +1,9 @@
+storage:
+  type: local
+  path: data/peer2
+  create: true
+grpc:
+  port: 2007
+swarm:
+  keypair: CAESQBEetBsAq/U+IBMFPMWGG0IfRxS4twipgDyD4ZoiqK1IW04sXzkxUJK/s6f9LOiBeEIzJSh4T8qt4gFxy84nECs
+  port: 8807

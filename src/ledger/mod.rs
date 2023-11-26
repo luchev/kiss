@@ -28,7 +28,7 @@ pub trait ILedger: Service {
     async fn set(&mut self, key: String, value: Bytes) -> Res<()>;
     async fn get(&mut self, key: String) -> Res<String>;
     async fn create_database(&mut self, name: String) -> Res<()>;
-    async fn create_contract(&mut self, file_hash: String, ttl: i64) -> Res<String>;
+    async fn create_contract(&mut self, file_uuid: Uuid, file_hash: String, ttl: i64) -> Res<()>;
     async fn sql_execute(&mut self, query: String, params: Vec<NamedParam>) -> Res<()>;
     async fn query_execute(
         &mut self,
@@ -159,8 +159,7 @@ impl ILedger for ImmuLedger {
         Ok(result)
     }
 
-    async fn create_contract(&mut self, file_hash: String, ttl: i64) -> Res<String> {
-        let file_uuid = Uuid::new_v4();
+    async fn create_contract(&mut self, file_uuid: Uuid, file_hash: String, ttl: i64) -> Res<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
         let params: Vec<NamedParam> = vec![
             NamedParam {
@@ -201,7 +200,7 @@ impl ILedger for ImmuLedger {
             .to_string();
 
         let _response = self.sql_execute(sql, params).await?;
-        Ok(file_uuid.to_string())
+        Ok(())
     }
 
     async fn get_contract(&mut self, file_uuid: String) -> Res<Contract> {
