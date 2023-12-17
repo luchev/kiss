@@ -1,5 +1,7 @@
+use crate::p2p::store::LocalStoreConfig;
 // use crate::p2p::memorystore::{MemoryStore, MemoryStoreConfig};
 use crate::settings::ISettings;
+use crate::storage::IStorage;
 use crate::util::{
     types::{Bytes, OneReceiver, OneSender, SwarmInstruction},
     Er, ErrorKind, Res,
@@ -41,6 +43,8 @@ use tokio::{
 };
 use uuid::Uuid;
 
+use super::store::LocalStore;
+
 interface! {
     dyn ISwarm = [
         Swarm,
@@ -59,7 +63,7 @@ impl ServiceFactory<()> for SwarmProvider {
     ) -> InjectResult<Self::Result> {
         let settings: Svc<dyn ISettings> = injector.get()?;
         let receiver: Svc<Mutex<Receiver<SwarmInstruction>>> = injector.get()?;
-        // let storage: Svc<dyn IStorage> = injector.get()?;
+        let storage: Svc<dyn IStorage> = injector.get()?;
 
         let local_key = match settings.swarm().keypair {
             Some(keypair) => Keypair::from_protobuf_encoding(
@@ -84,27 +88,26 @@ impl ServiceFactory<()> for SwarmProvider {
             let cfg = KademliaConfig::default()
                 .set_query_timeout(Duration::from_secs(60))
                 .to_owned();
-            let store = MemoryStore::with_config(
-                local_peer_id,
-                MemoryStoreConfig::default(),
-                // MemoryStoreConfig {
-                //     max_records: 150000,
-                //     max_value_bytes: 1024 * 1024 * 200,
-                //     max_provided_keys: 150000,
-                //     max_providers_per_key: 5,
-                // },
-            );
-
-            // let store = LocalStore::with_config(
+            // let store = MemoryStore::with_config(
             //     local_peer_id,
-            //     LocalStoreConfig {
+            //     MemoryStoreConfig {
             //         max_records: 150000,
             //         max_value_bytes: 1024 * 1024 * 200,
             //         max_provided_keys: 150000,
-            //         max_providers_per_key: 20,
+            //         max_providers_per_key: 5,
             //     },
-            //     storage,
             // );
+
+            let store = LocalStore::with_config(
+                local_peer_id,
+                LocalStoreConfig {
+                    max_records: 150000,
+                    max_value_bytes: 1024 * 1024 * 200,
+                    max_provided_keys: 150000,
+                    max_providers_per_key: 20,
+                },
+                storage,
+            );
             let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).map_err(|e| {
                 InjectError::ActivationFailed {
                     service_info: ServiceInfo::of::<Swarm>(),
@@ -524,8 +527,8 @@ impl Swarm {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "WireEvent")]
 pub struct CombinedBehaviour {
-    kademlia: Kademlia<MemoryStore>,
-    // kademlia: Kademlia<LocalStore>,
+    // kademlia: Kademlia<MemoryStore>,
+    kademlia: Kademlia<LocalStore>,
     mdns: Behaviour,
 }
 

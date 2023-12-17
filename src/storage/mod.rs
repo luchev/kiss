@@ -1,7 +1,7 @@
-use async_trait::async_trait;
 use crate::util::{types::Bytes, Er, ErrorKind, Res};
+use async_trait::async_trait;
 use libp2p::kad::Record;
-use std::path::{ PathBuf};
+use std::path::PathBuf;
 pub mod local;
 use self::local::LocalStorage;
 use crate::settings::{ISettings, Storage as StorageSettings};

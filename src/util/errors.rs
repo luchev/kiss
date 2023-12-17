@@ -7,6 +7,7 @@ use libp2p_kad::{
     PutRecordError, QueryId,
 };
 use log::error;
+use serde_yaml;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::result;
@@ -42,6 +43,8 @@ error_chain! {
         SettingsDependencyFail { display("") }
         SettingsParseError(e: String) { display("") }
         StoragePutFailed(e: object_store::Error) { display("storing file failed: {}", e) }
+        StoragePutSerdeError(e: serde_yaml::Error) { display("storing file failed due to serde: {}", e) }
+        StorageGetSerdeError(e: serde_yaml::Error) { display("getting file failed due to serde: {}", e) }
         StorageGetFailed(e: object_store::Error) { display("retrieving file failed: {}", e) }
         StorageConvertToStreamFailed(e: object_store::Error) { display("converting file to stream failed: {}", e) }
         GrpcServerStartFailed(e: tonic::transport::Error) {

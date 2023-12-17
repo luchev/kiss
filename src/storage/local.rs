@@ -1,16 +1,22 @@
 use super::{key_to_path, IStorage};
-use async_trait::async_trait;
 use crate::util::{types::Bytes, ErrorKind, Res};
+use async_trait::async_trait;
 use futures::TryStreamExt;
-use libp2p::kad::{Record};
+use libp2p::kad::Record;
+use libp2p_identity::PeerId;
 use log::info;
 use object_store::{
     local::{self, LocalFileSystem},
     path::Path,
     ObjectStore,
 };
-use std::collections::HashMap;
-use std::path::PathBuf;
+use serde::{
+    de::{self, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use std::{borrow::BorrowMut, collections::HashMap, error::Error, time::Instant};
+use std::{path::PathBuf, time::Duration};
 
 #[derive(Default)]
 pub struct LocalStorage {
@@ -20,41 +26,74 @@ pub struct LocalStorage {
 
 struct RecordWrapper(Record);
 
-// impl Serialize for RecordWrapper {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let mut serialized = serializer.serialize_struct("Record", 4)?;
+struct PeerIdWrapper(libp2p::PeerId);
 
-//         serialized.serialize_field("key", &self.0.key)?;
-//         serialized.serialize_field("value", &self.0.value)?;
-//         serialized.serialize_field("publisher", &self.0.publisher)?;
-//         serialized.serialize_field("expires", &self.0.expires)?;
-//         serialized.end()
-//     }
+impl Serialize for RecordWrapper {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut serialized = serializer.serialize_struct("Record", 4)?;
+
+        let publisher = match &self.0.publisher {
+            Some(peer_id) => Some(PeerIdWrapper(peer_id.clone())),
+            None => None,
+        };
+
+        let expires = match &self.0.expires {
+            Some(expires) => Some(expires.elapsed()),
+            None => None,
+        };
+
+        serialized.serialize_field(
+            "key",
+            &String::from_utf8(self.0.key.to_vec()).unwrap_or_default(),
+        )?;
+        serialized.serialize_field("value", &self.0.value)?;
+        serialized.serialize_field("publisher", &publisher)?;
+        serialized.serialize_field("expires", &expires)?;
+        serialized.end()
+    }
+}
+
+// pub fn deserialize<'de, D>(deserializer: D) -> Result<Instant, D::Error>
+// where
+//     D: Deserializer<'de>,
+// {
+//     let duration = Duration::deserialize(deserializer)?;
+//     let now = Instant::now();
+//     let instant = now
+//         .checked_sub(duration)
+//         .ok_or_else(|| Error::custom("Erreur checked_add"))?;
+//     Ok(instant)
 // }
 
-// impl<'de> Deserialize<'de> for RecordWrapper {
-//     fn deserialize<D: Deserializer>(deserializer: D) -> Result<Self, D::Error> {
-//         todo!()
-//     }
-// }
+impl Serialize for PeerIdWrapper {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut serialized = serializer.serialize_struct("PeerId", 1)?;
+        serialized.serialize_field("peer_id", &self.0.to_base58())?;
+        serialized.end()
+    }
+}
 
 #[async_trait]
 impl IStorage for LocalStorage {
     async fn put(&self, data: Record) -> Res<()> {
         let path = key_to_path(&data.key)?;
         info!("storing {}", path.clone().display());
-        // self.local_storage
-        //     .put(
-        //         &Path::from(path.to_str().ok_or(ErrorKind::InvalidRecordName)?),
-        //         serde_yaml::to_string(&RecordWrapper(&data))
-        //             .map_err(|err| ErrorKind::StoragePutFailed(err))
-        //             .into(),
-        //     )
-        //     .await
-        //     .map_err(|err| ErrorKind::StoragePutFailed(err).into())
+        let data = RecordWrapper(data);
+        let serialized_data =
+            serde_yaml::to_string(&data).map_err(ErrorKind::StoragePutSerdeError)?;
+        self.local_storage
+            .put(
+                &Path::from(path.to_str().ok_or(ErrorKind::InvalidRecordName)?),
+                serialized_data.into(),
+            )
+            .await
+            .map_err(ErrorKind::StoragePutFailed)?;
         Ok(())
     }
 
@@ -63,7 +102,7 @@ impl IStorage for LocalStorage {
             .to_str()
             .ok_or_else(|| ErrorKind::PathParsingError(path.clone()))?;
         info!("retrieving {}", path);
-        Ok(self
+        let bytes = self
             .local_storage
             .get(&Path::from(path))
             .await
@@ -75,7 +114,9 @@ impl IStorage for LocalStorage {
             .await?
             .into_iter()
             .flatten()
-            .collect::<Bytes>())
+            .collect::<Bytes>();
+        // let record = serde_yaml::from_slice(&bytes).map_err(ErrorKind::StorageGetSerdeError)?;
+        Ok(bytes)
     }
 }
 
