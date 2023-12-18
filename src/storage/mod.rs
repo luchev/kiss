@@ -16,7 +16,7 @@ use std::str;
 #[async_trait]
 pub trait IStorage: Service {
     async fn put(&self, data: Record) -> Res<()>;
-    async fn get(&self, path: PathBuf) -> Res<Bytes>;
+    async fn get(&self, path: PathBuf) -> Res<Record>;
 }
 
 pub struct StorageProvider;

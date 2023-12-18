@@ -94,67 +94,31 @@ impl RecordStore for LocalStore {
     >;
 
     fn get(&self, k: &Key) -> Option<Cow<'_, Record>> {
-        warn!("get {:?}", k);
-        let local = match key_to_path(k) {
+        match key_to_path(k) {
             Ok(path) => {
                 let handle = Handle::current();
                 let records = self.storage.clone();
                 match block_on(async { handle.spawn(async move { records.get(path).await }).await })
                 {
-                    Ok(Ok(x)) => Some(Cow::Owned(Record {
-                        key: k.clone(),
-                        value: x,
-                        publisher: None,
-                        expires: None,
-                    })),
+                    Ok(Ok(x)) => Some(Cow::Owned(x)),
                     _ => None,
                 }
             }
             Err(_) => None,
-        };
-        let memory = self.records.get(k).map(Cow::Borrowed);
-
-        local
+        }
     }
 
     fn put(&mut self, r: Record) -> Result<()> {
-        let record = r.clone();
-        let memory: Result<()> = {
-            if r.value.len() >= self.config.max_value_bytes {
-                return Err(Error::ValueTooLarge);
-            }
-
-            let num_records = self.records.len();
-
-            match self.records.entry(record.key.clone()) {
-                hash_map::Entry::Occupied(mut e) => {
-                    e.insert(record);
-                }
-                hash_map::Entry::Vacant(e) => {
-                    if num_records >= self.config.max_records {
-                        return Err(Error::MaxRecords);
-                    }
-                    e.insert(record);
-                }
-            }
-
-            Ok(())
-        };
-
-        let local = {
-            if r.value.len() >= self.config.max_value_bytes {
-                return Err(Error::ValueTooLarge);
-            }
-            debug!("put {:?}", r.key.clone());
-            let handle = Handle::current();
-            let records = self.storage.clone();
-            match block_on(async { handle.spawn(async move { records.put(r).await }).await }) {
-                Ok(Ok(x)) => Ok(x),
-                _ => Err(Error::MaxRecords),
-            }
-        };
-
-        local
+        if r.value.len() >= self.config.max_value_bytes {
+            return Err(Error::ValueTooLarge);
+        }
+        debug!("put {:?}", r.key.clone());
+        let handle = Handle::current();
+        let records = self.storage.clone();
+        match block_on(async { handle.spawn(async move { records.put(r).await }).await }) {
+            Ok(Ok(x)) => Ok(x),
+            _ => Err(Error::MaxRecords), // not exactly as it could be some storage issue but for now it's ok
+        }
     }
 
     fn remove(&mut self, k: &Key) {
