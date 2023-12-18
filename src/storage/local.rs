@@ -6,7 +6,7 @@ use futures::TryStreamExt;
 use libp2p::kad::Record;
 use libp2p_identity::PeerId;
 use libp2p_kad::RecordKey;
-use log::info;
+use log::{info, warn};
 use object_store::{
     local::{self, LocalFileSystem},
     path::Path,
@@ -17,7 +17,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{collections::HashMap, fmt, time::Instant};
+use std::{collections::HashMap, fmt, str::FromStr, time::Instant};
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Default)]
@@ -81,8 +81,8 @@ impl<'de> Deserialize<'de> for RecordWrapper {
                 V: MapAccess<'de>,
             {
                 let mut key: Option<String> = None;
-                let mut publisher: Option<String> = None;
-                let mut expires: Option<Duration> = None;
+                let mut publisher: Option<Option<String>> = None;
+                let mut expires: Option<Option<Duration>> = None;
                 let mut value: Option<String> = None;
                 while let Some(yaml_key) = map.next_key()? {
                     match yaml_key {
@@ -114,16 +114,19 @@ impl<'de> Deserialize<'de> for RecordWrapper {
                 }
                 let key = key.ok_or_else(|| de::Error::missing_field("key"))?;
                 let publisher = publisher.ok_or_else(|| de::Error::missing_field("publisher"))?;
-                let expires = expires.ok_or_else(|| de::Error::missing_field("expires"))?;
-                let value = value.ok_or_else(|| de::Error::missing_field("value"))?;
+                let expires = expires
+                    .unwrap_or_default()
+                    .map(|duration| Instant::now() + duration);
+                let value = value.unwrap_or_default();
+
                 Ok(RecordWrapper(Record {
                     key: RecordKey::new(&String::into_bytes(key)),
                     publisher: Some(
-                        PeerId::from_bytes(publisher.as_bytes()).map_err(|err| {
+                        PeerId::from_str(&publisher.unwrap_or_default()).map_err(|err| {
                             de::Error::custom(format!("invalid peer id: {}", err))
                         })?,
                     ),
-                    expires: Some(Instant::now() + expires),
+                    expires,
                     value: base64::engine::general_purpose::STANDARD
                         .decode(value.as_bytes())
                         .unwrap_or_default(),
@@ -173,7 +176,10 @@ impl IStorage for LocalStorage {
             .flatten()
             .collect::<Bytes>();
         let deserialized_record = serde_yaml::from_slice::<RecordWrapper>(&bytes)
-            .map_err(ErrorKind::StorageGetSerdeError)?
+            .map_err(|err| {
+                warn!("serde error: {}", err);
+                ErrorKind::StorageGetSerdeError(err)
+            })?
             .0;
         Ok(deserialized_record)
     }
