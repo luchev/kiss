@@ -1,7 +1,6 @@
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
 use crate::settings::ISettings;
-use crate::storage::IStorage;
 use crate::util::consts::{GRPC_TIMEOUT, LOCALHOST};
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissService;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissServiceServer;
@@ -43,12 +42,10 @@ impl ServiceFactory<()> for GrpcProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>()?.grpc().port;
-        let storage = injector.get::<Svc<dyn IStorage>>()?;
         let swarm_controller = injector.get::<Svc<dyn ISwarmController>>()?;
 
         Ok(GrpcHandler {
             inner: Inner {
-                storage,
                 swarm_controller,
                 ledger: injector.get::<Svc<Mutex<ImmuLedger>>>()?,
             },
@@ -64,7 +61,6 @@ pub trait IGrpcHandler: Service {
 
 #[derive(Clone)]
 struct Inner {
-    storage: Svc<dyn IStorage>,
     swarm_controller: Svc<dyn ISwarmController>,
     ledger: Svc<Mutex<ImmuLedger>>,
 }

@@ -13,17 +13,16 @@ use object_store::{
     ObjectStore,
 };
 use serde::{
-    de::{self, MapAccess, SeqAccess, Visitor},
+    de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{collections::HashMap, fmt, str::FromStr, time::Instant};
+use std::{fmt, str::FromStr, time::Instant};
 use std::{path::PathBuf, time::Duration};
 
 #[derive(Default)]
 pub struct LocalStorage {
     local_storage: LocalFileSystem,
-    records: HashMap<String, Record>,
 }
 
 struct RecordWrapper(Record);
@@ -37,14 +36,8 @@ impl Serialize for RecordWrapper {
 
         let key = String::from_utf8(self.0.key.to_vec()).unwrap_or_default();
         let value = base64::engine::general_purpose::STANDARD.encode(&self.0.value);
-        let publisher = match &self.0.publisher {
-            Some(peer_id) => Some(peer_id.to_base58()),
-            None => None,
-        };
-        let expires = match &self.0.expires {
-            Some(expires) => Some(expires.elapsed()),
-            None => None,
-        };
+        let publisher = self.0.publisher.as_ref().map(|peer_id| peer_id.to_base58());
+        let expires = self.0.expires.as_ref().map(|expires| expires.elapsed());
 
         serialized.serialize_field("key", &key)?;
         serialized.serialize_field("publisher", &publisher)?;
@@ -112,24 +105,28 @@ impl<'de> Deserialize<'de> for RecordWrapper {
                         }
                     }
                 }
-                let key = key.ok_or_else(|| de::Error::missing_field("key"))?;
-                let publisher = publisher.ok_or_else(|| de::Error::missing_field("publisher"))?;
+                let key = RecordKey::new(&String::into_bytes(
+                    key.ok_or_else(|| de::Error::missing_field("key"))?,
+                ));
+                let publisher =
+                    match publisher.and_then(|publisher| publisher) {
+                        Some(publisher) => Some(PeerId::from_str(&publisher).map_err(|err| {
+                            de::Error::custom(format!("invalid peer id: {}", err))
+                        })?),
+                        None => None,
+                    };
                 let expires = expires
                     .unwrap_or_default()
                     .map(|duration| Instant::now() + duration);
-                let value = value.unwrap_or_default();
+                let value = base64::engine::general_purpose::STANDARD
+                    .decode(value.ok_or_else(|| de::Error::missing_field("value"))?)
+                    .unwrap_or_default();
 
                 Ok(RecordWrapper(Record {
-                    key: RecordKey::new(&String::into_bytes(key)),
-                    publisher: Some(
-                        PeerId::from_str(&publisher.unwrap_or_default()).map_err(|err| {
-                            de::Error::custom(format!("invalid peer id: {}", err))
-                        })?,
-                    ),
+                    key,
+                    publisher,
                     expires,
-                    value: base64::engine::general_purpose::STANDARD
-                        .decode(value.as_bytes())
-                        .unwrap_or_default(),
+                    value,
                 }))
             }
         }
@@ -191,7 +188,6 @@ impl LocalStorage {
             local::LocalFileSystem::new_with_prefix(prefix).map_err(ErrorKind::LocalStorageFail)?;
         Ok(LocalStorage {
             local_storage: object_store,
-            records: HashMap::new(),
         })
     }
 }
