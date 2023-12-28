@@ -46,6 +46,11 @@ get-closest uuid:
     "[::1]:2000" \
     kiss_grpc.KissService/GetClosestPeers
 
+test:
+    cargo test
+
+test-nocap:
+    RUST_LOG=debug cargo test -- --nocapture
 
 keeper1: release-keeper
     ENV=peer1 RUST_LOG=info ./target/release/keeper

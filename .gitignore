@@ -15,7 +15,6 @@ docs/external
 *.blg
 *.bbl
 *.aux
-*.bib
 *.out
 *.run.xml
 
