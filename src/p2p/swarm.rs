@@ -146,6 +146,7 @@ impl ServiceFactory<()> for SwarmProvider {
             })?;
 
         Ok(Swarm {
+            local_peer_id: local_peer_id,
             inner: Mutex::new(swarm),
             swarm_controller_api: receiver,
             queries: Mutex::new(HashMap::new()),
@@ -159,9 +160,16 @@ pub trait ISwarm: Service {
 }
 
 pub struct Swarm {
+    local_peer_id: PeerId,
     inner: Mutex<libp2p::Swarm<CombinedBehaviour>>,
     swarm_controller_api: Svc<Mutex<Receiver<SwarmInstruction>>>,
     queries: Mutex<HashMap<QueryId, QueryResponse>>,
+}
+
+#[derive(Debug)]
+pub struct QueryGetResponse {
+    pub file: Bytes,
+    pub origin_peer_id: PeerId,
 }
 
 #[derive(Debug)]
@@ -173,7 +181,7 @@ enum QueryResponse {
         sender: OneSender<Res<()>>,
     },
     Get {
-        sender: OneSender<Res<Bytes>>,
+        sender: OneSender<Res<QueryGetResponse>>,
     },
     GetProviders {
         sender: OneSender<Res<HashSet<PeerId>>>,
@@ -313,8 +321,18 @@ impl Swarm {
         match message {
             Ok(GetRecordOk::FoundRecord(PeerRecord {
                 record: Record { value, .. },
-                ..
-            })) => response_channel.send(Ok(value))?,
+                peer,
+            })) => {
+                let peer = match peer {
+                    Some(peer) => peer,
+                    None => self.local_peer_id,
+                };
+                info!("found record for peer: {:?}", peer);
+                response_channel.send(Ok(QueryGetResponse {
+                    file: value,
+                    origin_peer_id: peer,
+                }))?
+            }
             Ok(_) => response_channel.send(Err(ErrorKind::SwarmGetRecordUnknownError(
                 "unexpected GetRecord result".to_string(),
             )
@@ -508,11 +526,11 @@ impl Swarm {
         &self,
         swarm: &mut MutexGuard<'t, libp2p::Swarm<CombinedBehaviour>>,
         key: String,
-        resp: OneSender<OneReceiver<Res<Bytes>>>,
+        resp: OneSender<OneReceiver<Res<QueryGetResponse>>>,
     ) -> Res<()> {
         debug!("kad get key {:?}", key);
         let key = Key::new(&key);
-        let (sender, receiver) = oneshot::channel::<Res<Bytes>>();
+        let (sender, receiver) = oneshot::channel::<Res<QueryGetResponse>>();
         resp.send(receiver)?;
 
         let query_id = swarm.behaviour_mut().kademlia.get_record(key);

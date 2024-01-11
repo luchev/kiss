@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use crate::p2p::swarm::QueryGetResponse;
 use crate::util::types::{Bytes, OneReceiver};
 use crate::util::{types::SwarmInstruction, Res};
 use async_trait::async_trait;
@@ -36,7 +37,7 @@ impl ServiceFactory<()> for SwarmControllerProvider {
 pub trait ISwarmController: Service {
     async fn put(&self, key: String, value: Bytes) -> Res<()>;
     async fn put_to(&self, key: String, value: Bytes, peers: Vec<PeerId>) -> Res<()>;
-    async fn get(&self, key: String) -> Res<Bytes>;
+    async fn get(&self, key: String) -> Res<QueryGetResponse>;
     async fn get_providers(&self, key: String) -> Res<HashSet<PeerId>>;
     async fn get_closest_peers(&self, key: Uuid) -> Res<Vec<PeerId>>;
     async fn start_providing(&self, key: String) -> Res<()>;
@@ -103,8 +104,8 @@ impl ISwarmController for SwarmController {
         result
     }
 
-    async fn get(&self, key: String) -> Res<Bytes> {
-        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<Bytes>>>();
+    async fn get(&self, key: String) -> Res<QueryGetResponse> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<QueryGetResponse>>>();
         self.swarm_api
             .lock()
             .await

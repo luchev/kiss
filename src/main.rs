@@ -6,6 +6,7 @@
 #![deny(clippy::expect_used)]
 #![deny(clippy::panic)]
 #![recursion_limit = "256"]
+#![feature(test)]
 // #![deny(clippy::todo)]
 
 mod deps;
@@ -36,18 +37,8 @@ async fn main() {
 
 async fn run() -> Res<()> {
     env_logger::init();
-    info!("key: {}", generate_keypair());
     let injector = dependency_injector()?;
     let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
     let kad: Svc<dyn ISwarm> = injector.get()?;
     try_join!(grpc_handler.start(), kad.start()).map(|_| ())
-}
-
-use base64::Engine;
-use libp2p_identity::Keypair;
-fn generate_keypair() -> String {
-    let local_key = Keypair::generate_ed25519();
-    let encoded = base64::engine::general_purpose::STANDARD_NO_PAD
-        .encode(local_key.to_protobuf_encoding().unwrap_or_default());
-    return encoded;
 }

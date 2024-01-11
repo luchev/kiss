@@ -1,3 +1,4 @@
+use crate::p2p::swarm::QueryGetResponse;
 use crate::util::grpc::immudb_grpc::SqlValue;
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
@@ -239,6 +240,18 @@ impl From<result::Result<Vec<PeerId>, Error>> for Error {
 
 impl From<oneshot::Receiver<std::result::Result<Vec<PeerId>, Error>>> for Error {
     fn from(_: oneshot::Receiver<std::result::Result<Vec<PeerId>, Error>>) -> Self {
+        ErrorKind::SendReceiverFailed.into()
+    }
+}
+
+impl From<result::Result<QueryGetResponse, Error>> for Error {
+    fn from(_: result::Result<QueryGetResponse, Error>) -> Self {
+        ErrorKind::SendingResultFailed.into()
+    }
+}
+
+impl From<oneshot::Receiver<result::Result<QueryGetResponse, Error>>> for Error {
+    fn from(_: oneshot::Receiver<result::Result<QueryGetResponse, Error>>) -> Self {
         ErrorKind::SendReceiverFailed.into()
     }
 }

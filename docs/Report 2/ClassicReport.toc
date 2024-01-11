@@ -1,0 +1,16 @@
+\babel@toc {american}{}\relax 
+\vspace {-\cftbeforepartskip }
+\babel@toc {american}{}\relax 
+\contentsline {chapter}{\numberline {1}{Abstract}}{1}{chapter.1}%
+\contentsline {chapter}{\numberline {2}{Introduction}}{3}{chapter.2}%
+\contentsline {chapter}{\numberline {3}{Related Work}}{5}{chapter.3}%
+\contentsline {section}{\numberline {3.1}{Proof of Retrievability}}{5}{section.3.1}%
+\contentsline {section}{\numberline {3.2}{Peer-to-peer networks}}{5}{section.3.2}%
+\contentsline {chapter}{\numberline {4}{Architecture \& Implementation}}{7}{chapter.4}%
+\contentsline {section}{\numberline {4.1}{Proof of Retrievability}}{7}{section.4.1}%
+\contentsline {section}{\numberline {4.2}{Local Storage}}{9}{section.4.2}%
+\contentsline {section}{\numberline {4.3}{Cryptographic puzzle}}{10}{section.4.3}%
+\contentsline {section}{\numberline {4.4}{Decentralized Verifier}}{11}{section.4.4}%
+\contentsline {chapter}{\numberline {5}{Evaluation}}{13}{chapter.5}%
+\contentsline {section}{\numberline {5.1}{Proof of Retrievability Verification}}{13}{section.5.1}%
+\providecommand \tocbasic@end@toc@file {}\tocbasic@end@toc@file 

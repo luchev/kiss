@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::Res;
+use crate::{Res, p2p::swarm::QueryGetResponse};
 use libp2p_identity::PeerId;
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -14,7 +14,7 @@ pub type OneReceiver<T> = oneshot::Receiver<T>;
 pub enum SwarmInstruction {
     Get {
         key: String,
-        resp: Responder<OneReceiver<Res<Bytes>>>,
+        resp: Responder<OneReceiver<Res<QueryGetResponse>>>,
     },
     PutLocal {
         key: String,

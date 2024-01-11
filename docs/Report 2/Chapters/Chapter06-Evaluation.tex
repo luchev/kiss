@@ -1,0 +1,91 @@
+\chapter{Evaluation}
+\label{chap:evaluation}
+
+We are going to compare the new or changed components of our system with the old ones.
+
+\section{Proof of Retrievability Verification}
+
+The trivial verification method is to download the whole file and compare it against the original.
+This defeats the point of distributed storage, but it can be optimized by comparing the hash of the file instead of the file itself.
+This method requires too much bandwidth ($O(N)$) and is therefore slow,
+but it is a 100\% accurate and requires only $O(N)$ computation (where $N$ is the size of the file) on the client side and $O(1)$ space for the hash.
+
+Can we do better?
+We can precompute multiple hashes from the file concatenated with a random string (salt) and store these hashes together with the salts.
+Then, we for each verification we can send the salt, then the storage node sends back the hash of the file with the salt, and finally we compare the hash to the one we have precomputed.
+This method requires $O(1)$ bandwidth and $O(N)$ computation on the client side (the cost of precomputing each hash) and $O(1)$ space for the hashes and salts.
+
+Keeping the bandwidth low is important, because it is the slowest part of the verification process.
+The computation can be usually parallelized and make use of data locality to be much faster than network communication.
+This is where our current implementation lies.
+The Proof of Retrievability protocol we use requires $O(N^3)$ reducible to $O(N^{2.37287})$ \cite{matrixmultiplication} for matrix multiplication during the precomputation step.
+The verification step requires $O(N)$ server computation and $O(\sqrt{N})$ client computation, as well as $O(\sqrt{N})$ bandwidth.
+The space requirement is $O(N)$ for the server and $O(\sqrt{N})$ for the client.
+These numbers can be further improved with a better Proof of Retrievability protocol \cite{pormerkle}.
+This is marginally better thanks to the lower bandwidth and storage required on the client.
+We would like to argue that these are the two most important resources because of the goals of the client - they want to store their data in the system, i.e., they want to use as little space as possible, and they want to be able to verify their data as fast as possible, i.e., they want to use as little bandwidth as possible.
+It does not make sense to compare algorithms with different CPU and bandwidth requirements because the network communication can either be really fast or really slow, depending on the network conditions, distance between peers, etc.
+Therefore, we will only present results for the time required to initialize a file and verify it on a local machine to give an idea of the performance of the system.
+
+
+
+\begin{figure}
+  \myfloatalign
+  \begin{tikzpicture}
+    \begin{axis} [xlabel=time (s), ylabel=value]
+      \addplot[
+      sharp plot,
+      error bars,
+      y dir=both,
+      y explicit,
+      error bar style={red}
+      ] table[
+      x=x,
+      y=avgy,
+      y error=stddevp]{./data/example.csv};
+    \end{axis}
+  \end{tikzpicture}
+  \caption[A graph with error bars]{Generating figures directly in \LaTeX\ is possible, and they can be very consistent stylewise with the rest of the document.}
+  \label{fig:pretty-graph}
+\end{figure}
+
+
+
+\begin{table}
+  \myfloatalign
+  \pgfplotstabletypeset[
+  every head row/.style={%Define the top and mid lines
+    before row=\toprule,
+    after row=\midrule
+  },
+  every last row/.style={%Define the bottom line
+    after row=\bottomrule
+  },
+  columns={x, avgy, stddevpp %Style the chosen columns and specify their alignment etc
+  },
+  columns/x/.style={
+    column name=\textsc{time},
+    dec sep align,
+    fixed,
+    fixed zerofill,
+    precision=2
+  },
+  columns/avgy/.style={
+    column name=\textsc{value},
+    dec sep align,
+    fixed,
+    fixed zerofill,
+    precision=2
+  },
+  columns/stddevpp/.style={
+    column name=$\sigma\%$,
+    dec sep align,
+    fixed,
+    fixed zerofill,
+    precision=1
+  },
+  ]{./data/example.csv}
+  \caption[An auto-generated table]{This table has been generated from a
+    \texttt{.csv} file, which sometimes can be very handy and a great timesaver. Note, how numbers have been normalised and aligned properly.}
+  \label{tab:pretty-table}
+\end{table}

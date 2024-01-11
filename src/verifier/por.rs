@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 const P_BITS: u64 = 57;
 const MIN_LOOP: usize = 8;
 const P57: u64 = 144115188075855859;
@@ -12,20 +14,20 @@ fn main() {
     println!("{}", audit(&client, &server));
 }
 
-struct ClientConfig {
+pub struct ClientConfig {
     rows: usize,
     cols: usize,
     secret_m_vector: Vec<u64>,
     secret_n_vector: Vec<u64>,
 }
 
-struct ServerConfig {
+pub struct ServerConfig {
     rows: usize,
     cols: usize,
     file: Vec<u8>,
 }
 
-fn init(file: Vec<u8>) -> (ClientConfig, ServerConfig) {
+pub fn init(file: Vec<u8>) -> (ClientConfig, ServerConfig) {
     let num_chunks = 1 + (file.len() - 1) / BYTES_UNDER_P;
     let n =
         (((num_chunks as f64).sqrt() / CHUNK_ALIGN as f64).ceil() * CHUNK_ALIGN as f64) as usize;
@@ -48,7 +50,7 @@ fn init(file: Vec<u8>) -> (ClientConfig, ServerConfig) {
         let raw_row = file_extended[(bytes_per_row * i)..bytes_per_row * (i + 1)].to_vec();
         let raw_row = raw_row
             .chunks_exact(8)
-            .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
+            .map(|x| u64::from_le_bytes(x.try_into().unwrap_or_default()))
             .collect::<Vec<u64>>();
         for full_ind in (0..n).step_by(8) {
             let mut data_val = (raw_row[raw_ind] & chunk_mask) as u128;
@@ -84,10 +86,10 @@ fn init(file: Vec<u8>) -> (ClientConfig, ServerConfig) {
         file,
     };
 
-    return (client_config, server_config);
+    (client_config, server_config)
 }
 
-struct Client {
+pub struct Client {
     config: ClientConfig,
 }
 
@@ -122,7 +124,7 @@ impl Client {
     }
 }
 
-struct Server {
+pub struct Server {
     config: ServerConfig,
 }
 
@@ -175,7 +177,7 @@ impl Server {
     }
 }
 
-fn audit(client: &Client, server: &Server) -> bool {
+pub fn audit(client: &Client, server: &Server) -> bool {
     let challenge = client.make_challenge_vector(server.config.rows);
     let response = server.retrieve(challenge.clone());
     client.audit(challenge, response)
@@ -265,7 +267,7 @@ impl Random {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
@@ -297,6 +299,49 @@ mod test {
     #[test]
     fn test_audit() {
         let (client_config, server_config) = init("abcdefghijklmnopqrstuvwxyz".as_bytes().to_vec());
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        assert!(audit(&client, &server));
+    }
+    extern crate test;
+    use test::{black_box, Bencher};
+
+    #[bench]
+    fn test_audit_1mb_init(b: &mut Bencher) {
+        b.iter(|| {
+            let (client_config, server_config) = init(
+                "abcdefghijklmnopqrstuvwxyz"
+                    .as_bytes()
+                    .to_vec()
+                    .repeat(4000),
+            );
+            let client = Client::new(client_config);
+            let server = Server::new(server_config);
+            black_box(audit(&client, &server));
+        });
+    }
+
+    #[test]
+    fn test_audit_10mb() {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(400000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        assert!(audit(&client, &server));
+    }
+
+    #[test]
+    fn test_audit_100mb() {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(4000000),
+        );
         let client = Client::new(client_config);
         let server = Server::new(server_config);
         assert!(audit(&client, &server));

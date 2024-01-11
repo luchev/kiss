@@ -203,8 +203,9 @@ impl KissService for Inner {
 
         let res = self.swarm_controller.get(request.name.clone()).await;
         info!("get finished: {:?}", res);
-        let content =
-            res.map_err(|e| Status::not_found(format!("failed getting from swarm: {}", e)))?;
+        let content = res
+            .map_err(|e| Status::not_found(format!("failed getting from swarm: {}", e)))?
+            .file;
 
         let file_hash = hasher::hash(&content);
         if file_hash != contract.file_hash {
@@ -268,7 +269,8 @@ impl KissService for Inner {
             .swarm_controller
             .get(request.path)
             .await
-            .map_err(|e| Status::not_found(format!("failed to get file from swarm: {}", e)))?;
+            .map_err(|e| Status::not_found(format!("failed to get file from swarm: {}", e)))?
+            .file;
 
         let reply = VerifyResponse {
             hash: hash(&content),
