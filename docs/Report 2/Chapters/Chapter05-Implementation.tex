@@ -36,90 +36,11 @@ To balance the security and the efficiency of the protocol, we need to choose th
 In practice, it makes sense to choose them such that $n \approx m$.
 
 The procedure of the protocol is as follows:
+
 \begin{center}
-{\Large \texttt{Init}}
-
-\begin{tcolorbox}[
-                sharp corners,
-                colback=white,
-                ]
-    % input/output
-    \begin{tabular}{lcc}
-        &Server & Client \\
-        {\bf Input} && $\c{M}$ \\
-        {\bf Output} & $st_\c{S}$ & $st_\c{C}$
-    \end{tabular}
-
-\vspace*{3mm}
-    % the protocol
-    \begin{algorithmic}[1]
-        \LComment{
-        $\c{M}$ is the input file treated as a square matrix, padded with empty bytes if needed
-        }
-        \State{{\bf Client} sets $t := \left\lceil \tfrac{\lambda}{\log_2(q-1) ~-~ \log_2(n) }\right\rceil$}
-        \LComment{
-        $q$ is the size of the field we work in (in practice a number close to $2^{64}$)\\
-        In practice we choose $t \approx n \approx m$
-        }
-        \State{{\bf Client} chooses a random vector $\b{u} = [u_1, u_2, ..., u_t]^\mathtt{T} $ $\overset{\$}{\gets} (\mathbb{F}_q^*)^t$ with non-zero entries}
-        \State{{\bf Client} computes the matrix $\b{U} \in 
-        \mathbb{F}_q^{t \times n}$ by setting the entries $\b{U}[i,j] := (u_i)^j$}
-        
-        $$
-        \b{U} =
-        \left(
-        \begin{smallmatrix}
-            u_1 & u_1^2 & ... & u_1^n \\
-            u_2 & u_2^2 &  & u_2^n \\
-            \vdots &  & \ddots & \vdots \\
-            u_t & u_t^2 & ... & u_t^n 
-        \end{smallmatrix}
-        \right)
-        $$
-        \State{{\bf Client} computes the matrix $\b{V} := \b{U} \c{M} \in \mathbb{F}_q^{t \times m}$}
-        \State{{\bf Server} saves state $st_\c{S} = (\c{M})$}
-        \State{{\bf Client} saves state $st_\c{C} = (\b{u}, \b{V})$}
-    \end{algorithmic}
-\end{tcolorbox}
-
+\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{init}
+\includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{audit}
 \end{center}
-\begin{center}
-
-
-{\Large \texttt{Audit}}
-
-\begin{tcolorbox}[%
-                sharp corners,
-                colback=white,
-                ]
-    % input/output
-    \begin{tabular}{lcc}
-        &Server & ~~~~~~~~~~Client \\
-        {\bf Input} & $st_\c{S}$ & $st_\c{C}$ \\
-        {\bf Output} &  & $\pi$
-    \end{tabular}
-
-\vspace*{3mm}
-    % the protocol
-    \begin{algorithmic}[1]
-        \State{ {\bf Client} chooses a random, non-zero challenge $x \overset{\$}{\gets} \mathbb{F}_q^*$, computes the vector $\b{x}^\mathtt{T} := [x^1,x^2, ..., x^n]$ and sends $\b{x}$ to {\bf Server}}
-        \State{{\bf Server} computes $\b{y} := \b{\M} \b{x} \in \mathbb{F}_q^k$ and sends $\pi = (\b{x}, \b{y})$ to {\bf Client}}
-    \end{algorithmic}
-    \tcblower
-    On receiving the audit transcript $\pi=(\b{x},\b{y})$, the {\bf Client} computes the matrix $\b{U} \in \mathbb{F}_q^{t \times k}$ by $\b{U}[i,j] := (u_i)^j$ and checks whether $\b{U} \b{y} \overset{?}{=} \b{V} \b{x}$
-\end{tcolorbox}
-
-\end{center}
-
-The original paper \cite{poralgebra} has precise complexity bounds, but for our purposes, we will approximate them, as the overhead is mostly negligible:
-\begin{itemize}
-    \item The server stores $O(N)$ data, where $N$ is the size of the input file
-    \item The client stores $O(\sqrt{N})$ data
-    \item The bandwidth of \texttt{Init} is $O(N)$
-    \item The bandwidth of \texttt{Audit} is $O(\sqrt{N})$
-    \item The computation for the Server during \texttt{Audit} is $O(N)$
-    \item The computation for the Client during \texttt{Audit} is $O(\sqrt{N})$
-\end{itemize}
 
 We have implemented the PoR protocol, closely following the paper and the implementation by the authors.
 This choice was made, so we can compare our results with theirs and ensure that our implementation is correct.

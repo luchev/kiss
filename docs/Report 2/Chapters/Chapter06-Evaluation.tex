@@ -2,6 +2,7 @@
 \label{chap:evaluation}
 
 We are going to compare the new or changed components of our system with the old ones.
+We will not discuss the soundness of the components, because these are covered by unit tests and tests comparing results between our implementation and the reference implementations.
 
 \section{Proof of Retrievability Verification}
 
@@ -18,74 +19,123 @@ This method requires $O(1)$ bandwidth and $O(N)$ computation on the client side 
 Keeping the bandwidth low is important, because it is the slowest part of the verification process.
 The computation can be usually parallelized and make use of data locality to be much faster than network communication.
 This is where our current implementation lies.
-The Proof of Retrievability protocol we use requires $O(N^3)$ reducible to $O(N^{2.37287})$ \cite{matrixmultiplication} for matrix multiplication during the precomputation step.
+The Proof of Retrievability protocol we use requires $O(N^3)$ matrix multiplication algorithm reducible to $O(N^{2.37287})$ \cite{matrixmultiplication} for matrix multiplication during the precomputation step.
+Since the matrices we are multiplying are of size $O(\sqrt{N})$, the total cost of the precomputation step is $O(N^{3/2})$.
+Also, the matrices are special, so in reality we end up with close to $O(N)$ time.
 The verification step requires $O(N)$ server computation and $O(\sqrt{N})$ client computation, as well as $O(\sqrt{N})$ bandwidth.
 The space requirement is $O(N)$ for the server and $O(\sqrt{N})$ for the client.
 These numbers can be further improved with a better Proof of Retrievability protocol \cite{pormerkle}.
 This is marginally better thanks to the lower bandwidth and storage required on the client.
-We would like to argue that these are the two most important resources because of the goals of the client - they want to store their data in the system, i.e., they want to use as little space as possible, and they want to be able to verify their data as fast as possible, i.e., they want to use as little bandwidth as possible.
+We would like to argue that these are the two most important resources because of the goals of the client - they want to store their data in the system, i.e., they want to use as little space as possible, and they want to be able to audit their data as fast as possible, i.e., they want to use as little bandwidth as possible.
 It does not make sense to compare algorithms with different CPU and bandwidth requirements because the network communication can either be really fast or really slow, depending on the network conditions, distance between peers, etc.
-Therefore, we will only present results for the time required to initialize a file and verify it on a local machine to give an idea of the performance of the system.
-
-
-
-\begin{figure}
-  \myfloatalign
-  \begin{tikzpicture}
-    \begin{axis} [xlabel=time (s), ylabel=value]
-      \addplot[
-      sharp plot,
-      error bars,
-      y dir=both,
-      y explicit,
-      error bar style={red}
-      ] table[
-      x=x,
-      y=avgy,
-      y error=stddevp]{./data/example.csv};
-    \end{axis}
-  \end{tikzpicture}
-  \caption[A graph with error bars]{Generating figures directly in \LaTeX\ is possible, and they can be very consistent stylewise with the rest of the document.}
-  \label{fig:pretty-graph}
-\end{figure}
-
-
+Therefore, we will only present results for the time required to initialize a file and audit it on a local machine to give an idea of the performance of the system.
 
 \begin{table}
   \myfloatalign
   \pgfplotstabletypeset[
-  every head row/.style={%Define the top and mid lines
-    before row=\toprule,
-    after row=\midrule
-  },
-  every last row/.style={%Define the bottom line
-    after row=\bottomrule
-  },
-  columns={x, avgy, stddevpp %Style the chosen columns and specify their alignment etc
-  },
-  columns/x/.style={
-    column name=\textsc{time},
-    dec sep align,
-    fixed,
-    fixed zerofill,
-    precision=2
-  },
-  columns/avgy/.style={
-    column name=\textsc{value},
-    dec sep align,
-    fixed,
-    fixed zerofill,
-    precision=2
-  },
-  columns/stddevpp/.style={
-    column name=$\sigma\%$,
-    dec sep align,
-    fixed,
-    fixed zerofill,
-    precision=1
-  },
-  ]{./data/example.csv}
-  \caption[An auto-generated table]{This table has been generated from a
-    \texttt{.csv} file, which sometimes can be very handy and a great timesaver. Note, how numbers have been normalised and aligned properly.}
+    col sep=comma,
+    header=true,
+    string type,
+    every head row/.style={%Define the top and mid lines
+      before row=\toprule,
+      after row=\midrule
+    },
+    every last row/.style={%Define the bottom line
+      after row=\bottomrule
+    },
+    columns={Operation, Naive, Current implementation},
+    columns/Operation/.style={column name=Operation, column type={>{\bfseries}r|}},
+    columns/Naive/.style={column name=Naive, column type={c|}},
+    columns/Current implementation/.style={column type={c}},
+  ]{
+    Operation, Naive, Current implementation
+    {Init client cost}, $O(N)$, $O(N^{3/2})$
+    {Init server cost}, $O(N)$, $O(N)$
+    {Init bandwidth}, $O(N)$, $O(N)$
+    {Audit client cost}, $O(N)$, $O(\sqrt{N})$
+    {Audit server cost}, $O(N)$, $O(N)$
+    {Audit bandwidth}, $O(1)$, $O(\sqrt{N})$
+    {Storage server}, $O(N)$, $O(\sqrt{N})$
+    {Storage client}, $O(1)$, $O(\sqrt{N})$
+
+  }
+  \caption[]{Theoretical comparison of the naive optimized (old implementation) and the Proof of Retrievability (current implementation)}
   \label{tab:pretty-table}
 \end{table}
+
+\begin{figure}
+  \myfloatalign
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={File size (MB)},
+      ylabel={Time (ms)},
+      grid=major,
+      width=0.8\textwidth,
+      height=6cm,
+    ]
+    \addplot[mark=., blue] coordinates {
+      (1, 0.347597)
+      (10, 3.439716)
+      (100, 49.84325)
+    };
+    \end{axis}
+  \end{tikzpicture}
+  \caption[]{Time required to initialize a file. Larger tests (up to 1gb files) have been excluded from the graph because they are hard to visualize, but they exhibit the same linear trend.}
+  \label{fig:pretty-graph}
+\end{figure}
+
+\begin{figure}
+  \myfloatalign
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={File size (MB)},
+      ylabel={Time (ms)},
+      grid=major,
+      width=0.8\textwidth,
+      height=6cm,
+    ]
+    \addplot[mark=., blue] coordinates {
+      (1, 0.221211)
+      (10, 2.867223)
+      (100, 36.410966)
+    };
+    \end{axis}
+  \end{tikzpicture}
+  \caption[]{Time required to audit a file on the Verifier and the Keeper.}
+  \label{fig:pretty-graph}
+\end{figure}
+
+\begin{figure}
+  \myfloatalign
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={File size (MB)},
+      ylabel={Time (ms)},
+      grid=major,
+      width=0.8\textwidth,
+      height=6cm,
+    ]
+    \addplot[mark=., blue] coordinates {
+      (1, 0.013607)
+      (10, 0.043147)
+      (100, 0.131054)
+    };
+    \end{axis}
+  \end{tikzpicture}
+  \caption[]{Time required to audit a file from the Verifier's perspective only.}
+  \label{fig:pretty-graph}
+\end{figure}
+
+The conclusion from this is that the current implementation has some milliseconds (less than 1 second for 1 GB files) preprocessing overhead, but this allows much faster auditing.
+The audit is comparable to the init time because they essentially do the same computation.
+However, if we exclude the server time, the audit time is a magnitude faster than the init time.
+This achieved our goal of putting as little load on the Verifier (client) as possible.
+The results also confirm our theoretical time complexity analysis.
+
+\section{Cryptographic puzzle}
+
+
+
+\section{Decentralized Verifier}
+
+\section{Distributed Storage}

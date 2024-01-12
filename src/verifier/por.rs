@@ -269,6 +269,9 @@ impl Random {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
+    extern crate test;
+    use test::{black_box, Bencher};
 
     #[test]
     fn test_init() {
@@ -303,23 +306,6 @@ mod tests {
         let server = Server::new(server_config);
         assert!(audit(&client, &server));
     }
-    extern crate test;
-    use test::{black_box, Bencher};
-
-    #[bench]
-    fn test_audit_1mb_init(b: &mut Bencher) {
-        b.iter(|| {
-            let (client_config, server_config) = init(
-                "abcdefghijklmnopqrstuvwxyz"
-                    .as_bytes()
-                    .to_vec()
-                    .repeat(4000),
-            );
-            let client = Client::new(client_config);
-            let server = Server::new(server_config);
-            black_box(audit(&client, &server));
-        });
-    }
 
     #[test]
     fn test_audit_10mb() {
@@ -345,5 +331,152 @@ mod tests {
         let client = Client::new(client_config);
         let server = Server::new(server_config);
         assert!(audit(&client, &server));
+    }
+
+    #[bench]
+    fn bench_init_1mb(b: &mut Bencher) {
+        b.iter(|| {
+            black_box(init(
+                "abcdefghijklmnopqrstuvwxyz"
+                    .as_bytes()
+                    .to_vec()
+                    .repeat(40000),
+            ));
+        });
+    }
+
+    #[bench]
+    fn bench_init_10mb(b: &mut Bencher) {
+        b.iter(|| {
+            black_box(init(
+                "abcdefghijklmnopqrstuvwxyz"
+                    .as_bytes()
+                    .to_vec()
+                    .repeat(400000),
+            ));
+        });
+    }
+
+    #[bench]
+    fn bench_init_100mb(b: &mut Bencher) {
+        b.iter(|| {
+            black_box(init(
+                "abcdefghijklmnopqrstuvwxyz"
+                    .as_bytes()
+                    .to_vec()
+                    .repeat(4000000),
+            ));
+        });
+    }
+
+    #[bench]
+    fn bench_100mb_init_random(b: &mut Bencher) {
+        let size_in_bytes = 1024 * 1024 * 100;
+        let mut rng = rand::thread_rng();
+        let random_bytes: Vec<u8> = (0..size_in_bytes).map(|_| rng.gen()).collect();
+
+        b.iter(|| {
+            black_box(init(random_bytes.clone()));
+        });
+    }
+
+    // #[bench]
+    // fn bench_init_1gb(b: &mut Bencher) {
+    //     b.iter(|| {
+    //         black_box(init(
+    //             "abcdefghijklmnopqrstuvwxyz"
+    //                 .as_bytes()
+    //                 .to_vec()
+    //                 .repeat(40000000),
+    //         ));
+    //     });
+    // }
+
+    #[bench]
+    fn bench_audit_1mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(40000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        b.iter(|| {
+            black_box(audit(&client, &server));
+        });
+    }
+
+    #[bench]
+    fn bench_audit_10mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(400000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        b.iter(|| {
+            black_box(audit(&client, &server));
+        });
+    }
+
+    #[bench]
+    fn bench_audit_100mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(4000000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        b.iter(|| {
+            black_box(audit(&client, &server));
+        });
+    }
+
+    #[bench]
+    fn bench_audit_client_1mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(40000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        let challenge = client.make_challenge_vector(server.config.rows);
+        let response = server.retrieve(challenge.clone());
+        b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
+    }
+    #[bench]
+    fn bench_audit_client_10mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(400000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        let challenge = client.make_challenge_vector(server.config.rows);
+        let response = server.retrieve(challenge.clone());
+        b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
+    }
+    #[bench]
+    fn bench_audit_client_100mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(4000000),
+        );
+        let client = Client::new(client_config);
+        let server = Server::new(server_config);
+        let challenge = client.make_challenge_vector(server.config.rows);
+        let response = server.retrieve(challenge.clone());
+        b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
     }
 }

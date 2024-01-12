@@ -67,6 +67,103 @@
 
 
 
+\usepackage{helvet}
+\usepackage{etoolbox}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{booktabs}
+\usepackage[usenames, dvipsnames]{xcolor} 
+\usepackage{setspace}
+\usepackage{amsthm}
+\usepackage{xparse}
+\usepackage{hyperref}
+\usepackage{amssymb} % for mathbb
+\usepackage{soul} % for highlighting
+    \definecolor{highlight}{gray}{0.85}
+    \sethlcolor{highlight}
+\usepackage[many]{tcolorbox} % for boxes definitions
+\usepackage[all]{xy} % for xy-matrix
+\usepackage{algpseudocodex} % for algorithm set-up
+\renewcommand{\c}[1]{\mathcal{#1}}
+\renewcommand{\b}[1]{\boldsymbol{#1}}
+\newcommand{\M}{\mathrm{M}}
+\newcommand{\F}{\mathrm{F}}
+\newcommand{\MT}{\mathsf{MT}}
+\newcommand{\DPoR}{
+    (\texttt{Init},\, \mathtt{Read},\, \mathtt{Write},\, \mathtt{Audit},\, \mathtt{Extract})
+}
+\newcommand{\Prob}{\mathbb{P}}
+\newenvironment{changemargin}[2]{%
+\begin{list}{}{%
+\setlength{\topsep}{0pt}%
+\setlength{\leftmargin}{#1}%
+\setlength{\rightmargin}{#2}%
+\setlength{\listparindent}{\parindent}%
+\setlength{\itemindent}{\parindent}%
+\setlength{\parsep}{\parskip}%
+}%
+\item[]}{\end{list}}
+\newenvironment{definition}[1][]
+    {\begin{tcolorbox}[%
+        enhanced, 
+        breakable,
+        skin first=enhanced,
+        skin middle=enhanced,
+        skin last=enhanced,
+        colback=white,
+        ]
+    \textbf{Definition.} (#1)
+    \tcblower
+    }{
+    \end{tcolorbox}
+    }
+
+\definecolor{light_gray}{gray}{0.95}
+\newenvironment{MATH}[2][]
+    {\begin{tcolorbox}[%
+        enhanced, 
+        breakable,
+        skin first=enhanced,
+        skin middle=enhanced,
+        skin last=enhanced,
+        colback=light_gray,
+        ]
+    \textbf{#1.} (#2)
+    \tcblower
+    \begin{changemargin}{1cm}{1cm}
+    }{
+    \end{changemargin}
+    \end{tcolorbox}
+    }
+\usepackage{tikz}
+\usetikzlibrary{decorations.shapes}
+\tikzset{
+  decoration = {shape backgrounds, shape=circle,
+                shape size=0.75pt, shape sep=4pt},
+paint/.style = {decorate, fill=black}
+}
+\newtcolorbox{dottedBox}{%
+enhanced,
+breakable,
+sharp corners,
+boxrule=2pt,boxsep=0pt,top=4pt,left=4pt,right=4pt,bottom=4pt,middle=0pt,
+colback=white,
+colframe=white,
+pad at break=0pt,bottomrule at break=0pt,toprule at break=0pt,
+borderline={0pt}{0pt}{paint},
+}%
+\renewcommand{\footnotesize}{\fontsize{9}{11}\selectfont}
+\usepackage{caption}
+\usepackage{float}
+\graphicspath{ {./Images/} }
+\makeatletter
+\patchcmd{\@maketitle}{\LARGE \@title}{\fontsize{16}{19.2}\selectfont\@title}{}{}
+\makeatother
+\date{}    
+
+\usepackage{amsmath} % for math environments and operations
+\usepackage{bm}      % for bold symbols in math mode
+
 %\usepackage[square,numbers,sort&compress]{natbib}
 %\bibliographystyle{abbrvnat}
 
@@ -83,6 +180,7 @@
    natbib=true % natbib compatibility mode (\citep and \citet still work)
 }{biblatex}
 \usepackage{biblatex}
+
 
 \PassOptionsToPackage{fleqn}{amsmath}       % math environments and more by the AMS 
 \usepackage{amsmath}
@@ -154,6 +252,9 @@
     belowcaptionskip=.75\baselineskip
     %frame=L
 } 
+
+
+
 % ****************************************************************************************************             
 
 
@@ -163,33 +264,23 @@
 % ********************************************************************
 % Using PDFLaTeX
 % ********************************************************************
-\PassOptionsToPackage{pdftex,hyperfootnotes=false,pdfpagelabels}{hyperref}
-    \usepackage{hyperref}  % backref linktocpage pagebackref
-\pdfcompresslevel=9
-\pdfadjustspacing=1 
+\usepackage{hyperref}
 \PassOptionsToPackage{pdftex}{graphicx}
     \usepackage{graphicx} 
- 
+
+\usepackage{tcolorbox}
 
 % ********************************************************************
 % Hyperreferences
 % ********************************************************************
 \hypersetup{%
-    %draft, % = no hyperlinking at all (useful in b/w printouts)
     colorlinks=true, linktocpage=true, pdfstartpage=3, pdfstartview=FitV,%
-    % uncomment the following line if you want to have black links (e.g., for printing)
-    %colorlinks=false, linktocpage=false, pdfstartpage=3, pdfstartview=FitV, pdfborder={0 0 0},%
     breaklinks=true, pdfpagemode=UseNone, pageanchor=true, pdfpagemode=UseOutlines,%
     plainpages=false, bookmarksnumbered, bookmarksopen=true, bookmarksopenlevel=1,%
     hypertexnames=true, pdfhighlight=/O,%nesting=true,%frenchlinks,%
     urlcolor=webbrown, linkcolor=RoyalBlue, citecolor=webgreen, %pagecolor=RoyalBlue,%
-    %urlcolor=Black, linkcolor=Black, citecolor=Black, %pagecolor=Black,%
     pdftitle={\myTitle},%
     pdfauthor={\textcopyright\ \myShortNames, \myUni, \myFaculty},%
-    pdfsubject={},%
-    pdfkeywords={},%
-    pdfcreator={pdfLaTeX},%
-    pdfproducer={LaTeX with hyperref and classicthesis}%
 }   
 
 % ********************************************************************
