@@ -1,6 +1,9 @@
 run env:
     ENV={{env}} RUST_LOG=info cargo run
 
+debug env:
+    ENV={{env}} RUST_LOG=debug cargo run
+
 put data:
     grpcurl \
     -plaintext \

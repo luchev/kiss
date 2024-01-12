@@ -117,8 +117,22 @@ impl RecordStore for LocalStore {
         }
     }
 
-    fn remove(&mut self, _k: &Key) {
-        todo!();
+    fn remove(&mut self, key: &Key) {
+        match key_to_path(key) {
+            Ok(path) => {
+                let handle = Handle::current();
+                let records = self.storage.clone();
+                match block_on(async {
+                    handle
+                        .spawn(async move { records.remove(path).await })
+                        .await
+                }) {
+                    Ok(Ok(x)) => debug!("removed record: {:?}", x),
+                    _ => debug!("failed to remove record"),
+                }
+            }
+            Err(_) => debug!("failed to remove record"),
+        }
     }
 
     fn records(&self) -> Self::RecordsIter<'_> {

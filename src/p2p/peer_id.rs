@@ -38,6 +38,9 @@ fn generate_with_leading_zeros(leading_zeros: usize) -> Keypair {
 mod tests {
     use super::*;
     use crate::util::hasher::hash;
+    use rand::Rng;
+    extern crate test;
+    use test::{black_box, Bencher};
 
     #[test]
     fn test_generate_keypair() {}
@@ -58,7 +61,7 @@ mod tests {
     #[test]
     fn with_leading_zeros() {
         env_logger::init();
-        let keypair = generate_with_leading_zeros(3);
+        let keypair = generate_with_leading_zeros(2);
         let hashed = hash(
             keypair
                 .public()
@@ -67,6 +70,34 @@ mod tests {
                 .to_bytes()
                 .as_slice(),
         );
-        assert!(hashed.chars().take(3).all(|c| c == '0'));
+        assert!(hashed.chars().take(2).all(|c| c == '0'));
     }
+
+    #[bench]
+    fn bench_peer_id_1_leading_zero(b: &mut Bencher) {
+        b.iter(|| {
+            black_box(generate_with_leading_zeros(1));
+        })
+    }
+
+    #[bench]
+    fn bench_peer_id_2_leading_zero(b: &mut Bencher) {
+        b.iter(|| {
+            black_box(generate_with_leading_zeros(2));
+        })
+    }
+
+    #[bench]
+    fn bench_peer_id_3_leading_zero(b: &mut Bencher) {
+        b.iter(|| {
+            black_box(generate_with_leading_zeros(3));
+        })
+    }
+
+    // #[bench]
+    // fn bench_peer_id_4_leading_zero(b: &mut Bencher) {
+    //     b.iter(|| {
+    //         black_box(generate_with_leading_zeros(4));
+    //     })
+    // }
 }

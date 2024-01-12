@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{Res, p2p::swarm::QueryGetResponse};
+use crate::{p2p::swarm::QueryGetResponse, Res};
 use libp2p_identity::PeerId;
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -41,9 +41,10 @@ pub enum SwarmInstruction {
     },
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Contract {
     pub contract_uuid: String,
+    pub peer_id: PeerId,
     pub file_uuid: String,
     pub file_hash: String,
     pub upload_date: i64,

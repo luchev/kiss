@@ -65,7 +65,6 @@ impl ISwarmController for SwarmController {
         let result = receiving_channel.await?;
         info!("put result: {:?}", result);
 
-        // let (sender, receiver) = oneshot::channel::<QueryId>();
         result
     }
 
@@ -86,7 +85,6 @@ impl ISwarmController for SwarmController {
         let result = receiving_channel.await?;
         info!("put to result: {:?}", result);
 
-        // let (sender, receiver) = oneshot::channel::<QueryId>();
         result
     }
 

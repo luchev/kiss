@@ -461,7 +461,6 @@ impl Swarm {
         remotes: Vec<PeerId>,
         resp: OneSender<OneReceiver<Res<()>>>,
     ) -> Res<()> {
-        info!("getting key {:?}", key);
         let key = Key::new(&key);
         let (sender, receiver) = oneshot::channel::<Res<()>>();
         resp.send(receiver)?;
@@ -511,13 +510,6 @@ impl Swarm {
             .lock()
             .await
             .insert(query_id, QueryResponse::Put { sender });
-
-        // let query_id = swarm.behaviour_mut().kademlia.start_providing(key)?;
-        // let (sender, receiver) = oneshot::channel::<Res<()>>();
-        // self.queries
-        //     .lock()
-        //     .await
-        //     .insert(query_id, QueryResponse::Put { sender });
 
         Ok(())
     }

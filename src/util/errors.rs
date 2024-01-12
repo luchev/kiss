@@ -2,7 +2,7 @@ use crate::p2p::swarm::QueryGetResponse;
 use crate::util::grpc::immudb_grpc::SqlValue;
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
-use libp2p_identity::{DecodingError, PeerId};
+use libp2p_identity::{DecodingError, ParseError, PeerId};
 use libp2p_kad::{
     store, AddProviderError, GetClosestPeersError, GetProvidersError, GetRecordError,
     PutRecordError, QueryId,
@@ -44,6 +44,7 @@ error_chain! {
         SettingsDependencyFail { display("") }
         SettingsParseError(e: String) { display("") }
         StoragePutFailed(e: object_store::Error) { display("storing file failed: {}", e) }
+        StorageDeleteFailed(e: object_store::Error) { display("deleting file failed: {}", e) }
         StoragePutSerdeError(e: serde_yaml::Error) { display("storing file failed due to serde: {}", e) }
         StorageGetSerdeError(e: serde_yaml::Error) { display("getting file failed due to serde: {}", e) }
         StorageGetFailed(e: object_store::Error) { display("retrieving file failed: {}", e) }
@@ -95,6 +96,7 @@ error_chain! {
         AsyncExecutionFailed { display("async execution failed") }
         InvalidSwarmInstruction(e: SwarmInstruction) { display("invalid swarm instruction: {:?}", e) }
         InvalidNonZeroUsize { display("invalid non-zero usize ") }
+        InvalidPeerId(e: ParseError) { display("invalid peer id: {}", e) }
     }
 }
 

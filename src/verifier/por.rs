@@ -451,6 +451,7 @@ mod tests {
         let response = server.retrieve(challenge.clone());
         b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
     }
+
     #[bench]
     fn bench_audit_client_10mb(b: &mut Bencher) {
         let (client_config, server_config) = init(
@@ -465,6 +466,7 @@ mod tests {
         let response = server.retrieve(challenge.clone());
         b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
     }
+
     #[bench]
     fn bench_audit_client_100mb(b: &mut Bencher) {
         let (client_config, server_config) = init(

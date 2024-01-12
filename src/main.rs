@@ -26,6 +26,7 @@ use p2p::swarm::ISwarm;
 use runtime_injector::Svc;
 use tokio::try_join;
 use util::{die, Res};
+use verifier::IVerifier;
 
 #[tokio::main]
 async fn main() {
@@ -40,5 +41,6 @@ async fn run() -> Res<()> {
     let injector = dependency_injector()?;
     let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
     let kad: Svc<dyn ISwarm> = injector.get()?;
-    try_join!(grpc_handler.start(), kad.start()).map(|_| ())
+    let verifier: Svc<dyn IVerifier> = injector.get()?;
+    try_join!(grpc_handler.start(), kad.start(), verifier.start()).map(|_| ())
 }

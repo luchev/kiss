@@ -159,14 +159,27 @@ impl KissService for Inner {
 
         let closest = self.swarm_controller.get_closest_peers(file_uuid).await;
         info!("closest peers: {:?}", closest);
+        let closest_peer = *closest
+            .map_err(|e| Status::internal(e.to_string()))?
+            .first()
+            .ok_or_else(|| Status::internal("no closest peer found".to_string()))?;
 
         let mut ledger = self.ledger.lock().await;
         ledger
-            .create_contract(file_uuid, file_hash, request.ttl)
+            .create_contract(closest_peer, file_uuid, file_hash, request.ttl)
             .await
             .map_err(|e| Status::unknown(e.to_string()))?;
 
         debug!("created contract for {}", file_uuid);
+
+        let res = self
+            .swarm_controller
+            .put_to(
+                file_uuid.clone().to_string(),
+                request.content.clone(),
+                vec![closest_peer],
+            )
+            .await;
 
         let res = self
             .swarm_controller
@@ -297,12 +310,20 @@ impl KissService for Inner {
     ) -> std::result::Result<Response<PutToResponse>, Status> {
         let request = request.into_inner();
         let file_hash = hash(&request.content);
+        let mut peers = Vec::new();
+        for peer_uuid in request.peer_uuids.iter() {
+            peers.push(
+                PeerId::from_str(peer_uuid).map_err(|e| Status::invalid_argument(e.to_string()))?,
+            );
+        }
         let mut ledger = self.ledger.lock().await;
         let file_uuid = Uuid::new_v4();
-        ledger
-            .create_contract(file_uuid, file_hash, request.ttl)
-            .await
-            .map_err(|e| Status::unknown(e.to_string()))?;
+        for peer in peers.iter() {
+            ledger
+                .create_contract(peer.clone(), file_uuid, file_hash.clone(), request.ttl)
+                .await
+                .map_err(|e| Status::unknown(e.to_string()))?;
+        }
 
         info!("created contract for {}", file_uuid);
 

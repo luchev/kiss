@@ -8,11 +8,13 @@ use crate::util::{
 };
 use async_std::task::block_on;
 use async_trait::async_trait;
+use libp2p_identity::PeerId;
 use log::info;
 use runtime_injector::{
     interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
     ServiceInfo, Svc,
 };
+use std::str::FromStr;
 use std::{
     net::SocketAddr,
     time::{SystemTime, UNIX_EPOCH},
@@ -28,7 +30,13 @@ pub trait ILedger: Service {
     async fn set(&mut self, key: String, value: Bytes) -> Res<()>;
     async fn get(&mut self, key: String) -> Res<String>;
     async fn create_database(&mut self, name: String) -> Res<()>;
-    async fn create_contract(&mut self, file_uuid: Uuid, file_hash: String, ttl: i64) -> Res<()>;
+    async fn create_contract(
+        &mut self,
+        peer_id: PeerId,
+        file_uuid: Uuid,
+        file_hash: String,
+        ttl: i64,
+    ) -> Res<()>;
     async fn sql_execute(&mut self, query: String, params: Vec<NamedParam>) -> Res<()>;
     async fn query_execute(
         &mut self,
@@ -159,13 +167,25 @@ impl ILedger for ImmuLedger {
         Ok(result)
     }
 
-    async fn create_contract(&mut self, file_uuid: Uuid, file_hash: String, ttl: i64) -> Res<()> {
+    async fn create_contract(
+        &mut self,
+        peer_id: PeerId,
+        file_uuid: Uuid,
+        file_hash: String,
+        ttl: i64,
+    ) -> Res<()> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
         let params: Vec<NamedParam> = vec![
             NamedParam {
                 name: "contract_uuid".to_string(),
                 value: Some(SqlValue {
                     value: Some(Value::S(Uuid::new_v4().to_string())),
+                }),
+            },
+            NamedParam {
+                name: "peer_id".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(peer_id.to_base58())),
                 }),
             },
             NamedParam {
@@ -195,13 +215,62 @@ impl ILedger for ImmuLedger {
         ];
 
         let sql = "UPSERT
-                INTO contracts(contract_uuid, file_uuid, file_hash, upload_date, ttl)
-                VALUES (@contract_uuid, @file_uuid, @file_hash, @upload_date, @ttl);"
+                INTO contracts(contract_uuid, peer_id, file_uuid, file_hash, upload_date, ttl)
+                VALUES (@contract_uuid, @peer_id, @file_uuid, @file_hash, @upload_date, @ttl);"
             .to_string();
 
         let _response = self.sql_execute(sql, params).await?;
         Ok(())
     }
+
+    // async fn create_contract_old(
+    //     &mut self,
+    //     file_uuid: Uuid,
+    //     file_hash: String,
+    //     ttl: i64,
+    // ) -> Res<()> {
+    //     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+    //     let params: Vec<NamedParam> = vec![
+    //         NamedParam {
+    //             name: "contract_uuid".to_string(),
+    //             value: Some(SqlValue {
+    //                 value: Some(Value::S(Uuid::new_v4().to_string())),
+    //             }),
+    //         },
+    //         NamedParam {
+    //             name: "file_uuid".to_string(),
+    //             value: Some(SqlValue {
+    //                 value: Some(Value::S(file_uuid.to_string())),
+    //             }),
+    //         },
+    //         NamedParam {
+    //             name: "file_hash".to_string(),
+    //             value: Some(SqlValue {
+    //                 value: Some(Value::S(file_hash)),
+    //             }),
+    //         },
+    //         NamedParam {
+    //             name: "upload_date".to_string(),
+    //             value: Some(SqlValue {
+    //                 value: Some(Value::N(now)),
+    //             }),
+    //         },
+    //         NamedParam {
+    //             name: "ttl".to_string(),
+    //             value: Some(SqlValue {
+    //                 value: Some(Value::N(ttl)),
+    //             }),
+    //         },
+    //     ];
+
+    //     let sql = "UPSERT
+    //             INTO contracts(contract_uuid, file_uuid, file_hash, upload_date, ttl)
+    //             VALUES (@contract_uuid, @file_uuid, @file_hash, @upload_date, @ttl);"
+    //         .to_string();
+
+    //     let _response = self.sql_execute(sql, params).await?;
+    //     Ok(())
+    // }
 
     async fn get_contract(&mut self, file_uuid: String) -> Res<Contract> {
         let sql = "SELECT * FROM contracts WHERE file_uuid = @file_uuid;".to_string();
@@ -222,25 +291,31 @@ impl ILedger for ImmuLedger {
                 }) => x.to_owned(),
                 _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
             },
-            file_uuid: match row.get(1).as_ref() {
+            peer_id: match row.get(1).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::S(x)),
+                }) => PeerId::from_str(x).map_err(|e| ErrorKind::InvalidPeerId(e))?,
+                _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+            },
+            file_uuid: match row.get(2).as_ref() {
                 Some(SqlValue {
                     value: Some(Value::S(x)),
                 }) => x.to_owned(),
                 _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
             },
-            file_hash: match row.get(2).as_ref() {
+            file_hash: match row.get(3).as_ref() {
                 Some(SqlValue {
                     value: Some(Value::S(x)),
                 }) => x.to_owned(),
                 _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
             },
-            upload_date: match row.get(3).as_ref() {
+            upload_date: match row.get(4).as_ref() {
                 Some(SqlValue {
                     value: Some(Value::N(x)),
                 }) => x.to_owned(),
                 _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
             },
-            ttl: match row.get(4).as_ref() {
+            ttl: match row.get(5).as_ref() {
                 Some(SqlValue {
                     value: Some(Value::N(x)),
                 }) => x.to_owned(),
@@ -263,25 +338,31 @@ impl ILedger for ImmuLedger {
                         }) => x.to_owned(),
                         _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
                     },
-                    file_uuid: match row.get(1).as_ref() {
+                    peer_id: match row.get(1).as_ref() {
+                        Some(SqlValue {
+                            value: Some(Value::S(x)),
+                        }) => PeerId::from_str(x).map_err(|e| ErrorKind::InvalidPeerId(e))?,
+                        _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+                    },
+                    file_uuid: match row.get(2).as_ref() {
                         Some(SqlValue {
                             value: Some(Value::S(x)),
                         }) => x.to_owned(),
                         _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
                     },
-                    file_hash: match row.get(2).as_ref() {
+                    file_hash: match row.get(3).as_ref() {
                         Some(SqlValue {
                             value: Some(Value::S(x)),
                         }) => x.to_owned(),
                         _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
                     },
-                    upload_date: match row.get(3).as_ref() {
+                    upload_date: match row.get(4).as_ref() {
                         Some(SqlValue {
                             value: Some(Value::N(x)),
                         }) => x.to_owned(),
                         _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
                     },
-                    ttl: match row.get(4).as_ref() {
+                    ttl: match row.get(5).as_ref() {
                         Some(SqlValue {
                             value: Some(Value::N(x)),
                         }) => x.to_owned(),
@@ -375,6 +456,7 @@ async fn login(
 async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
     let query = "CREATE TABLE IF NOT EXISTS contracts (
             contract_uuid   VARCHAR[36],
+            peer_id         VARCHAR[53],
             file_uuid       VARCHAR[36],
             file_hash       VARCHAR[1024],
             upload_date     INTEGER,

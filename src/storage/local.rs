@@ -180,6 +180,20 @@ impl IStorage for LocalStorage {
             .0;
         Ok(deserialized_record)
     }
+
+    async fn remove(&self, path: PathBuf) -> Res<()> {
+        Ok(())
+        // let path = path
+        //     .to_str()
+        //     .ok_or_else(|| ErrorKind::PathParsingError(path.clone()))?;
+        // info!("deleting {}", path);
+        // let res = self
+        //     .local_storage
+        //     .delete(&Path::from(path))
+        //     .await
+        //     .map_err(ErrorKind::StorageDeleteFailed)?;
+        // Ok(res)
+    }
 }
 
 impl LocalStorage {

@@ -134,8 +134,34 @@ The results also confirm our theoretical time complexity analysis.
 
 \section{Cryptographic puzzle}
 
+We use a cryptographic puzzle to prevent Sybil attacks by limiting how fast a node can join the network.
+The puzzle is a proof of work, i.e., a computation that is easy to verify but hard to compute.
+We are using Sha3-256 \cite{sha3} as the hash function, and we require the hash to start with a certain number of zeros.
+The number of zeros is a parameter of the system, and it can be changed to adjust the difficulty of the puzzle.
+Having 4 leading zeros requires about 1.5 seconds on a modern CPU, and it is a good tradeoff between security and usability.
+Each added zero makes the puzzle on average 20 times harder.
+This means we can start the system off with 4 leading zeros and then increase the number of leading zeros if needed as the network grows.
 
+\begin{figure}
+  \myfloatalign
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={Leading zeros},
+      ylabel={Time (ms)},
+      grid=major,
+      width=0.8\textwidth,
+      height=6cm,
+    ]
+    \addplot[mark=., blue] coordinates {
+      (1, 0.453130)
+      (2, 6.818939)
+      (3, 102.240562)
+      (4, 1750.663366)
+    };
+    \end{axis}
+  \end{tikzpicture}
+  \caption[]{Time required to generate a Peer Id with a certain number of leading zeros.}
+  \label{fig:pretty-graph}
+\end{figure}
 
 \section{Decentralized Verifier}
-
-\section{Distributed Storage}
