@@ -24,10 +24,10 @@ PoR protocols are designed to be secure against malicious servers, but not malic
 In our case, a malicious Keeper can use their Verifier to retrieve the metadata from the ledger and break the PoR protocol.
 However, modern PoR protocols propose a public auditability feature that allows anyone to verify the file.
 This would make the protocol secure against malicious Keepers.
-We do not implement this feature in our system, because of the complexity it adds to the protocol.
+We have not implemented this feature in our system, because of the complexity it adds to the protocol.
 We leave it to future work.
 
-The PoR protocol we are using is based on the one described in Dynamic proofs of retrievability with low server storage\cite{poralgebra}.
+The PoR protocol we are using is based on the one described in "Dynamic proofs of retrievability with low server storage" \cite{poralgebra}.
 The full protocol is described in the paper, so we will only describe some important parts.
 The protocol treats the input file as a matrix of bytes with $n$ rows and $m$ columns.
 The parameter $n$ is related to the security of the protocol as well as the size of the metadata that the client needs to store.
@@ -52,11 +52,11 @@ Other minor differences are:
 \begin{enumerate}
     \item Unlike the original implementation, we do not parallelize the multiplication of the matrices,
         which makes our implementation slower.
-        This is something we leave for future work.
+        This optimization is something we leave for future work.
     \item We have to use more modulo operations to ensure the calculations do not overflow.
         The original algorithm sometimes allows overflows, but these are not allowed in Rust.
         If an overflow happens in Rust, the program will crash.
-    \item We are hard-coding the values that the original hard-coded as well, which are needed to argue about the security.
+    \item We are hard-coding some values (primes, block sizes, etc.) that the original hard-coded as well, which are needed to argue about the security.
     \item Instead of relying on custom read functions, we pad the file with empty (zero) bytes to enable proper alignment.
         This is done only when calculations are performed and never affects the file.
 \end{enumerate}
@@ -115,8 +115,8 @@ Then we hash the peer ID using SHA-3 and expect the hash to start with a certain
 The number of zeros is a parameter of the puzzle and is related to the security of the puzzle.
 If the hash does not start with the required number of zeros, we generate a new peer ID and try again.
 
-This is easily verifiable by other peers because they can hash the peer ID and check if the hash starts with the required number of zeros.
-This is also a computationally expensive task because the only way to find a peer ID that satisfies the puzzle is to generate random peer IDs and hash them until we find one that satisfies the puzzle.
+This is a computationally expensive task because the only way to find a peer ID that satisfies the puzzle is to generate random peer IDs and hash them until we find one that satisfies the puzzle.
+On the other hand the peer ID is easily verifiable by other peers because they can hash the peer ID and check if the hash starts with the required number of zeros.
 We will discuss the number of zeros in the puzzle in the evaluation section.
 
 \section{Decentralized Verifier}
@@ -132,7 +132,7 @@ To achieve this, we merged the verifier module with the keeper module.
 In the previous version, the Verifier contacted the Keeper nodes via GRPC over TCP.
 Now the verifier can access the Kademlia interface and interact with peers via the Kademlia protocol.
 This means we had to rework the Contracts for storing a file, which kept track of the Keeper's IP address,
-but now only keep track of the Keeper's peer ID in the network.
+but now keep track of the Keeper's peer ID in the network instead.
 
 In the implementation of Kademlia we are using PUT queries to store the file at the peer that received the query.
 To store the file with other peers and achieve replication, we need to send PUT queries to other peers, which are called PUT\_TO queries.
@@ -142,3 +142,53 @@ We then issue PUT\_TO queries to the $k$ closest peers and note down which peers
 Now we have a list of peers that have stored the file, with which we can create the Contracts and, later on, use them to verify the file.
 The final thing that allows us to use this approach is the fact that the GET query returns the peer ID that answers the query.
 This allows us to issue verification requests using the GET query to the peers that have stored the file, and get information about which peers answer the query.
+
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{store}
+    \caption{New procedure for storing a file. The main difference is the preprocessing step and the absence of the Verifier, that was previously the point of contact.}
+\end{figure}
+
+Building on top of this newly merged Verifier and Keeper module, we can now implement the decentralized Verifier.
+Instead of having 1 Verifier, which is responsible for verifying all files,
+we can have multiple Verifiers, which are responsible for verifying only a subset of the files.
+Our implementation is relies on rotation of the subset of files that each Verifier is responsible for.
+At the start a Verifier reads how many peers are in the network and splits the number of files into equal parts.
+Then it takes 1 part and goes through the list of stored files from that part and verifies them.
+Afterwards it goes to the next part and repeats the process.
+This way we can ensure that all files are verified, but the load is distributed between the Verifiers.
+
+\begin{figure}[!htb]
+    \centering
+    \includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{verify}
+    \caption{New procedure for verifying a file. The main difference is that the Verifier now sends a challenge and compares the response to the expected response.}
+\end{figure}
+
+It is important to note that the files in the system are stored under a unique identifier - a 128-bit UUID.
+When we talk about a subset of files, we mean a subset of the identifiers.
+For example if we split the identifiers into 2 parts, the first part is UUIDs that begin with the bit 0 and the second part is UUIDs that begin with the bit 1.
+With our current implementation UUIDs correspond to peer IDs in the network, however, in the future we would like to break this connection.
+This would allow us to ensure that one peer is storing files with UUIDs, which are in different parts, and thus, are verified by different Verifiers in the same time period.
+
+\section{Putting everything together}
+
+Now that we have discussed the individual components of the system, we can look at the architecture of the system as a whole.
+
+By combining the Verifier and Keeper modules into one node, we can reuse a lot of the components.
+The Settings, Kademlia, Dependency Injector are all common modules now that are used by both the Keeper and Verifier.
+On the one hand this is good because it allows us to reuse code, on the other hand these modules have become bigger in order to support both the Keeper and Verifier.
+We have the Keeper specific modules, which are mostly related to local storage.
+Then we have the Verifier specific modules, which are related to the PoR protocol.
+
+This change in the architecture has no impact on performance because the Keeper and Verifier modules run in parallel and do not block each other.
+
+The Proof of Retrievability is added to the Verifier and the gRPC module.
+Since it does not change the files themselves and only adds metadata, it does not affect the Keeper module.
+
+The Cryptographic Puzzle is integrated in the startup procedure of the Kademlia Swarm.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth,height=\textheight,keepaspectratio]{architecture}
+    \caption{Revised architecture of the system}
+\end{figure}

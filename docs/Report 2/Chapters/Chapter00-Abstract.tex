@@ -1,8 +1,8 @@
 \chapter{Abstract}
 \label{chap:abstract}
 
-Version 1 of this project proposed a storage system based on Kademlia, which used verification to ensure the system's integrity.
-In this project, we will propose a system that is resilient to adversary attacks aimed at deleting or altering data.
+This project is a continuation of a proposal for a decentralized storage system with verification.
+Version 1 of this project proposed a storage system based on Kademlia, which used verification to ensure the system's integrity and resilience against adversarial nodes.
 Like many others, the system implements key-value storage (also known as distributed hash tables).
 A verification mechanism is introduced to improve the resilience of the network, which is absent in other similar systems.
 The system was divided into Keeper (storage) and Verifier (maintaining integrity) nodes.
@@ -17,3 +17,5 @@ The main changes are:
     \item Joining the network is gated by a crypto puzzle
     \item Verification is more efficient thanks to Proof of Retrievability
 \end{enumerate}
+
+The code of the project is available at \href{https://github.com/luchev/kiss}{https://github.com/luchev/kiss}

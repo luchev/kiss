@@ -165,3 +165,21 @@ This means we can start the system off with 4 leading zeros and then increase th
 \end{figure}
 
 \section{Decentralized Verifier}
+
+Decentralizing the Verifier means there are more nodes that perform the same work.
+Because the Verifiers rotate what part of the ID space they are responsible for, the workload is evenly distributed,
+but there is no less work, instead it is just spread out over a longer period of time.
+
+Currently, we are working with a fixed number of nodes $N$, which means that each verification round is $N$-times faster.
+Therefore, we could say that we have improved the Verifier by perfectly distributing it, but this is not true.
+In the future we need to add a consensus mechanism to the Verifier nodes, which will track how many nodes there are and what node is responsible for what part of the ID space.
+This consensus can be done in parallel to the verification, so it will not slow down the system a lot,
+but it will still add some overhead.
+
+While, with the current implementation that runs under ideal conditions, we have improved the Verifier by a factor of $N$,
+in a real world scenario, the improvement will be less than $N$.
+For instance, when a new peer joins the network, it will take some time for the Verifiers to agree on the new number of nodes
+and to redistribute the ID space.
+This also applies in the case that a peer leaves the network, or perhaps we want to allow peers some time before they start verifying,
+to build up credibility.
+We leave the exact analysis of the overhead for future work, as such consensus mechanism is out of the scope of this project.

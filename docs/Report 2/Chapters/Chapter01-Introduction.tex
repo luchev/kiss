@@ -14,7 +14,7 @@ Such attacks can be classified as:
     \item Malicious peer modifying a stored file
     \item Malicious peers overloading the system with requests (DDoS)
     \item Malicious peers joining the network in bulk, aiming to disrupt the established connections/topology
-    \item A query dying in a malicious subnetwork
+    \item A query being suffocated in a malicious subnetwork
     \item Malicious peers performing a man-in-the-middle attack
     \item etc.
 \end{itemize}
@@ -37,7 +37,7 @@ Version 1 of the project focused on combining the decentralized storage from p2p
 This centralized authority is a bottleneck to the scalability and goes against the idea of a decentralized network.
 This Verifier kept a ledger of information on which peer (IP address) stored what file, and on a given period it would contact that peer and verify that the file was intact.
 
-In Version 2, we are moving away from directly communicating with peers over IP and are instead moving that communication to it using the Kademlia network.
+In Version 2, we are moving away from directly communicating with peers over IP and are instead moving that communication to the Kademlia network.
 By doing this, the Verifier would now become just another peer.
 This allowed us to merge the Verifier and Keeper nodes.
 Now each Keeper runs a Verifier subprocess.
