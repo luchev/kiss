@@ -1,0 +1,60 @@
+\chapter{Introduction}
+\label{chap:introduction}
+
+Peer-to-peer (p2p) networks are distributed systems where there is no central authority.
+A lot of the proposed networks implement a Distributed Hash Table (DHT), which is the basis for persistent file storage.
+
+Such networks are considered resilient to attacks
+because they are distributed and replicate the stored data.
+However, some attacks can disrupt the integrity and
+storage guarantees of a decentralized storage system.
+Such attacks can be classified as:
+\begin{itemize}
+    \item Malicious peer deleting a stored file
+    \item Malicious peer modifying a stored file
+    \item Malicious peers overloading the system with requests (DDoS)
+    \item Malicious peers joining the network in bulk, aiming to disrupt the established connections/topology
+    \item A query being suffocated in a malicious subnetwork
+    \item Malicious peers performing a man-in-the-middle attack
+    \item etc.
+\end{itemize}
+
+Most of these attacks have been addressed and there exist mechanisms to fend them off.
+S/Kademlia\cite{skademlia} addresses the majority of such attacks, by building security mechanisms on top of Kademlia\cite{kademlia}.
+In particular, S/Kademlia makes the following contributions:
+\begin{itemize}
+    \item Sybil Attack Prevention - preventing malicious peers from joining the network in bulk
+    \item Secure Communication - encrypting the communication between peers
+    \item Improved Node Authentication - using digital signatures to authenticate peers
+    \item etc.
+\end{itemize}
+
+In this project, we are focusing on attacks that cannot be controlled via communication over the network, i.e., attacks that happen on the peers themselves — modifying/deleting stored data.
+These attacks are possible because the peers in the network are usually not controlled by an authority, as is the case in centralized storage systems.
+We attempt to prevent such attacks by continuously monitoring the stored files in the system.
+
+Version 1 of the project focused on combining the decentralized storage from p2p systems with a centralized authority — a single Verifier node, which performed verification.
+This centralized authority is a bottleneck to the scalability and goes against the idea of a decentralized network.
+This Verifier kept a ledger of information on which peer (IP address) stored what file, and on a given period it would contact that peer and verify that the file was intact.
+
+In Version 2, we are moving away from directly communicating with peers over IP and are instead moving that communication to the Kademlia network.
+By doing this, the Verifier would now become just another peer.
+This allowed us to merge the Verifier and Keeper nodes.
+Now each Keeper runs a Verifier subprocess.
+We discuss this in more detail in Chapter \ref{chap:implementation}.
+We are still going to refer to the nodes with Keeper or Verifier, depending on which logical part we are referencing, but they are combined into one peer at the end.
+To add to this, we are also distributing the responsibilities of the Verifiers, by making each one responsible only for a portion of the stored files.
+This leaves the file catalog as the only centralized part of the system.
+
+Having too many peers join the network rapidly might destabilize it in case many of these peers are malicious.
+To avoid this, we are introducing a cryptographic puzzle, which must be solved before joining the network.
+This restrains joining the network behind a time-consuming CPU procedure.
+Such a procedure can stop Sybil attacks on the network.
+
+Version 1 made use of simple hashing to verify the availability of files.
+This relies on honest peers, that would rehash the file each time, and not just store the hashed value once and return it in subsequent queries.
+This proof-of-concept procedure does not fare well with malicious peers in reality.
+Therefore, in Version 2, we are switching it out for a Proof of Retrievability\cite{porfirst} protocol.
+Proof of Retrievability protocols allows the client to store a small amount of metadata and perform many unique queries for the availability of a file on the server.
+While the protocol is developed for a client-server architecture, it can be expanded to work in a peer-to-peer network if we imagine that the Verifiers are clients and the Keepers are servers.
+Replacing simple hashing with a Proof of Retrievablity protocol allows us to detect malicious peers with higher probability.

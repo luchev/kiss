@@ -15,10 +15,10 @@ docs/external
 *.blg
 *.bbl
 *.aux
-*.bib
 *.out
 *.run.xml
 
 submodules
 .DS_store
 _minted-*
+build/

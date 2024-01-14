@@ -1,0 +1,9 @@
+storage:
+  type: local
+  path: data/peer2
+  create: true
+grpc:
+  port: 2005
+swarm:
+  keypair: CAESQDMVgy/GUG6/dx5rWUQoLzPajKytfblM0APdUxrFxnKHsMGXU4m+GrKZOqP0vkKZCf0R9AOOEdYpWASenFQOljg
+  port: 8805

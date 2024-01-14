@@ -1,0 +1,18 @@
+storage:
+  type: local
+  path: data/peer
+  create: true
+grpc:
+  port: 2000
+swarm:
+  keypair: CAESQKV3dTAPB/2Wh3Ju7IuO9FN9m/4vn+PRxt+j+UQn9NeMezS6NMNptbSXBeaDXwMpfM1frWLUwKQy4XvojWkdUaU
+  port: 8800
+  bootstrap:
+    - 127.0.0.1:8801
+    - 127.0.0.1:8802
+    - 127.0.0.1:8803
+ledger:
+  type: immudb
+  username: immudb
+  password: immudb
+  address: 127.0.0.1:3322

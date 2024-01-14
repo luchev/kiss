@@ -1,0 +1,39 @@
+\chapter{Related Work}
+\label{chap:related-work}
+
+\section{Proof of Retrievability}
+Proof of Retrievability (PoR) is a fairly new concept introduced in 2007 Provable data possession at untrusted stores \cite{porveryfirtst}.
+PoR is a cryptographic technique ensuring that a stored data object in a distributed system can be efficiently and verifiably retrieved, assuring data integrity and availability.
+Later in 2009 “Proofs of retrievability: Theory and implementation” \cite{porfirst} provides a neat formal description of the field, that a lot of following papers use.
+There are 2 state of the art PoR techniques:
+\begin{itemize}
+    \item From 2020, Dynamic proofs of retrievability with low server storage \cite{poralgebra} — based on an algebraic approach, involving matrix multiplication.
+    \item From 2022, Efficient Dynamic Proof of Retrievability for Cold Storage \cite{pormerkle} — based on a purely cryptographic approach. This paper achieves the best bandwidth, client storage, and complexity overall, however, its implementation is incredibly complex.
+\end{itemize}
+While PoR is not exactly intended to be used in p2p systems, it fits the use case of this project nicely.
+
+\section{Peer-to-peer networks}
+Many decentralized storage systems have been proposed and implemented.
+Modern distributed storage systems achieve up to logarithmic time for insert, lookup, and delete operations.
+To name a few such systems — Chord \cite{chord}, Pastry \cite{pastry}, and Kademlia \cite{kademlia}.
+The main difference between these systems is how they organize the network nodes.
+Chord and Pastry use a ring structure, while Kademlia uses a binary tree.
+Kademlia is more resilient to churn and performs faster lookups, but generates more network traffic \cite{kadvschordvspastry}.
+Most of these systems serve as a foundation for applications that implement some decentralized storage,
+but we won't go into detail about them, because they are not the focus of this project.
+
+There are also multiple proposals on how to make decentralized storage systems more resilient to malicious peers.
+To name a few — ARA \cite{ara}, Freenet \cite{freenet}, and S/Kademlia \cite{skademlia}.
+The main idea behind these proposals is to have some kind of auditing mechanism that checks if the peers are behaving correctly.
+ARA proposes a system where peers allocate “credits” to other peers they communicate with.
+If peer A requests files from another peer B, B gains “credits”, while A informs other neighboring peers
+that B has received “credits” from A.
+Peers also share information about these “credits” with other peers and use them as an auditing mechanism.
+S/Kademlia focuses on node authentication with expensive node ID generation and verifiable messages using
+public and private key cryptography.
+S/Kademlia also routes requests through multiple different nodes at the same time
+to reduce the chance of a request falling into a malicious subnet.
+Freenet's approach to security is to encrypt all data and route requests through multiple nodes.
+It works in a way similar to Tor — nodes in the path to the target cannot tell what other nodes are in the path,
+except for the previous and the next node.
+Nodes storing the data are also obscured in the response, so the source cannot be tracked.

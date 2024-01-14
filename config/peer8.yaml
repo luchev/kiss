@@ -1,0 +1,9 @@
+storage:
+  type: local
+  path: data/peer2
+  create: true
+grpc:
+  port: 2008
+swarm:
+  keypair: CAESQJTwheeMcVsgLhVlMKbB4VdxhXqLWnOLtFvlvi6TJcXLxposip5Qsf/E/W/s9Cn5Mwf2wQHjjUgoeEKl96MGGO0
+  port: 8808
