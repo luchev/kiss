@@ -93,3 +93,6 @@ debug-common:
 
 run-random-keeper:
     KISS_grpc_port=0 KISS_swarm_port=0 RUST_LOG=info ./target/release/keeper
+
+thesis:
+    cd docs/Thesis/ && tectonic -X build

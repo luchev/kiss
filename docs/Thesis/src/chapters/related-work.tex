@@ -1,0 +1,172 @@
+\label{chapter:related-work}
+\chapter{Related Work}
+
+\section{Distributed Storage Systems}
+
+There are many decentralized storage systems that have been developed over the years.
+While there exist decentralized networks, which are focusing on decentralized computing,
+most of the decentralized networks are used for storage or some form of data sharing.
+These are referred to as Distributed Hash Tables (DHT).
+
+There are many ways to categorize DHTs, and we will cover some of them here.
+
+\subsection{Structured vs Unstructured DHTs}
+
+One major way to categorize DHTs is by their topology.
+If they have a predefined topology, they are called structured DHTs, otherwise they are called unstructured DHTs.
+
+Due to the nature of unstructured networks they can become heavily unbalanced
+where some nodes are almost completely isolated.
+However, this rarely occurs as these networks rely on gossip protocols to connect to random peers and exchange
+information with them.
+A huge downside of such networks is often the discovery of resources.
+Since a resource can be at any node, typically such networks broadcast queries through the whole network.
+This is both inefficient and can also cause traffic congestion.
+
+Structured networks have predefined topology, that any node joining adheres to.
+Often used topologies are circular, used by Chord \cite{chord} and Pastry \cite{pastry},
+and hypercube, used by Kademlia \cite{kademlia}.
+While there are others, most modern structured networks either build on top of Kademlia or
+use a similar hypercube topology \cite{skademlia}.
+\wtf{skademlia suggests that bittorrent is based on kademlia???}
+These networks are more efficient in terms of resource discovery, as they can use the topology to
+route queries to the correct node.
+The queries usually take $O(\log n)$ hops to reach the correct node, where $n$ is the number of
+nodes in the network.
+
+While some unstructured networks are in use today, such as BitTorrent, they are used for a very specific purpose.
+When we talk about decentralized storage to rival cloud storage,
+structured networks are predominant due to their efficiency and
+time guarantees for resource discovery and routing.
+
+\subsection{Anonymity (Freenet)}
+
+Most DHTs are not designed with anonymity in mind.
+Anonymity means that the identity of the user, the data they are storing or requesting,
+the queries, and the location of the data are hidden.
+Freenet \cite{freenet} uses onion routing and cover traffic to hide the identity of the user and the location of the data.
+Another part of the anonymity is achieved by querying the network for cached copies of the file.
+Since Freenet does not assign responsibility for a file to a specific node, it is difficult to trace the file back to the original uploader,
+or to the current holder of the file.
+However, this also means that the network cannot provide any guarantees about the availability of the file.
+
+\wtf{should I talk about I2P?}
+
+\subsection{Keyspace}
+
+Most DHTs \cite{chord, kademlia, pastry, freenet} use a keyspace that is either $2^{128}$, $2^{160}$, or $2^{256}$.
+The keyspace should be large enough to avoid collisions,
+but not too large to make routing and computations inefficient.
+Each node in the network is assigned a peer ID, which is a random number in the keyspace.
+Files with a key that is close to the peer ID of a node are stored on that node.
+Replication works by storing the file on the $k$ closest nodes to the key of the file.
+
+Key generation is done in a way such that the keys are uniformly distributed in the keyspace.
+This is mostly done with cryptographic hash functions, such as SHA-1 or SHA-256.
+Usually the name of the file or the contents of the file are hashed to produce the key.
+
+IPFS is a DHT that provides human-friendly names for files.
+If users want their files to be verifiable, they can use a cryptographic key pair
+and publish files under a personal namespace that is the hash of their public key.
+This allows others to verify the files are published by a particular user.
+The namespace has one downside - it is not human-friendly.
+To solve this IPFS can be integrated with a Name Shortening Service, similar to a DNS.
+Human-friendly names have a downside that they could be subject to a dictionary attack and
+squatting - where a malicious user could register a name similar to a popular one and
+serve malicious content.
+
+\subsection{Persistence}
+
+Kademlia \cite{kademlia} republishes files every 1 hour to ensure that the file is still available.
+This ensures that if a node goes offline, or if a new one joins closer to the key, the file is still available
+and replicated properly.
+
+Freenet \cite{freenet} uses a similar approach, where the file is republished by nodes in order to 
+ensure that the file is still available.
+The difference from Kademlia is that the file is split into smaller chunks, and each chunk is
+republished separately.
+
+IPFS \cite{ipfs} relies on a similar approach to BitTorrent, where the file is available as long as there is 
+interest in it, i.e., it is being requested.
+However, it also employs the BitSwap protocol, which allows peers to barter for the blocks they need,
+hence making rare pieces of data more valuable for barter, and incentivizing peers to store them.
+Thanks to this, caching of the file is achieved at different nodes.
+
+\wtf{should I talk about the parallel queries? technically they are important, but I'm not sure how deep I need to go into the details of the systems}
+
+\wtf{should I talk about other systems such as Past, CAN, OceanStore, Coral, etc?}
+
+\wtf{should I compare the performance of the networks?}
+
+\wtf{should I talk about the block exchange or version control of IPFS?}
+
+\subsection{Reputation systems}
+
+IPFS \cite{ipfs} uses the BitSwap protocol, which allows peers to exchange partial blocks of data,
+similarly to BitTorrent.
+Peers can barter for the blocks they need, or choose to store rare pieces of data to increase their reputation.
+The authors hint at using a ledger to keep track of the reputation (currency) of the peers,
+but leave it as future work.
+The BitSwap protocol borrows a lot from BitTorrent, and acknowledges that there are exploits such as
+BitTyrant \cite{bittorrentexploits} and BitThief \cite{bittorrentexploits}
+that can be used to exploit the protocol.
+The protocol should:
+\begin{enumerate}
+    \item maximize the trade performance of the node and the whole exchange
+    \item prevent freeloaders from exploiting and degrading the exchange
+    \item be effective and resistant to other, unknown strategies
+    \item be lenient to trusted peers
+\end{enumerate}
+These are too complex to be solved in the paper and are left as future work.
+
+\subsection{Security}
+
+In order to increase security of Kademlia, the authors of S/Kademlia \cite{skademlia} propose a couple of
+mechanisms.
+Kademlia already handles Eclipse Attacks as it favors longer-lived nodes over new ones.
+Hence, once the network is bootstrapped it would be difficult for an attacker to take over the network.
+This same concept addresses Churn attacks, where an attacker continuously joins and leaves the network.
+To address Sybil attacks S/Kademlia employs a proof-of-work mechanism - a cryptographic puzzle that
+the joining node must solve.
+S/Kademlia proposes a solution for adversarial routing by sending multiple queries to different parts
+of the network and comparing the results.
+DDoS attacks are not covered by the paper.
+These are usually attempted to be solved by rate limiting, throttling, and traffic filtering,
+however there are no guarantees that these will work against a sufficiently large attack.
+
+\section{Proof of Retrievability}
+
+Proof of Retrievability (PoR) \cite{porfirst} is a cryptographic protocol that
+allows a client to verify that a server is storing a file.
+The server is challenged to prove that it is storing the file, and the client
+can verify the proof.
+PoR protocols are designed to be used to check the integrity of the data stored by cloud providers mostly.
+
+There are 2 state of the art PoR techniques:
+\begin{itemize}
+    \item From 2020, "Dynamic proofs of retrievability with low server storage" \cite{poralgebra} —
+        based on an algebraic approach, involving matrix multiplication.
+    \item From 2022, "Efficient Dynamic Proof of Retrievability for Cold Storage" \cite{pormerkle} —
+        based on a purely cryptographic approach with Merkle trees.
+\end{itemize}
+
+"Dynamic proofs of retrievability with low server storage" introduces a protocol, which 
+requires $N + O(N/\log N)$ server storage, where $N$ is the size of the file.
+The protocol is dynamic, meaning that the client can update the file and the server can update the proof.
+This feature could be important for some decentralized storage systems, which split the files into chunks and
+store them on different nodes.
+However, splitting the file between multiple nodes will make the audit process more complex and time-consuming.
+The client stores $O(\sqrt{N})$ data.
+This is still not perfect, as in a decentralized storage system each node is a client, hence knows the secret.
+This can be addressed with the last contribution of the paper - public verifiability.
+Public verifiability is a variant of the proposed protocol that allows any untrusted third party
+to conduct audits without a shared secret.
+
+"Efficient Dynamic Proof of Retrievability for Cold Storage" makes improvements to the bandwidth and
+client storage requirements of the previous protocol.
+The audit proof is $O(1)$ - a fixed number of group elements sent from the server to the client.
+Client storage is reduced to a single master key, the size of the security parameter,
+which is again constant.
+Public verifiability is also possible with logarithmic overhead.
+
+Proofs of Retrievability are an important instrument to ensure integrity in decentralized storage.

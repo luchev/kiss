@@ -1,0 +1,225 @@
+\label{chapter:introduction}
+\chapter{Introduction}
+
+Cloud storage is a key component of modern computing.
+It allows users to store and access their data from anywhere in the world.
+A lot of the popular cloud storage providers are centralized, meaning owned and operated by a single entity.
+On one hand, this is good for the user because the entity provides a friendly interface and customer support
+in exchange for a fee.
+On the other hand, the user has to trust the entity to keep their data safe and private and not misuse it.
+
+To address these concerns, decentralized storage systems have been proposed.
+They are also called DHTs (Distributed Hash Tables) or P2P (Peer to Peer) networks.
+These systems tend to be the exact opposite of centralized systems, i.e., they focus on privacy, security,
+and fault tolerance, but often lack the user-friendly interface and provide no customer support at all.
+Storing data in decentralized networks could also be paid for by means other than fiat currency,
+e.g., offering some of one's storage in exchange for using the network or executing a complex computation
+for the nodes in the network.
+Decentralized networks are resistant to censorship as they are not supervised by a central authority
+(although this could also be seen as a downside depending on how the network is used).
+Last but not least, due to the physical distribution of peers, such networks provide higher potential availability,
+in contrast to centralized data centers, in which thousands of nodes can go offline during a power outage.
+
+The goal of this thesis is to design and implement a secure and fault-tolerant decentralized storage system
+that can compete with centralized storage systems.
+In the following sections, we will introduce decentralized networks,
+define what security and integrity means, discuss the motivation for this work,
+and propose a solution to the integrity problem in modern decentralized networks.
+Before we can discuss the requirements for such a system, we will introduce the main
+concepts of decentralized networks and the security of such networks.
+
+\section{Overview of decentralized networks}
+
+Peer to peer (P2P) networks are the backbone of decentralized storage.
+They are a type of network where each node acts as both a client and a server.
+This means that each node can request and provide services to other nodes.
+There is also no central server, although there may be a central directory to help nodes find each other.
+
+\subsection{Structured networks}
+
+Decentralized networks come in two varieties - structured and unstructured.
+We will cover these in more detail in \ref{chapter:related-work}, but we will go over a brief overview here.
+
+Structured networks have predefined topology, that any node joining adheres to.
+Often used topologies are circular and hypercube.
+The most popular structured network is Kademlia \cite{kademlia}, which uses a hypercube topology.
+\wtf{As far as I know most proprietary networks use a circular topology, is this the case, why, should I investigate?}
+These networks are efficient in terms of resource discovery, as they can use the topology to
+route queries to the correct node.
+The queries usually take $O(\log n)$ hops to reach the correct node, where $n$ is the number of
+nodes in the network.
+
+When we talk about decentralized storage, structured networks are predominant due to their efficiency and
+time guarantees for resource discovery and routing.
+Hence, we will focus on structured networks in this thesis and use Kademlia as the basis for our work.
+
+\subsection{Anonymity in decentralized networks}
+
+Anonymity is not exactly considered part of the security of a decentralized network, 
+however it is related to the privacy of the users.
+We will not cover anonymity in detail, but it is worth mentioning as it often goes hand in hand with security.
+Solving anonymity is done by using completely different methods such as
+onion routing (used by Tor \cite{tor}) and cover traffic (Tarzan \cite{tarzan}).
+
+\subsection{Security in decentralized networks}
+
+Most decentralized networks focus on efficient routing and resource discovery.
+Security is often an afterthought, if it is considered at all.
+After multiple networks with $O(\log n)$ query time were proposed \cite{chord, kademlia, pastry},
+the focus shifted to security.
+
+Security is a major concern in decentralized networks because
+the network is open to anyone, and there is no central authority to enforce rules,
+in contrast to centralized storage systems.
+Peers can join and leave the network at any time, and they can lie about their identity and the data they store.
+We call such peers malicious.
+
+When we talk about security we assume that the underlying network provides no security guarantees.
+Attackers can eavesdrop on the communication between nodes, modify the messages, and even drop them.
+They can also spoof IP addresses and there is no authentication of data packets in the underlying network.
+This is a reasonable assumption as most decentralized networks are built on top of the Internet,
+which is inherently insecure.
+
+S/Kademlia \cite{skademlia} summarizes the main attacks on decentralized networks:
+\begin{enumerate}
+    \item \textbf{Eclipse attacks} - an attacker isolates a node from the rest of the network.
+    \item \textbf{Sybil attacks} - a single entity pretends to be multiple entities.
+    \item \textbf{Churn attacks} - an attacker joins and leaves the network repeatedly.
+    \item \textbf{Adversarial routing} - an attacker returns adversarial routing information.
+    \item \textbf{Denial-of-service attacks} - an attacker floods the network with requests.
+    \item \textbf{Storage attacks} - an attacker manipulates the data stored on a node.
+\end{enumerate}
+
+Kademlia and S/Kademlia cover most of these attacks and are mostly secure against them.
+The one exception is storage attacks.
+No decentralized network has a solution for storage attacks.
+
+\subsection{Storage attacks}
+\label{section:storage-attacks}
+
+Storage attacks are the main focus of this thesis.
+They are mostly ignored by the literature, because decentralized networks are often designed to
+drop old files based on some criteria, such as popularity or age.
+This is done to save space and to keep the network up to date.
+However, if we want durable storage, we need to address these attacks.
+
+Storage attacks can be classified into two categories:
+\begin{enumerate}
+    \item \textbf{Data availability attacks} - an attacker claims to store data, but does not.
+    \item \textbf{Data integrity attacks} - an attacker claims to store data, but stores different data.
+\end{enumerate}
+
+Checking if a node stores the data it claims to store can be as simple as asking the node to return the data.
+However, this is a very inefficient and bandwidth-consuming method.
+Ideally, we would like to reduce the amount of traffic between nodes and still be able to check
+if the data is stored correctly.
+
+\section{Requirements for the system}
+
+If we want to design a decentralized storage system that is similar and can compete with centralized systems,
+we need to provide the same guarantees and features:
+\begin{enumerate}
+    \item \textbf{Scalability} - the system should be able to handle many users and data.
+    \item \textbf{Performance} - the system should be fast.
+    \item \textbf{Resilience} - the system should be able to recover from attacks.
+    \item \textbf{Reliability} - the system should be able to recover from failures.
+    \item \textbf{Availability} - data stored on the network should be accessible at all times.
+    \item \textbf{Integrity} - data stored on the network should not be tampered with.
+    \item \textbf{Security} - data stored on the network, and accessing the data should be secure.
+\end{enumerate}
+
+\textbf{Scalability} is covered by most networks, regardless of being centralized or decentralized.
+Allowing many peers to join the network is a key feature of decentralized networks.
+\textbf{Performance} is also covered by most modern networks, as they provide $O(\log n)$ query time.
+\textbf{Resilience} is for the most part covered by the security additions to the networks, such as S/Kademlia.
+An exception is the storage attacks, which are not addressed.
+\textbf{Reliability} is covered by rebalancing the network when a node leaves or joins.
+Most networks also provide some form of redundancy, which allows the network to recover from failures.
+\textbf{Availability} follows from reliability and resilience.
+\textbf{Security} can be solved by using encryption, cover traffic, onion routing, etc.
+\textbf{Integrity} is not the focus of existing networks, as discussed in \ref{section:storage-attacks}.
+
+These requirements have some overlap.
+In order to achieve resilience, we need to guarantee the integrity of the data.
+In order to achieve performance, we need optimized way to check the integrity of the data.
+And to achieve availability, we need the above two.
+
+If we want a system to compete with centralized storage systems, we
+need to be able to provide guarantees about the data stored on the network.
+A lot of the popular centralized storage systems provide data durability and
+availability of five (99.999\%) or more nines.
+
+\section{Solving the integrity problem}
+
+To solve the integrity problem, we need to be able to check if the data is stored correctly.
+To achieve this we need a verification/auditing mechanism, which is efficient and secure.
+We will use a Proof of Retrievability (PoR) scheme, which will allow us to efficiently check the 
+integrity of the data stored in the network.
+PoR schemes are a type of cryptographic scheme that allows a verifier to check if a node
+stores the data it claims to store.
+The verifier does not need to download the whole file, but only exchange a few messages, which are much smaller.
+
+Once we have a method to check the integrity of the data, we need someone to perform this check.
+We will use the nodes in the network to perform the checks.
+It makes sense for honest nodes, which are users of the network, to do audits,
+as they have a vested interest in the integrity of the data.
+However, we also need to make sure that malicious nodes are also doing audits.
+
+We can achieve this by using rewards and penalties.
+We will reward nodes for performing audits and penalize them for not performing audits.
+First, let us focus on the penalties.
+If a node is found to be storing data incorrectly (by failing an audit), we will penalize the node.
+If a node is found to not be performing audits, we will penalize it.
+
+The only way to penalize a node is to remove it from the network.
+It would be better if we could have lighter penalties.
+Here we are proposing a reputation system based on a ledger store, e.g., a blockchain.
+We will use a blockchain to store the reputation of the nodes.
+This will allow us to have a light penalty system, as we can downgrade the reputation of the node
+instead of removing it from the network.
+Using a ledger store allows us to have a transparent and immutable record of the reputation of the nodes.
+
+Using a reputation system will also allow us to reward nodes for performing audits.
+Successfully storing a file and passing audits will increase the reputation of the node.
+Successfully performing audits will also increase the reputation of the node.
+Failing to store a file or failing to perform an audit will decrease the reputation of the node.
+In the \ref{section:evaluation} we will discuss how very high or low reputation nodes will be treated.
+
+We know how to perform audits, but we also need to know how to make sure none of the
+audits are faked.
+To solve this, we would require the nodes performing an audit to record the results of the audit and keep
+it in a ledger store.
+When a node is suspicious of the correctness of the audit, it can check the ledger store to see if the audit
+was performed correctly.
+This could also be used to check if the audits are being performed at all.
+
+\section{Evaluation and testing}
+\label{section:evaluation}
+
+We need to evaluate the proper penalties and rewards for the nodes.
+A good balance is needed between rewards and penalties to ensure that a node is
+going to perform enough work for the system before being able to harm it.
+Part of this evaluation will be:
+\begin{enumerate}
+    \item How much reputation points a node stakes when it stores a file?
+    \item How much reputation points a node loses when it fails an audit?
+    \item How much reputation points a node gains when it performs an audit?
+    \item How much reputation points a node loses when it's discovered to not be performing audits?
+    \item What is the starting reputation for new nodes?
+    \item How do nodes increase their reputation at the very beginning?
+    \item Does having high reputation give the node any benefits?
+\end{enumerate}
+
+Nodes with very high reputation could easily become malicious as they can absorb the penalties.
+We need to solve this problem by either having a maximum reputation or by having the penalties be
+percentage-based.
+
+We need to answer the question of how often audits should be performed and how often nodes should
+check the audit results of others.
+The overhead of performing audits should be as low as possible, but the audits should be performed often enough
+to ensure the integrity of the data.
+
+Finding the balance between audits and the overhead of the audits, and the penalties and rewards for the nodes
+is crucial for the success of the system.
+We will evaluate the system by running it with different parameters and observing the behavior of the nodes.
+We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.

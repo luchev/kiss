@@ -1,0 +1,39 @@
+\label{title}
+
+\begin{titlepage}
+    \begin{center}
+        \large  
+        \hfill
+        \vfill
+        \begingroup
+            \color{Maroon}\spacedallcaps{\myTitle} \\ \bigskip
+        \endgroup
+        \emph{\mySubtitle} \\ \medskip
+        % \spacedlowsmallcaps{\myShortNames}\\
+        \vfill
+        \includegraphics[width=6cm]{gfx/au-logo} \\ \medskip
+        \myDegree\\ \medskip
+        \myDepartment\\                            
+        \myFaculty\\
+        \myUni\\ \bigskip
+        \myTime
+        \vfill                      
+    \end{center}  
+\end{titlepage}   
+
+\thispagestyle{empty}
+\vspace*{\fill}\noindent{\color{aublue}\rule{\linewidth}{1mm}\\[4ex]\color{black}
+  \begin{RaggedRight}
+\Large \spacedallcaps\myTitle\\ \vspace*{1.5em}
+% \large \spacedallcaps\mySubtitle\\ \vspace*{3em}
+\end{RaggedRight}
+\foreach \name\id in \authors
+{
+  {\noindent\Large \spacedlowsmallcaps \name, \id }\\[1ex]
+}
+\\[-1ex]
+{\noindent\large \spacedlowsmallcaps \myGroup}\\[1.5ex]
+\noindent\color{aublue}\rule{\linewidth}{1mm}\\[4ex]\color{black}
+\noindent{\large \spacedlowsmallcaps \myDegree\\[1ex] 
+\monthname\ \the\year  \\[1ex] Advisor: \myProf \\[23ex]}\\[\fill]}
+\includegraphics[width=\linewidth]{gfx/logo}
