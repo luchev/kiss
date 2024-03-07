@@ -54,6 +54,7 @@ pub trait ISettings: Service {
     fn grpc(&self) -> Grpc;
     fn swarm(&self) -> Swarm;
     fn ledger(&self) -> Ledger;
+    fn malicious_behavior(&self) -> MaliciousBehavior;
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -76,6 +77,20 @@ impl Default for Ledger {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MaliciousBehavior {
+    None,
+    DeleteAll,
+    DeleteRandom(usize),
+}
+
+impl Default for MaliciousBehavior {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 #[derive(Default, Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Grpc {
@@ -88,6 +103,7 @@ pub struct Settings {
     pub grpc: Grpc,
     pub swarm: Swarm,
     pub ledger: Ledger,
+    pub malicious_behavior: MaliciousBehavior,
 }
 
 impl ISettings for Settings {
@@ -105,6 +121,10 @@ impl ISettings for Settings {
 
     fn ledger(&self) -> Ledger {
         self.ledger.clone()
+    }
+
+    fn malicious_behavior(&self) -> MaliciousBehavior {
+        self.malicious_behavior.clone()
     }
 }
 

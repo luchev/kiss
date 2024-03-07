@@ -1,4 +1,30 @@
 \label{chapter:evaluation}
 \chapter{Evaluation}
 
-todo
+We need to evaluate the proper penalties and rewards for the nodes.
+A good balance is needed between rewards and penalties to ensure that a node is
+going to perform enough work for the system before being able to harm it.
+Part of this evaluation will be:
+\begin{enumerate}
+    \item How much reputation points a node stakes when it stores a file?
+    \item How much reputation points a node loses when it fails an audit?
+    \item How much reputation points a node gains when it performs an audit?
+    \item How much reputation points a node loses when it's discovered to not be performing audits?
+    \item What is the starting reputation for new nodes?
+    \item How do nodes increase their reputation at the very beginning?
+    \item Does having high reputation give the node any benefits?
+\end{enumerate}
+
+Nodes with very high reputation could easily become malicious as they can absorb the penalties.
+We need to solve this problem by either having a maximum reputation or by having the penalties be
+percentage-based.
+
+We need to answer the question of how often audits should be performed and how often nodes should
+check the audit results of others.
+The overhead of performing audits should be as low as possible, but the audits should be performed often enough
+to ensure the integrity of the data.
+
+Finding the balance between audits and the overhead of the audits, and the penalties and rewards for the nodes
+is crucial for the success of the system.
+We will evaluate the system by running it with different parameters and observing the behavior of the nodes.
+We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.

@@ -7,66 +7,102 @@ A lot of the popular cloud storage providers are centralized, meaning owned and 
 On one hand, this is good for the user because the entity provides a friendly interface and customer support
 in exchange for a fee.
 On the other hand, the user has to trust the entity to keep their data safe and private and not misuse it.
+They also might prefer to pay with their storage or computation power instead of money, or 
+they might not want to be locked into a single provider.
+Such cases are often when the user is a university or a government.
 
-To address these concerns, decentralized storage systems have been proposed.
-They are also called DHTs (Distributed Hash Tables) or P2P (Peer to Peer) networks.
-These systems tend to be the exact opposite of centralized systems, i.e., they focus on privacy, security,
-and fault tolerance, but often lack the user-friendly interface and provide no customer support at all.
-Storing data in decentralized networks could also be paid for by means other than fiat currency,
-e.g., offering some of one's storage in exchange for using the network or executing a complex computation
-for the nodes in the network.
-Decentralized networks are resistant to censorship as they are not supervised by a central authority
-(although this could also be seen as a downside depending on how the network is used).
-Last but not least, due to the physical distribution of peers, such networks provide higher potential availability,
-in contrast to centralized data centers, in which thousands of nodes can go offline during a power outage.
+To address such use cases and the concerns with cloud storage, decentralized storage systems have been proposed.
+
+We will focus on the most popular type of decentralized storage, which is decentralized hash tables (DHT).
+They are often used as the basis of NoSQL databases, such as Cassandra \cite{cassandra},
+which are used by companies such as Facebook, Twitter, and Netflix, in order to serve millions of users.
+While they can be used for centralized storage, they are mostly used as decentralized storage,
+therefore they focus on privacy, security, fault tolerance, and resistance to censorship.
 
 The goal of this thesis is to design and implement a secure and fault-tolerant decentralized storage system
 that can compete with centralized storage systems.
+In particular, we will focus on the integrity of the data stored on the network,
+as this is the main problem that is not addressed by existing decentralized storage systems.
 In the following sections, we will introduce decentralized networks,
 define what security and integrity means, discuss the motivation for this work,
 and propose a solution to the integrity problem in modern decentralized networks.
-Before we can discuss the requirements for such a system, we will introduce the main
-concepts of decentralized networks and the security of such networks.
+We will then talk about the requirements for the system and how we will evaluate it.
+
+\section{Overview of cloud storage}
+
+Cloud storage provides a way to store and access data over the Internet.
+The user does not need to worry about the physical location of the storage, the hardware, the maintenance,
+the replication, the backups, etc., as it is abstracted away by the cloud storage provider.
+If we want to build a decentralized storage system, we need to provide the same guarantees and features
+as centralized storage systems.
+For this purpose we will explore the requirements for Amazon's S3,
+which is one of the most popular cloud storage providers.
+
+\begin{enumerate}
+    \item The system can store from 0 to 5 terabytes of data in a single object.
+    \item The system can store an unlimited number of objects.
+    \item The system can store an object for an unlimited amount of time.
+    \item The cloud provider will not access the data for any purpose, except when required to do so by law.
+    \item Files will be stored under keys, which are unique identifiers and
+        can be constructed to mimic a hierarchical structure.
+    \item The system will provide a simple REST API to store and retrieve the objects.
+    \item Files stored by the user can be accessed only by the user, unless the user decides to share the file.
+    \item Data is stored encrypted, and the user can provide their own encryption key.
+    \item The system can provide 99.999999999\% durability of the data (achieved via verification).
+    \item The system can provide 99.99\% availability.
+    \item The system can provide 99.99\% of the time the objects will be retrieved in less than 100 milliseconds.
+    \item Deletes are guaranteed to be permanent, and no data can be recovered after a deletion.
+    \item The system provides different types of replication - region and cross-region.
+\end{enumerate}
+
+These features come at a cost, which is usually a fee for the storage and the bandwidth.
+
+If we want to build a decentralized storage system, we need to provide the same guarantees and features.
+While we cannot restrict which users can access the data, we can encrypt it,
+which will make it unreadable to anyone who does not have the decryption key.
+There is one feature that is hard to achieve in a decentralized network - deletion.
+Because the data is stored on multiple nodes, and we cannot guarantee that all of them will delete the file,
+but since the data is encrypted, it is not readable to anyone who does not have the decryption key.
+
+Most of the features are covered by existing decentralized storage systems, but the one that is not is durability.
+Durability or data integrity is the main focus of this thesis.
+We will approach the problem by using the same method as centralized storage systems - verification.
+Before we discuss the verification method, we will briefly talk about decentralized networks and security,
+in order to provide the necessary background for the rest of the thesis.
+
+\wtf{I can move the whole introduction to decentralized networks and security to the Related Work section.
+But then the reader will not have the necessary background, and will need to read the Related Work section first.}
 
 \section{Overview of decentralized networks}
 
-Peer to peer (P2P) networks are the backbone of decentralized storage.
+Decentralized storage is implemented on top of peer to peer (P2P) networks.
 They are a type of network where each node acts as both a client and a server.
 This means that each node can request and provide services to other nodes.
 There is also no central server, although there may be a central directory to help nodes find each other.
 
-\subsection{Structured networks}
-
-Decentralized networks come in two varieties - structured and unstructured.
-We will cover these in more detail in \ref{chapter:related-work}, but we will go over a brief overview here.
-
-Structured networks have predefined topology, that any node joining adheres to.
+Decentralized networks can be classified into two categories - unstructured and structured.
+Structured networks have a predefined topology and are more efficient in terms of routing and resource discovery.
 Often used topologies are circular and hypercube.
 The most popular structured network is Kademlia \cite{kademlia}, which uses a hypercube topology.
-\wtf{As far as I know most proprietary networks use a circular topology, is this the case, why, should I investigate?}
-These networks are efficient in terms of resource discovery, as they can use the topology to
-route queries to the correct node.
-The queries usually take $O(\log n)$ hops to reach the correct node, where $n$ is the number of
-nodes in the network.
+It is also the foundation for most modern decentralized storage systems.
 
-When we talk about decentralized storage, structured networks are predominant due to their efficiency and
-time guarantees for resource discovery and routing.
-Hence, we will focus on structured networks in this thesis and use Kademlia as the basis for our work.
+\section{Anonymity}
 
-\subsection{Anonymity in decentralized networks}
-
-Anonymity is not exactly considered part of the security of a decentralized network, 
-however it is related to the privacy of the users.
-We will not cover anonymity in detail, but it is worth mentioning as it often goes hand in hand with security.
+Security is a major concern in decentralized networks,
+as they are open to anyone and there is no central authority to enforce rules.
+The definition of security can be different from system to system.
+Some systems focus on anonymity of the users and nodes storing the data,
+while others discard anonymity in order to track the nodes and the data they store.
 Solving anonymity is done by using completely different methods such as
 onion routing (used by Tor \cite{tor}) and cover traffic (Tarzan \cite{tarzan}).
-
-\subsection{Security in decentralized networks}
+We will not focus on anonymity, as it disallows us from tracking the integrity of data stored on the network.
 
 Most decentralized networks focus on efficient routing and resource discovery.
 Security is often an afterthought, if it is considered at all.
 After multiple networks with $O(\log n)$ query time were proposed \cite{chord, kademlia, pastry},
 the focus shifted to security.
+
+\section{Security}
 
 Security is a major concern in decentralized networks because
 the network is open to anyone, and there is no central authority to enforce rules,
@@ -193,33 +229,13 @@ When a node is suspicious of the correctness of the audit, it can check the ledg
 was performed correctly.
 This could also be used to check if the audits are being performed at all.
 
-\section{Evaluation and testing}
 \label{section:evaluation}
+\section{Evaluation and testing}
 
-We need to evaluate the proper penalties and rewards for the nodes.
-A good balance is needed between rewards and penalties to ensure that a node is
-going to perform enough work for the system before being able to harm it.
-Part of this evaluation will be:
-\begin{enumerate}
-    \item How much reputation points a node stakes when it stores a file?
-    \item How much reputation points a node loses when it fails an audit?
-    \item How much reputation points a node gains when it performs an audit?
-    \item How much reputation points a node loses when it's discovered to not be performing audits?
-    \item What is the starting reputation for new nodes?
-    \item How do nodes increase their reputation at the very beginning?
-    \item Does having high reputation give the node any benefits?
-\end{enumerate}
-
-Nodes with very high reputation could easily become malicious as they can absorb the penalties.
-We need to solve this problem by either having a maximum reputation or by having the penalties be
-percentage-based.
-
-We need to answer the question of how often audits should be performed and how often nodes should
-check the audit results of others.
-The overhead of performing audits should be as low as possible, but the audits should be performed often enough
-to ensure the integrity of the data.
-
-Finding the balance between audits and the overhead of the audits, and the penalties and rewards for the nodes
-is crucial for the success of the system.
-We will evaluate the system by running it with different parameters and observing the behavior of the nodes.
+Of the requirements, Scalability, Performance, Resilience, Reliability, Availability, and Security
+are covered by other works.
+We need to evaluate the Integrity requirement, which will be done by evaluating the verification/auditing mechanism,
+the penalties and rewards for the nodes, and the reputation system.
+Implementing the validation system could make the performance degrade, so we have to evaluate
+if any of the requirements are affected by the validation system, and if so, how much.
 We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.

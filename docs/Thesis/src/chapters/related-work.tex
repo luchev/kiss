@@ -3,104 +3,227 @@
 
 \section{Distributed Storage Systems}
 
+Distributed storage comes in two flavors - centralized and decentralized.
+Centralized systems are mostly proprietary and are either used by companies or are offered as a service.
+Decentralized systems are mostly open-source and are used by academia, individuals, and occasionally companies.
+
 There are many decentralized storage systems that have been developed over the years.
 While there exist decentralized networks, which are focusing on decentralized computing,
 most of the decentralized networks are used for storage or some form of data sharing.
-These are referred to as Distributed Hash Tables (DHT).
+There are different kinds of decentralized storage:
+\begin{enumerate}
+    \item \textbf{Decentralized Hash Tables} - key-value store where the keys are distributed among the nodes.
+    \item \textbf{Blockchain based storage} - data is stored in a blockchain, or cryptocurrency
+        is rewarded to users who share their available storage.
+    \item \textbf{Bulk storage} - data is split into chunks and stored on different nodes.
+        \wtf{I could not find good sources for this, or other types of storage}
+\end{enumerate}
 
+We will mainly focus on decentralized hash tables, as they are the most popular and are used by
+most of the decentralized storage systems.
+Bulk storage and blockchain based storage are niche and are not used for general purpose storage.
 There are many ways to categorize DHTs, and we will cover some of them here.
 
-\subsection{Structured vs Unstructured DHTs}
+\begin{enumerate}
+    \item \textbf{Structured/Unstructured} - Networks can have a predefined topology,
+        or they can be constructed at random.
+        A downside of unstructured networks is often the discovery of resources.
+        Since a resource can be at any node,
+        typically such networks broadcast queries through the whole network.
+        This is both inefficient and can also cause traffic congestion.
+        In modern structured networks the query time is $O(\log n)$,
+        where $n$ is the number of nodes in the network.
+    \item \textbf{Replication} - if and how the data is replicated in the network.
+        Replication usually works by storing the file on the $k$ closest nodes to the key of the file.
+        More rarely replication is only achieved by caching the file at different nodes.
+    \item \textbf{Keyspace} - the size of the keyspace can vary between different networks.
+        Most networks use a keyspace of the form $2^b$, where $b$ is the number of bits.
+        Each node in the network is assigned a peer ID, which is a random number in the keyspace.
+        A good distribution of the peer IDs is important for the performance of the network,
+        therefore the peer IDs are usually generated using a cryptographic hash function such as SHA-256.
+    \item \textbf{Naming Scheme} - how the files are named in the network.
+        When storing files, an ID is generated for the file, which determines its location in the network.
+        Usually the name of the file or the contents of the file are hashed to produce the key.
+        More rarely, the key of the file is chosen by the user.
+        While this allows for human-friendly names,
+        it has a downside that it could be subject to dictionary attacks.
+    \item \textbf{Anonymity} - some networks are designed to provide anonymity to the users.
+        Anonymity means that the identity of the user, the data they are storing or requesting,
+        the queries, and the location of the data are hidden.
+        Networks usually achieve this by using onion routing and cover traffic.
+        Additionally, the network caches the files aggressively,
+        so the original storage node is hard to trace.
+        Anonymity usually means that the network cannot provide any guarantees about
+        the integrity of the data, as it should not be possible to be traced.
+    \item \textbf{Security} - what security guarantees the network provides
+        Security is a major concern in decentralized networks because
+        the network is open to anyone, and there is no central authority to enforce rules,
+        in contrast to centralized storage systems.
+        Peers can join and leave the network at any time, and they can lie about their identity and the data they store.
+        We call such peers malicious.
 
-One major way to categorize DHTs is by their topology.
-If they have a predefined topology, they are called structured DHTs, otherwise they are called unstructured DHTs.
+        When we talk about security we assume that the underlying physical connection provides no security guarantees.
+        Attackers can eavesdrop on the communication between nodes, modify the messages, and even drop them.
+        They can also spoof IP addresses and there is no authentication of data packets in the underlying network.
+        This is a reasonable assumption as most decentralized networks are built on top of the Internet,
+        which is inherently insecure.
 
-Due to the nature of unstructured networks they can become heavily unbalanced
-where some nodes are almost completely isolated.
-However, this rarely occurs as these networks rely on gossip protocols to connect to random peers and exchange
-information with them.
-A huge downside of such networks is often the discovery of resources.
-Since a resource can be at any node, typically such networks broadcast queries through the whole network.
-This is both inefficient and can also cause traffic congestion.
+        Security can be defined as the ability of the network to detect and prevent attacks.
+        S/Kademlia \cite{skademlia} summarizes the main attacks on decentralized networks:
+        \begin{enumerate}
+            \item \textbf{Eclipse attacks} - an attacker isolates a node from the rest of the network.
+            \item \textbf{Sybil attacks} - a single entity pretends to be multiple entities.
+            \item \textbf{Churn attacks} - an attacker joins and leaves the network repeatedly.
+            \item \textbf{Adversarial routing} - an attacker returns adversarial routing information.
+            \item \textbf{Denial-of-service attacks} - an attacker floods the network with requests.
+            \item \textbf{Storage attacks} - an attacker manipulates the data stored on a node.
+        \end{enumerate}
+    \item \textbf{Persistence} - how long the data is stored in the network.
+        One of the possible approaches is to let a file be available as long as there is interest in it,
+        i.e., it is being requested.
+        This can be expanded in a way that rare files or rare pieces are more valuable and
+        networks that employ a bartering system can use this to incentivize peers to store them.
+        Another approach is to republish the file every $X$ amount of time,
+        e.g., every 1 hour, to ensure that the file is still available.
+        Networks that use this mechanism also use it to ensure that the data is stored on
+        the correct nodes, in case a node goes offline, or a new, closer node, joins the network.
+        Additionally, some networks split the files into chunks and replicate them separately.
+        The most reliable networks make use of erasure codes to ensure that the file is still available
+        even if some chunks are lost.
+    \item \textbf{Reputation system} - some networks have a reputation system
+        to incentivize nodes to store data.
+        In networks where the files are split into pieces or blocks,
+        storing rare pieces can increase a peer's reputation.
+        Another approach is to use a ledger to keep track of the reputation (currency) of the peers,
+        or have each node keep track of the reputation of its neighbors.
+    \item \textbf{Scalability} - how well the network scales with the number of nodes.
+        Modern networks scale well with tens of thousands of nodes,
+        the comparison mainly comes down to optimizing the constant factors.
+        Networks often utilize locality or proximity to optimize the routing and speed.
+    \item \textbf{Fault Tolerance} - how well the network handles nodes failing or behaving maliciously.
+        Fault tolerance is not addressed in many networks, as it is assumed that most nodes are honest.
+        Common ways to deal with nodes failing are to use a republishing mechanism
+        to ensure that the data remains available.
+    \item \textbf{Data Integrity} - if and how the network ensures that the data is stored correctly.
+        Networks usually create a cryptographic hash of the file,
+        which is used to verify the integrity upon retrieval.
+        Most networks do not address data integrity before retrieval.
+    \item \textbf{Data Retrieval Efficiency} - how efficient the DHT is in retrieving data.
+\end{enumerate}
 
-Structured networks have predefined topology, that any node joining adheres to.
-Often used topologies are circular, used by Chord \cite{chord} and Pastry \cite{pastry},
-and hypercube, used by Kademlia \cite{kademlia}.
-While there are others, most modern structured networks either build on top of Kademlia or
-use a similar hypercube topology \cite{skademlia}.
-\wtf{skademlia suggests that bittorrent is based on kademlia???}
-These networks are more efficient in terms of resource discovery, as they can use the topology to
-route queries to the correct node.
-The queries usually take $O(\log n)$ hops to reach the correct node, where $n$ is the number of
-nodes in the network.
+We will list some of the most popular decentralized storage systems and discuss how they fit into these categories.
+As most of the existing solutions focus only on a subset of these categories
+or make use of similar techniques,
+we will omit some of them for each system and focus only on the important and unique features
+that each system provides.
 
-While some unstructured networks are in use today, such as BitTorrent, they are used for a very specific purpose.
-When we talk about decentralized storage to rival cloud storage,
-structured networks are predominant due to their efficiency and
-time guarantees for resource discovery and routing.
+\subsection{Chord}
 
-\subsection{Anonymity (Freenet)}
+Chord \cite{chord} is one of the first DHTs.
+It uses a circular topology and was used as the basis for many other DHTs,
+before Kademlia \cite{kademlia} became popular.
+Chord uses a $2^{160}$ keyspace, which is navigated using a modular arithmetic metric.
+Replication is optional and is achieved by storing the file on the $k$ closest nodes to the key of the file.
+The keys are cryptographic hashes of the data.
+Upon joining the network, a node becomes responsible for the keyspace between itself and its predecessor.
+When a node leaves the network, its keyspace is assigned to its successor.
+The performance of Chord is $O(\log n)$ hops to reach the correct node,
+where $n$ is the number of nodes in the network.
+The hops form a path, which essentially models the exponential search algorithm.
 
-Most DHTs are not designed with anonymity in mind.
-Anonymity means that the identity of the user, the data they are storing or requesting,
-the queries, and the location of the data are hidden.
-Freenet \cite{freenet} uses onion routing and cover traffic to hide the identity of the user and the location of the data.
-Another part of the anonymity is achieved by querying the network for cached copies of the file.
-Since Freenet does not assign responsibility for a file to a specific node, it is difficult to trace the file back to the original uploader,
-or to the current holder of the file.
-However, this also means that the network cannot provide any guarantees about the availability of the file.
+\begin{figure}
+    \centering
+    \includegraphics[width=0.8\textwidth]{gfx/chord-performance.png}
+    \caption{Chord performance}
+\end{figure}
 
-\wtf{should I talk about I2P?}
+\subsection{Pastry}
 
-\subsection{Keyspace}
+Pastry \cite{pastry} is a DHT that uses a circular topology.
+It provides only the routing algorithm, and implements no application-level functionality.
+It uses a $2^{128}$ keyspace, and nodes' IDs are either a cryptographic hash
+of their IP address or their public key.
+Pastry uses a more complex routing algorithm than Chord, by making use of a table with
+neighbors that share a common prefix with the node.
+The routing algorithm utilizes prefix routing using the table.
+It also uses locality based on IP routing hops in order to optimize the routing and speed.
+A difference from Chord is how Pastry deals with node failures lazily.
+This means that when a node fails, the network will remove it from the routing tables of other nodes
+only when they try to access it.
+The paper explores a network with 5000 nodes where 10\% (500) of the nodes fail.
+To repair such a failure 200,000 queries were required.
+Pastry does not address replication and recovery of data.
 
-Most DHTs \cite{chord, kademlia, pastry, freenet} use a keyspace that is either $2^{128}$, $2^{160}$, or $2^{256}$.
-The keyspace should be large enough to avoid collisions,
-but not too large to make routing and computations inefficient.
-Each node in the network is assigned a peer ID, which is a random number in the keyspace.
-Files with a key that is close to the peer ID of a node are stored on that node.
-Replication works by storing the file on the $k$ closest nodes to the key of the file.
+\subsection{PAST}
 
-Key generation is done in a way such that the keys are uniformly distributed in the keyspace.
-This is mostly done with cryptographic hash functions, such as SHA-1 or SHA-256.
-Usually the name of the file or the contents of the file are hashed to produce the key.
+PAST \cite{past} is a storage solution implemented on top of Pastry.
+A file is stored under a unique fieldID (key),
+which is generated at the time of insertion into the network.
+PAST does not support deletion, it provides a reclaim operation, which marks a file as
+"can be deleted", but does not force its deletion.
+In terms of security PAST assumes most nodes are honest and does not provide much protection against
+malicious nodes.
+It does address data integrity by using a cryptographic hash of the file,
+which is used to verify the integrity upon retrieval.
+The paper also briefly mentions random audits to see if the data is still available,
+but provides no details on how this would be implemented or what the effectiveness is.
+The integrity checks are done by utilizing a new concept that the paper introduces - smart cards.
+Smart cards have 2 parts - a private key, used to sign data and contracts and a balance section.
+The balance indicates how much data this peer is storing in the network versus how much it is storing locally.
+This balance is used to disallow freeloaders and deal with malicious nodes trying to flood the
+network with fake data.
 
+\subsection{Kademlia}
+
+Kademlia \cite{kademlia} is one of the most popular structured DHTs.
+It uses a hypercube topology and is used as the basis for many other DHTs.
+Kademlia uses a $2^{160}$ keyspace, which is navigated using a XOR metric.
+Replication is optional and is achieved by storing the file on the $k$ closest nodes to the key of the file.
+The keys are usually hashes of the file contents.
+This enables a basic form of data integrity, as the file can be verified by comparing its hash to the key.
+However, this does not allow users to choose the key of the file.
+Kademlia does not provide anonymity to the users, as the network operates based on node IDs,
+which are public and can potentially be traced back to individual users.
+Stored data in the network needs to be republished every 1 hour to ensure that the file is still available.
+The base Kademlia does not employ any security mechanisms, unless accidental such.
+For example, Eclipse attacks and Churn attacks are mitigated by
+the fact that the network favors longer-lived nodes over new ones.
+The network uses the republishing mechanism to ensure that the data remains available when nodes
+leave or join the network.
+The fault tolerance relies on the above mechanism,
+as well as the fact that the network favors longer-lived nodes over new ones.
+Queries in Kademlia take $O(\log n)$ hops to reach the correct node, where $n$ is the number of nodes in the network.
+
+\subsection{S/Kademlia}
+
+S/Kademlia \cite{skademlia} is a secure version of Kademlia.
+It is the security extension of Kademlia and addresses the main attacks on decentralized networks.
+
+To address Sybil attacks S/Kademlia employs a proof-of-work mechanism - a cryptographic puzzle that
+the joining node must solve.
+It also proposes a solution for adversarial routing by sending multiple queries to different parts
+of the network and comparing the results.
+The routing algorithm is also improved to be more resistant to adversarial routing
+by running multiple queries in parallel and comparing the results.
+The paper does not cover data storage attacks.
+DDoS attacks are not covered by the paper.
+These are usually attempted to be solved by rate limiting, throttling, and traffic filtering,
+however there are no guarantees that these will work against a sufficiently large attack.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.8\textwidth]{gfx/skademlia-eval.png}
+    \caption{S/Kademlia node lookup success with $d$ disjoint paths and $k$ neighbor bucket size}
+\end{figure}
+
+\subsection{IPFS (InterPlanetary File System)}
 IPFS is a DHT that provides human-friendly names for files.
-If users want their files to be verifiable, they can use a cryptographic key pair
-and publish files under a personal namespace that is the hash of their public key.
-This allows others to verify the files are published by a particular user.
-The namespace has one downside - it is not human-friendly.
-To solve this IPFS can be integrated with a Name Shortening Service, similar to a DNS.
+If users want their files to be verifiable, they can use a cryptographic protocols.
 Human-friendly names have a downside that they could be subject to a dictionary attack and
 squatting - where a malicious user could register a name similar to a popular one and
 serve malicious content.
-
-\subsection{Persistence}
-
-Kademlia \cite{kademlia} republishes files every 1 hour to ensure that the file is still available.
-This ensures that if a node goes offline, or if a new one joins closer to the key, the file is still available
-and replicated properly.
-
-Freenet \cite{freenet} uses a similar approach, where the file is republished by nodes in order to 
-ensure that the file is still available.
-The difference from Kademlia is that the file is split into smaller chunks, and each chunk is
-republished separately.
-
-IPFS \cite{ipfs} relies on a similar approach to BitTorrent, where the file is available as long as there is 
-interest in it, i.e., it is being requested.
-However, it also employs the BitSwap protocol, which allows peers to barter for the blocks they need,
-hence making rare pieces of data more valuable for barter, and incentivizing peers to store them.
-Thanks to this, caching of the file is achieved at different nodes.
-
-\wtf{should I talk about the parallel queries? technically they are important, but I'm not sure how deep I need to go into the details of the systems}
-
-\wtf{should I talk about other systems such as Past, CAN, OceanStore, Coral, etc?}
-
-\wtf{should I compare the performance of the networks?}
-
-\wtf{should I talk about the block exchange or version control of IPFS?}
-
-\subsection{Reputation systems}
+The system doesn't provide persistence guarantees.
+It relies on popular files being requested often enough, so they can be cached by different nodes.
 
 IPFS \cite{ipfs} uses the BitSwap protocol, which allows peers to exchange partial blocks of data,
 similarly to BitTorrent.
@@ -110,29 +233,22 @@ but leave it as future work.
 The BitSwap protocol borrows a lot from BitTorrent, and acknowledges that there are exploits such as
 BitTyrant \cite{bittorrentexploits} and BitThief \cite{bittorrentexploits}
 that can be used to exploit the protocol.
-The protocol should:
-\begin{enumerate}
-    \item maximize the trade performance of the node and the whole exchange
-    \item prevent freeloaders from exploiting and degrading the exchange
-    \item be effective and resistant to other, unknown strategies
-    \item be lenient to trusted peers
-\end{enumerate}
-These are too complex to be solved in the paper and are left as future work.
+Preventing these exploits however are left as future work.
 
-\subsection{Security}
+\subsection{Freenet}
 
-In order to increase security of Kademlia, the authors of S/Kademlia \cite{skademlia} propose a couple of
-mechanisms.
-Kademlia already handles Eclipse Attacks as it favors longer-lived nodes over new ones.
-Hence, once the network is bootstrapped it would be difficult for an attacker to take over the network.
-This same concept addresses Churn attacks, where an attacker continuously joins and leaves the network.
-To address Sybil attacks S/Kademlia employs a proof-of-work mechanism - a cryptographic puzzle that
-the joining node must solve.
-S/Kademlia proposes a solution for adversarial routing by sending multiple queries to different parts
-of the network and comparing the results.
-DDoS attacks are not covered by the paper.
-These are usually attempted to be solved by rate limiting, throttling, and traffic filtering,
-however there are no guarantees that these will work against a sufficiently large attack.
+
+\subsection{Dat}
+
+\subsection{OceanStore}
+
+\subsection{Ara}
+
+\subsection{Tahoe}
+
+\subsection{Sia}
+
+\subsection{Filecoin}
 
 \section{Proof of Retrievability}
 
