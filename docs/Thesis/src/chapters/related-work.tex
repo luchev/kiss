@@ -218,7 +218,7 @@ however there are no guarantees that these will work against a sufficiently larg
 
 \subsection{IPFS (InterPlanetary File System)}
 IPFS is a DHT that provides human-friendly names for files.
-If users want their files to be verifiable, they can use a cryptographic protocols.
+If users want their files to be verifiable, they can use a cryptographic protocol.
 Human-friendly names have a downside that they could be subject to a dictionary attack and
 squatting - where a malicious user could register a name similar to a popular one and
 serve malicious content.
@@ -237,10 +237,41 @@ Preventing these exploits however are left as future work.
 
 \subsection{Freenet}
 
+Freenet \cite{freenet} is a DHT that focuses heavily on anonymity.
+Another classic example of a network that provides no guarantees about the longevity of the data.
+It uses replication by aggressive caching during retrieval to hide where the data is stored originally.
+It also anonymizes the queries and the responses by using onion routing-style techniques.
+However, this means that the network heavily relies on peers being honest.
+The keyspace is $2^{160}$.
+The node ID is the XOR of the seeds of a number of nodes.
+Which means that the ID will be truly random, however it might allow a form of DoS attack
+where malicious nodes join the network in bulk, flooding it with traffic.
+Files are stored under user-chosen keys, which can be human-friendly.
+These keys are hashed to produce the key of the file.
+This enables dictionary attacks and key-squatting, which is a natural downside of a system
+that focuses on anonymity.
+Interesting new concept is the support of pointers, which allow the user to store a file under a key,
+and then store other keys that simple point to the same file.
 
-\subsection{Dat}
+\begin{figure}
+    \centering
+    \includegraphics[width=0.8\textwidth]{gfx/freenet-algo.png}
+    \caption{Freenet uses a hybrid routing algorithm that is between structured and unstructured,
+        which results in higher number of hops, and hence lower performance}
+\end{figure}
 
 \subsection{OceanStore}
+
+OceanStore \cite{oceanstore} another storage network aiming at scaling to serve trillions of files.
+To achieve this, the paper proposes a two-tiered query algorithm.
+First, a probabilistic fast query is used, based on bloom filters, and if it fails,
+a slower hierarchy based query is issued.
+In terms of security the paper discusses only DDoS attacks.
+It proposes hashing the file ID with multiple salts to generate different keys,
+which are then used to store the file on different nodes.
+This distributes the file across the network differently than sequential replication.
+To ensure data integrity OceanStore splits the files into chunks and stores them on different nodes.
+It also uses erasure codes so that the file can be restored from any $k$ out of $n$ chunks.
 
 \subsection{Ara}
 
