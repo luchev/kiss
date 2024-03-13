@@ -272,14 +272,35 @@ which are then used to store the file on different nodes.
 This distributes the file across the network differently than sequential replication.
 To ensure data integrity OceanStore splits the files into chunks and stores them on different nodes.
 It also uses erasure codes so that the file can be restored from any $k$ out of $n$ chunks.
+Another network that is very similar and dives deeper into erasure codes is Tahoe \cite{tahoe}.
 
 \subsection{Ara}
 
-\subsection{Tahoe}
+Ara is not a storage network, but proposes ways to deal with free-riding in peer-to-peer networks.
+The paper assumes a specific kind of malicious peer, that is selfish, i.e., does not want to contribute their resources to the system.
+The paper proposes a decentralized economy system, similar to performing micro-paymets to a server.
+The introduction of an economy means the possible subset of attacks is mainly related to disrupting said economy.
+To deal with these attacks the paper proposes audits on the transactions and the credits of each peer.
+The audits rely on cryptographic signatures and at least one non-malicious peer that can perform the audit.
+The audit is essentially checking the claim of the malicious peer for how much data they store versus how much has been recorded that they should store in the system's ledger.
+The paper does not cover content cheating (file integrity) as they argue it is not feasible without human intervention.
 
 \subsection{Sia}
+Sia \cite{sia} is a blockchain-based storage network.
+The network stores storage contracts in a blockchain, while the data itself is stored by the peers.
+Sia aknowledges the need for auditing and that it is better for the network itself to audit the files, instead of requiring the clients to do so.
+In terms of replication, the network has no in-built such - it proposes the users to upload the same file multiple times.
+When creating a contract the client specifies how often the audits happen, as well as the price paid out for a successful audit.
+Contracts also have an upper limit of failed audits, after which the contract is terminated.
+Sia utilizes merkle trees to perform the audits, which results are then sent to the blockckain so they can be verified by anyone.
+The paper also proposes clients to use erasure codes, but they do not come built-in.
+To prevent Sybil attacks, the network requires peers to lock in coins when advertising themselves as available to store data.
+This way, it becomes expensive for peers to join en masse and it requires them to make a commitment to the network.
+Balancing rewards and punishments is left to the client to decide, as they get to propse the contract as well as choose which peer to store it at.
+While the paper proposes a lot of innovative ideas, it does not fully explore most of them and it doesn't evaluate them under what paramemters they make sense.
 
 \subsection{Filecoin}
+
 
 \section{Proof of Retrievability}
 
