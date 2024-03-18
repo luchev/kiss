@@ -1,3 +1,5 @@
+\label{chapter:analysis}
+\chapter{Analysis}
 
 % The one exception is storage attacks.
 % No decentralized network has a solution for storage attacks.
@@ -21,3 +23,20 @@
 % However, this is a very inefficient and bandwidth-consuming method.
 % Ideally, we would like to reduce the amount of traffic between nodes and still be able to check
 % if the data is stored correctly.
+
+Notes
+
+Filecoin uses the coin as payments, we want to use the coin as a stake.
+The coin indicates reputation, not wealth.
+We want to trade storage for storage, not storage for money.
+i.e., using coins to trade trust/credibility, not work done.
+Filecoin makes the assumption that PoR protocols do not check the whole file,
+which is not true in the protocols we are looking at.
+Filecoin also mentions two types of new attacks:
+Sybil attack, where the malicious peers create multiple identities but store the same data in 1 place.
+And Outsourcing attacks - malicious peers claim to be able to store more data than they actually can,
+by storing the data elsewhere (e.g., in the network) and rely on quickly fetching it when requested.
+Maybe we can use timeouts for the audits to prevent this - because PoR should be very fast (no network delay).
+Proof of Spacetime can be used as well - require the server to run PoR every X time and then use some form Of
+chained hashes or signatures to collect all the proofs and verify them in a single audit (not sure If
+this works with the current PoR protocols, but it's an idea).

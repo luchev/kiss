@@ -301,6 +301,26 @@ While the paper proposes a lot of innovative ideas, it does not fully explore mo
 
 \subsection{Filecoin}
 
+Filecoin \cite{filecoin} is another blockchain-based storage network,
+which is a direct upgrade of Sia and works on top of IPFS.
+Filecoin is described as a decentralized storage network that turns cloud storage into an algorithmic market.
+It also introduces its own cryptocurrency, which powers the transactions in the market.
+Coins are earned by storage nodes, that store the data, and by retrieval nodes, that serve the data,
+and they are paid by the clients.
+The way tokens are awarded to the nodes is in micropayments done by the client after a successful audit/retreival.
+The paper defines Data Integrity as the ability to prove that retrieved data is untampered with,
+and Retrievability as the ability to prove that the data is still available.
+There is a catch in the definition of Retrievability - it works under the assumption that the peers
+follow the protocol.
+It does not address the case where the peers are malicious and stop serving the data.
+This is the first instance where Proof of Retrievability is mentioned in the context of decentralized storage,
+however the paper does not use the modern PoR protocols, and assumes PoR is probabilistic and proves
+that a server is storing some part of the data, but not necessarily all of it.
+For the audits Filecoin uses a custom protocol named Proof of Replication, which is a variant of PoR.
+In simple words, Proof of Replication works by storing each replica of a file encrypted with a different key,
+which makes each file different, it then issues cryptographic challenges as audits.
+To build on top of it also makes use of Proof of Spacetime, which is a protocol that proves that a node
+has been storing data for a certain amount of time.
 
 \section{Proof of Retrievability}
 
