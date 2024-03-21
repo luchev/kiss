@@ -9,7 +9,7 @@ use tokio::sync::{mpsc, Mutex};
 
 pub mod controller;
 mod memorystore;
-mod peer_id;
+pub mod peer_id;
 mod store;
 pub mod swarm;
 
