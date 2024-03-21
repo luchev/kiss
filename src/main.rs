@@ -12,6 +12,7 @@
 mod deps;
 mod grpc;
 mod ledger;
+mod malice;
 mod p2p;
 mod settings;
 mod storage;
@@ -42,5 +43,12 @@ async fn run() -> Res<()> {
     let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
     let kad: Svc<dyn ISwarm> = injector.get()?;
     let verifier: Svc<dyn IVerifier> = injector.get()?;
-    try_join!(grpc_handler.start(), kad.start(), verifier.start()).map(|_| ())
+    let malice: Svc<Box<dyn malice::IMalice>> = injector.get()?;
+    try_join!(
+        grpc_handler.start(),
+        kad.start(),
+        verifier.start(),
+        malice.start()
+    )
+    .map(|_| ())
 }
