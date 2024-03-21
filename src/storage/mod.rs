@@ -1,4 +1,4 @@
-use crate::util::{types::Bytes, Er, ErrorKind, Res};
+use crate::util::{Er, ErrorKind, Res};
 use async_trait::async_trait;
 use libp2p::kad::Record;
 use std::path::PathBuf;
@@ -32,15 +32,11 @@ impl ServiceFactory<()> for StorageProvider {
         let settings = injector.get::<Svc<dyn ISettings>>()?.storage();
 
         match settings {
-            StorageSettings::Local {
-                path,
-                create: _create,
-            } => Ok(LocalStorage::new(path.as_str()).map_err(|err| {
-                InjectError::ActivationFailed {
+            StorageSettings::Local { path, create } => Ok(LocalStorage::new(path, create)
+                .map_err(|err| InjectError::ActivationFailed {
                     service_info: ServiceInfo::of::<LocalStorage>(),
                     inner: Box::<Er>::new(err),
-                }
-            })?),
+                })?),
             StorageSettings::Docker => todo!(),
         }
     }
@@ -48,7 +44,7 @@ impl ServiceFactory<()> for StorageProvider {
 
 fn key_to_path(key: &Key) -> Res<PathBuf> {
     Ok(PathBuf::from(
-        str::from_utf8(&key.to_vec()).map_err(|e| ErrorKind::Utf8Error)?,
+        str::from_utf8(&key.to_vec()).map_err(|_e| ErrorKind::Utf8Error)?,
     ))
 }
 

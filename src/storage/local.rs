@@ -17,6 +17,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use std::path;
 use std::{fmt, str::FromStr, time::Instant};
 use std::{path::PathBuf, time::Duration};
 
@@ -197,7 +198,12 @@ impl IStorage for LocalStorage {
 }
 
 impl LocalStorage {
-    pub fn new(prefix: &str) -> Res<Self> {
+    pub fn new<S: AsRef<str>>(prefix: S, create: bool) -> Res<Self> {
+        let prefix = prefix.as_ref();
+        if create && !path::Path::new(prefix).exists() {
+            std::fs::create_dir_all(prefix).map_err(ErrorKind::FilesystemErr)?;
+        }
+
         let object_store =
             local::LocalFileSystem::new_with_prefix(prefix).map_err(ErrorKind::LocalStorageFail)?;
         Ok(LocalStorage {
