@@ -1,4 +1,5 @@
 use crate::ledger::{ImmuLedger, LedgerProvider};
+use crate::malice::{IMalice, MaliceProvider};
 use crate::util::Res;
 use crate::verifier::{IVerifier, VerifierProvider};
 use crate::{
@@ -14,6 +15,11 @@ pub fn dependency_injector() -> Res<Injector> {
     let mut injector = Injector::builder();
     injector.add_module(p2p::module());
     injector.provide(StorageProvider.singleton().with_interface::<dyn IStorage>());
+    injector.provide(
+        MaliceProvider
+            .singleton()
+            .with_interface::<Box<dyn IMalice>>(),
+    );
     injector.provide(
         SettingsProvider
             .singleton()
