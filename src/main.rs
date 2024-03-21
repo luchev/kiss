@@ -7,6 +7,7 @@
 #![deny(clippy::panic)]
 #![recursion_limit = "256"]
 #![feature(test)]
+// #![feature(trivial_bounds)]
 // #![deny(clippy::todo)]
 
 mod deps;

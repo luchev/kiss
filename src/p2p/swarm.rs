@@ -1,7 +1,9 @@
+use crate::p2p::peer_id::keypair_with_leading_zeros;
 use crate::p2p::store::LocalStoreConfig;
 // use crate::p2p::memorystore::{MemoryStore, MemoryStoreConfig};
 use crate::settings::ISettings;
 use crate::storage::IStorage;
+use crate::util::consts;
 use crate::util::{
     types::{Bytes, OneReceiver, OneSender, SwarmInstruction},
     Er, ErrorKind, Res,
@@ -9,6 +11,8 @@ use crate::util::{
 use async_trait::async_trait;
 use base64::Engine as _;
 use futures::StreamExt;
+use libp2p::request_response::ProtocolSupport;
+use libp2p::StreamProtocol;
 use libp2p::{
     core::upgrade::Version,
     kad::{
@@ -16,22 +20,22 @@ use libp2p::{
         PeerRecord, PutRecordResult, QueryId, QueryResult, Quorum, Record,
     },
     mdns::{self, tokio::Behaviour},
-    noise,
+    noise, request_response,
     swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::tokio::Transport,
     yamux, PeerId, Transport as _,
 };
 use libp2p_identity::Keypair;
-use libp2p_kad::store::{MemoryStore, MemoryStoreConfig};
 use libp2p_kad::{
     AddProviderOk, AddProviderResult, GetClosestPeersOk, GetClosestPeersResult, GetProvidersOk,
-    GetProvidersResult, Mode, RoutingUpdate,
+    GetProvidersResult, Mode,
 };
 use log::{debug, info, warn};
 use runtime_injector::{
     interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
     ServiceInfo, Svc,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -78,7 +82,7 @@ impl ServiceFactory<()> for SwarmProvider {
                 service_info: ServiceInfo::of::<Swarm>(),
                 inner: Box::<Er>::new(ErrorKind::KeypairBase64DecodingError(e).into()),
             })?,
-            None => generate_keypair(),
+            None => keypair_with_leading_zeros(consts::DEFAULT_LEADING_ZEROS),
         };
 
         let local_peer_id = PeerId::from(local_key.public());
@@ -117,7 +121,18 @@ impl ServiceFactory<()> for SwarmProvider {
 
             let mut kademlia = Kademlia::with_config(local_peer_id, store, cfg);
             kademlia.set_mode(Some(Mode::Server));
-            let behaviour = CombinedBehaviour { kademlia, mdns };
+            let req_res = request_response::cbor::Behaviour::new(
+                [(
+                    StreamProtocol::new("/verification/1.0.0"),
+                    ProtocolSupport::Full,
+                )],
+                request_response::Config::default(),
+            );
+            let behaviour = CombinedBehaviour {
+                kademlia,
+                mdns,
+                req_res,
+            };
             let transport = Transport::default()
                 .upgrade(Version::V1)
                 .authenticate(noise::Config::new(&local_key).map_err(|e| {
@@ -146,7 +161,7 @@ impl ServiceFactory<()> for SwarmProvider {
             })?;
 
         Ok(Swarm {
-            local_peer_id: local_peer_id,
+            local_peer_id,
             inner: Mutex::new(swarm),
             swarm_controller_api: receiver,
             queries: Mutex::new(HashMap::new()),
@@ -540,7 +555,14 @@ pub struct CombinedBehaviour {
     // kademlia: Kademlia<MemoryStore>,
     kademlia: Kademlia<LocalStore>,
     mdns: Behaviour,
+    req_res: request_response::cbor::Behaviour<VerificationRequest, VerificationResponse>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerificationRequest {}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VerificationResponse {}
 
 impl From<KademliaEvent> for WireEvent {
     fn from(event: KademliaEvent) -> Self {
@@ -554,12 +576,15 @@ impl From<mdns::Event> for WireEvent {
     }
 }
 
+impl From<request_response::Event<VerificationRequest, VerificationResponse>> for WireEvent {
+    fn from(event: request_response::Event<VerificationRequest, VerificationResponse>) -> Self {
+        WireEvent::ReqRes(event)
+    }
+}
+
 #[derive(Debug)]
 pub enum WireEvent {
     Kademlia(KademliaEvent),
     Mdns(mdns::Event),
-}
-
-fn generate_keypair() -> Keypair {
-    Keypair::generate_ed25519()
+    ReqRes(request_response::Event<VerificationRequest, VerificationResponse>),
 }

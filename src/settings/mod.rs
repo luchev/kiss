@@ -189,7 +189,7 @@ impl ServiceFactory<()> for SettingsProvider {
         let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
         if !std::path::Path::new(&format!("{}/{}.yaml", CONFIG_DIR, env_conf)).exists() {
-            // write settings new to the file
+            log::info!("creating new config file for env: {}", env_conf);
             let settings = Settings::new(&env_conf);
             let serialized = serde_yaml::to_string(&settings).unwrap_or_default();
             std::fs::write(format!("{}/{}.yaml", CONFIG_DIR, env_conf), serialized)

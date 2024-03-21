@@ -3,12 +3,10 @@ mod deleterandom;
 mod none;
 use crate::settings::{ISettings, MaliciousBehavior};
 use crate::storage::IStorage;
-use crate::util::{types::Bytes, Er, ErrorKind, Res};
+use crate::util::Res;
 use async_trait::async_trait;
-
 use runtime_injector::{
-    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
-    ServiceInfo, Svc,
+    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 
 use self::deleteall::MaliceDeleteAll;
