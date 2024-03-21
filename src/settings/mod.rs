@@ -1,18 +1,23 @@
-use std::{
-    env,
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-};
-
-use crate::util::{
-    consts::{self, CONFIG_DIR},
-    Er, ErrorKind,
+use crate::{
+    p2p::peer_id::{keypair_to_base64_proto, keypair_with_leading_zeros},
+    util::{
+        consts::{self, CONFIG_DIR},
+        Er, ErrorKind,
+    },
 };
 use config::{Config, Environment, File};
+use rand::distributions::Alphanumeric;
+use rand::thread_rng;
+use rand::Rng;
 use runtime_injector::{
     interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
     ServiceInfo,
 };
 use serde::{Deserialize, Serialize};
+use std::{
+    env,
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -45,6 +50,7 @@ impl Storage {
 pub struct Swarm {
     #[serde(default)]
     pub keypair: Option<String>,
+    pub leading_zeros: usize,
     pub port: u16,
     pub bootstrap: Vec<SocketAddr>,
 }
@@ -103,7 +109,7 @@ pub struct Settings {
     pub grpc: Grpc,
     pub swarm: Swarm,
     pub ledger: Ledger,
-    pub malicious_behavior: MaliciousBehavior,
+    pub malicious_behavior: Option<MaliciousBehavior>,
 }
 
 impl ISettings for Settings {
@@ -124,7 +130,50 @@ impl ISettings for Settings {
     }
 
     fn malicious_behavior(&self) -> MaliciousBehavior {
-        self.malicious_behavior.clone()
+        self.malicious_behavior.clone().unwrap_or_default()
+    }
+}
+
+fn random_string(len: usize) -> String {
+    String::from_utf8(
+        thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(len)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_default()
+}
+
+fn random_port() -> u16 {
+    rand::thread_rng().gen_range(5000..10000)
+}
+
+impl Settings {
+    pub fn new(config_name: &str) -> Self {
+        Self {
+            storage: Storage::Local {
+                path: format!("{}/{}", consts::DATA_DIR, config_name),
+                create: true,
+            },
+            grpc: Grpc {
+                port: random_port(),
+            },
+            swarm: Swarm {
+                keypair: keypair_to_base64_proto(keypair_with_leading_zeros(
+                    consts::DEFAULT_LEADING_ZEROS,
+                ))
+                .into(),
+                leading_zeros: consts::DEFAULT_LEADING_ZEROS,
+                port: random_port(),
+                bootstrap: vec![],
+            },
+            ledger: Ledger::Immudb {
+                username: "immudb".to_string(),
+                password: "immudb".to_string(),
+                address: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 3322)),
+            },
+            malicious_behavior: MaliciousBehavior::None.into(),
+        }
     }
 }
 
@@ -139,8 +188,20 @@ impl ServiceFactory<()> for SettingsProvider {
     ) -> InjectResult<Self::Result> {
         let env_conf = env::var("ENV").unwrap_or_else(|_| "dev".into());
 
-        Config::builder()
-            .add_source(File::with_name(consts::BASE_CONFIG))
+        if !std::path::Path::new(&format!("{}/{}.yaml", CONFIG_DIR, env_conf)).exists() {
+            // write settings new to the file
+            let settings = Settings::new(&env_conf);
+            let serialized = serde_yaml::to_string(&settings).unwrap_or_default();
+            std::fs::write(format!("{}/{}.yaml", CONFIG_DIR, env_conf), serialized)
+                .unwrap_or_default();
+        }
+
+        let mut builder = Config::builder();
+        if std::path::Path::new(consts::BASE_CONFIG).exists() {
+            builder = builder.add_source(File::with_name(consts::BASE_CONFIG));
+        }
+
+        builder
             .add_source(File::with_name(&format!("{}/{}", CONFIG_DIR, env_conf)).required(false))
             .add_source(
                 Environment::with_prefix("KISS")

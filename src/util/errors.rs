@@ -40,6 +40,7 @@ error_chain! {
         UnknownError { display("unknown error") }
         DockerConnectionFailed(e: String) { display("could not connect to docker unix socket: {}", e) }
         LocalStorageFail(e: object_store::Error) { display("local storage failure: {}", e) }
+        FilesystemErr(e: io::Error) { display("directory creation failed: {}", e) }
         ConfigErr(e: ConfigError) { display("loading config failed: {}", e) }
         SettingsDependencyFail { display("") }
         SettingsParseError(e: String) { display("") }
@@ -194,7 +195,10 @@ impl From<oneshot::Receiver<result::Result<HashSet<PeerId>, Error>>> for Error {
 
 impl From<runtime_injector::InjectError> for Error {
     fn from(e: runtime_injector::InjectError) -> Self {
-        ErrorKind::InjectorError(e.to_string()).into()
+        match e.source() {
+            Some(msg) => ErrorKind::InjectorError(format!("{}", msg)).into(),
+            None => ErrorKind::InjectorError("unknown error".to_string()).into(),
+        }
     }
 }
 
