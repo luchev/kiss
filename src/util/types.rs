@@ -11,7 +11,7 @@ pub type OneSender<T> = oneshot::Sender<T>;
 pub type OneReceiver<T> = oneshot::Receiver<T>;
 
 #[derive(Debug)]
-pub enum SwarmInstruction {
+pub enum CommandToSwarm {
     Get {
         key: String,
         resp: Responder<OneReceiver<Res<QueryGetResponse>>>,
@@ -38,6 +38,21 @@ pub enum SwarmInstruction {
     GetClosestPeers {
         key: Uuid,
         resp: Responder<OneReceiver<Res<Vec<PeerId>>>>,
+    },
+    RequestVerification {
+        peer: PeerId,
+        file_uuid: String,
+        secret_vector: Vec<u8>,
+        resp: Responder<OneReceiver<Res<String>>>,
+    },
+}
+
+pub enum CommandToController {
+    RequestVerification {
+        peer: PeerId,
+        file_uuid: String,
+        secret_vector: Vec<u8>,
+        resp: Responder<OneReceiver<Res<String>>>,
     },
 }
 

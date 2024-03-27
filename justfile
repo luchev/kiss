@@ -22,6 +22,15 @@ get uuid:
     '[::1]:2000' \
     kiss_grpc.KissService/Retrieve
 
+verify-at peer_id file_uuid:
+    grpcurl \
+    -plaintext \
+    -import-path proto \
+    -proto kiss.proto \
+    -d "{\"peer_id\": \"{{peer_id}}\", \"file_uuid\": \"{{file_uuid}}\"}" \
+    "[::1]:2000" \
+    kiss_grpc.KissService/VerifyFileAtPeer
+
 providers uuid:
     grpcurl \
     -plaintext \

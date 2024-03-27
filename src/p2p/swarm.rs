@@ -4,14 +4,17 @@ use crate::p2p::store::LocalStoreConfig;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use crate::util::consts;
+use crate::util::types::CommandToController;
 use crate::util::{
-    types::{Bytes, OneReceiver, OneSender, SwarmInstruction},
+    types::{Bytes, CommandToSwarm, OneReceiver, OneSender},
     Er, ErrorKind, Res,
 };
 use async_trait::async_trait;
 use base64::Engine as _;
 use futures::StreamExt;
-use libp2p::request_response::ProtocolSupport;
+use libp2p::request_response::{
+    InboundFailure, OutboundFailure, ProtocolSupport, RequestId, ResponseChannel,
+};
 use libp2p::StreamProtocol;
 use libp2p::{
     core::upgrade::Version,
@@ -41,9 +44,13 @@ use std::{
     fmt::Debug,
     time::Duration,
 };
+use tokio::sync::mpsc;
 use tokio::{
     select,
-    sync::{mpsc::Receiver, oneshot, Mutex, MutexGuard},
+    sync::{
+        mpsc::{Receiver, Sender},
+        oneshot, Mutex, MutexGuard,
+    },
 };
 use uuid::Uuid;
 
@@ -66,7 +73,7 @@ impl ServiceFactory<()> for SwarmProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let settings: Svc<dyn ISettings> = injector.get()?;
-        let receiver: Svc<Mutex<Receiver<SwarmInstruction>>> = injector.get()?;
+        let commands_from_controller: Svc<Mutex<Receiver<CommandToSwarm>>> = injector.get()?;
         let storage: Svc<dyn IStorage> = injector.get()?;
 
         let local_key = match settings.swarm().keypair {
@@ -163,8 +170,9 @@ impl ServiceFactory<()> for SwarmProvider {
         Ok(Swarm {
             local_peer_id,
             inner: Mutex::new(swarm),
-            swarm_controller_api: receiver,
+            commands_from_controller,
             queries: Mutex::new(HashMap::new()),
+            requests: Mutex::new(HashMap::new()),
         })
     }
 }
@@ -177,8 +185,9 @@ pub trait ISwarm: Service {
 pub struct Swarm {
     local_peer_id: PeerId,
     inner: Mutex<libp2p::Swarm<CombinedBehaviour>>,
-    swarm_controller_api: Svc<Mutex<Receiver<SwarmInstruction>>>,
+    commands_from_controller: Svc<Mutex<Receiver<CommandToSwarm>>>,
     queries: Mutex<HashMap<QueryId, QueryResponse>>,
+    requests: Mutex<HashMap<RequestId, QueryResponse>>,
 }
 
 #[derive(Debug)]
@@ -207,13 +216,16 @@ enum QueryResponse {
     GetClosestPeers {
         sender: OneSender<Res<Vec<PeerId>>>,
     },
+    VerificationRequest {
+        sender: OneSender<Res<String>>,
+    },
 }
 
 #[async_trait]
 impl ISwarm for Swarm {
     async fn start(&self) -> Res<()> {
         let mut swarm = self.inner.lock().await;
-        let mut receiver = self.swarm_controller_api.lock().await;
+        let mut receiver = self.commands_from_controller.lock().await;
         loop {
             select! {
                 instruction = receiver.recv() => {
@@ -270,8 +282,109 @@ impl Swarm {
                 }
                 _ => warn!("unhandled kademlia event: {:?}", event),
             },
+            SwarmEvent::Behaviour(WireEvent::ReqRes(event)) => match event {
+                request_response::Event::Message { peer, message } => match message {
+                    request_response::Message::Request {
+                        request_id,
+                        request,
+                        channel,
+                    } => {
+                        self.handle_reqres_message_request(swarm, request, channel, request_id)
+                            .await?
+                    }
+                    request_response::Message::Response {
+                        request_id,
+                        response,
+                    } => {
+                        self.handle_reqres_message_response(response, request_id)
+                            .await?
+                    }
+                },
+                request_response::Event::ResponseSent { peer, request_id } => {
+                    self.handle_response_sent(peer, request_id).await?
+                }
+                request_response::Event::InboundFailure {
+                    peer,
+                    request_id,
+                    error,
+                } => self.handle_inbound_failure(peer, request_id, error).await?,
+                request_response::Event::OutboundFailure {
+                    peer,
+                    request_id,
+                    error,
+                } => {
+                    self.handle_outbound_failure(peer, request_id, error)
+                        .await?
+                }
+            },
             _ => {}
         }
+        Ok(())
+    }
+
+    async fn handle_reqres_message_request(
+        &self,
+        swarm: &mut MutexGuard<'_, libp2p::Swarm<CombinedBehaviour>>,
+        request: VerificationRequest,
+        channel: ResponseChannel<VerificationResponse>,
+        request_id: RequestId,
+    ) -> Res<()> {
+        swarm
+            .behaviour_mut()
+            .req_res
+            .send_response(
+                channel,
+                VerificationResponse {
+                    file_name: request.file_name,
+                    response_vector: vec![],
+                },
+            )
+            .map_err(|e| ErrorKind::SwarmReqResSendResponseError(e).into())
+    }
+
+    async fn handle_reqres_message_response(
+        &self,
+        response: VerificationResponse,
+        request_id: RequestId,
+    ) -> Res<()> {
+        let response_channel = match self.requests.lock().await.remove(&request_id) {
+            Some(QueryResponse::VerificationRequest { sender }) => sender,
+            _ => Err(ErrorKind::InvalidResponseChannelForRequest(request_id))?,
+        };
+        response_channel.send(Ok("success".to_string()))?;
+        Ok(())
+    }
+
+    async fn handle_response_sent(&self, _peer: PeerId, request_id: RequestId) -> Res<()> {
+        debug!("response sent for request_id: {:?}", request_id);
+        Ok(())
+    }
+
+    async fn handle_inbound_failure(
+        &self,
+        _peer: PeerId,
+        request_id: RequestId,
+        error: InboundFailure,
+    ) -> Res<()> {
+        let response_channel = match self.requests.lock().await.remove(&request_id) {
+            Some(QueryResponse::VerificationRequest { sender }) => sender,
+            _ => Err(ErrorKind::InvalidResponseChannelForRequest(request_id))?,
+        };
+        response_channel.send(Err(ErrorKind::RequestInboundFailure(error).into()))?;
+        Ok(())
+    }
+
+    async fn handle_outbound_failure(
+        &self,
+        _peer: PeerId,
+        request_id: RequestId,
+        error: OutboundFailure,
+    ) -> Res<()> {
+        let response_channel = match self.requests.lock().await.remove(&request_id) {
+            Some(QueryResponse::VerificationRequest { sender }) => sender,
+            _ => Err(ErrorKind::InvalidResponseChannelForRequest(request_id))?,
+        };
+        response_channel.send(Err(ErrorKind::RequestOutboundFailure(error).into()))?;
         Ok(())
     }
 
@@ -373,16 +486,16 @@ impl Swarm {
 
     async fn handle_controller_event<'a>(
         &self,
-        instruction: Option<SwarmInstruction>,
+        instruction: Option<CommandToSwarm>,
         swarm: &mut MutexGuard<'a, libp2p::Swarm<CombinedBehaviour>>,
     ) -> Res<()> {
         let instruction = instruction.ok_or(ErrorKind::MissingInstruction)?;
         info!("instruction {:?}", instruction);
         match instruction {
-            SwarmInstruction::PutLocal { key, value, resp } => {
+            CommandToSwarm::PutLocal { key, value, resp } => {
                 self.handle_controller_put(swarm, key, value, resp).await
             }
-            SwarmInstruction::PutRemote {
+            CommandToSwarm::PutRemote {
                 key,
                 value,
                 remotes,
@@ -391,21 +504,60 @@ impl Swarm {
                 self.handle_controller_put_record_to(swarm, key, value, remotes, resp)
                     .await
             }
-            SwarmInstruction::Get { key, resp } => {
-                self.handle_controller_get(swarm, key, resp).await
-            }
-            SwarmInstruction::GetProviders { key, resp } => {
+            CommandToSwarm::Get { key, resp } => self.handle_controller_get(swarm, key, resp).await,
+            CommandToSwarm::GetProviders { key, resp } => {
                 self.handle_controller_get_providers(swarm, key, resp).await
             }
-            SwarmInstruction::GetClosestPeers { key, resp } => {
+            CommandToSwarm::GetClosestPeers { key, resp } => {
                 self.handle_controller_get_closest_peers(swarm, key, resp)
                     .await
             }
-            SwarmInstruction::StartProviding { key, resp } => {
+            CommandToSwarm::StartProviding { key, resp } => {
                 self.handle_controller_start_providing(swarm, key, resp)
                     .await
             }
+            CommandToSwarm::RequestVerification {
+                peer,
+                file_uuid,
+                secret_vector,
+                resp,
+            } => {
+                self.handle_controller_request_verification(
+                    swarm,
+                    peer,
+                    file_uuid,
+                    secret_vector,
+                    resp,
+                )
+                .await
+            }
         }
+    }
+
+    async fn handle_controller_request_verification(
+        &self,
+        swarm: &mut MutexGuard<'_, libp2p::Swarm<CombinedBehaviour>>,
+        peer: PeerId,
+        file_name: String,
+        secret_vector: Vec<u8>,
+        resp: OneSender<OneReceiver<Res<String>>>,
+    ) -> Res<()> {
+        let (sender, receiver) = oneshot::channel::<Res<String>>();
+        resp.send(receiver)?;
+
+        let request_id = swarm.behaviour_mut().req_res.send_request(
+            &peer,
+            VerificationRequest {
+                file_name,
+                secret_vector,
+            },
+        );
+
+        self.requests
+            .lock()
+            .await
+            .insert(request_id, QueryResponse::VerificationRequest { sender });
+        Ok(())
     }
 
     async fn handle_controller_start_providing<'t>(
@@ -559,10 +711,16 @@ pub struct CombinedBehaviour {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct VerificationRequest {}
+pub struct VerificationRequest {
+    pub file_name: String,
+    pub secret_vector: Vec<u8>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct VerificationResponse {}
+pub struct VerificationResponse {
+    pub file_name: String,
+    pub response_vector: Vec<u8>,
+}
 
 impl From<KademliaEvent> for WireEvent {
     fn from(event: KademliaEvent) -> Self {

@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::p2p::swarm::QueryGetResponse;
-use crate::util::types::{Bytes, OneReceiver};
-use crate::util::{types::SwarmInstruction, Res};
+use crate::util::types::{Bytes, CommandToController, OneReceiver};
+use crate::util::{types::CommandToSwarm, Res};
 use async_trait::async_trait;
 use libp2p_identity::PeerId;
 use log::info;
@@ -28,8 +28,9 @@ impl ServiceFactory<()> for SwarmControllerProvider {
         injector: &Injector,
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
-        let sender: Svc<Mutex<mpsc::Sender<SwarmInstruction>>> = injector.get()?;
-        Ok(SwarmController { swarm_api: sender })
+        let commands_to_swarm: Svc<Mutex<mpsc::Sender<CommandToSwarm>>> = injector.get()?;
+        injector.get()?;
+        Ok(SwarmController { commands_to_swarm })
     }
 }
 
@@ -41,10 +42,16 @@ pub trait ISwarmController: Service {
     async fn get_providers(&self, key: String) -> Res<HashSet<PeerId>>;
     async fn get_closest_peers(&self, key: Uuid) -> Res<Vec<PeerId>>;
     async fn start_providing(&self, key: String) -> Res<()>;
+    async fn request_verification(
+        &self,
+        peer: PeerId,
+        file_uuid: String,
+        secret_vector: Vec<u8>,
+    ) -> Res<String>;
 }
 
 pub struct SwarmController {
-    swarm_api: Svc<Mutex<mpsc::Sender<SwarmInstruction>>>,
+    commands_to_swarm: Svc<Mutex<mpsc::Sender<CommandToSwarm>>>,
 }
 
 #[async_trait]
@@ -52,10 +59,10 @@ impl ISwarmController for SwarmController {
     async fn put(&self, key: String, value: Bytes) -> Res<()> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
 
-        self.swarm_api
+        self.commands_to_swarm
             .lock()
             .await
-            .send(SwarmInstruction::PutLocal {
+            .send(CommandToSwarm::PutLocal {
                 key,
                 value,
                 resp: sender,
@@ -71,10 +78,10 @@ impl ISwarmController for SwarmController {
     async fn put_to(&self, key: String, value: Bytes, peer_ids: Vec<PeerId>) -> Res<()> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
 
-        self.swarm_api
+        self.commands_to_swarm
             .lock()
             .await
-            .send(SwarmInstruction::PutRemote {
+            .send(CommandToSwarm::PutRemote {
                 key,
                 value,
                 resp: sender,
@@ -91,10 +98,10 @@ impl ISwarmController for SwarmController {
     async fn start_providing(&self, key: String) -> Res<()> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<()>>>();
 
-        self.swarm_api
+        self.commands_to_swarm
             .lock()
             .await
-            .send(SwarmInstruction::StartProviding { key, resp: sender })
+            .send(CommandToSwarm::StartProviding { key, resp: sender })
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
@@ -104,10 +111,10 @@ impl ISwarmController for SwarmController {
 
     async fn get(&self, key: String) -> Res<QueryGetResponse> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<QueryGetResponse>>>();
-        self.swarm_api
+        self.commands_to_swarm
             .lock()
             .await
-            .send(SwarmInstruction::Get { key, resp: sender })
+            .send(CommandToSwarm::Get { key, resp: sender })
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
@@ -117,10 +124,10 @@ impl ISwarmController for SwarmController {
 
     async fn get_providers(&self, key: String) -> Res<HashSet<PeerId>> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<HashSet<PeerId>>>>();
-        self.swarm_api
+        self.commands_to_swarm
             .lock()
             .await
-            .send(SwarmInstruction::GetProviders { key, resp: sender })
+            .send(CommandToSwarm::GetProviders { key, resp: sender })
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
@@ -130,14 +137,37 @@ impl ISwarmController for SwarmController {
 
     async fn get_closest_peers(&self, key: Uuid) -> Res<Vec<PeerId>> {
         let (sender, receiver) = oneshot::channel::<OneReceiver<Res<Vec<PeerId>>>>();
-        self.swarm_api
+        self.commands_to_swarm
             .lock()
             .await
-            .send(SwarmInstruction::GetClosestPeers { key, resp: sender })
+            .send(CommandToSwarm::GetClosestPeers { key, resp: sender })
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
         info!("get closest peers result: {:?}", result);
+        result
+    }
+
+    async fn request_verification(
+        &self,
+        peer: PeerId,
+        file_uuid: String,
+        secret_vector: Vec<u8>,
+    ) -> Res<String> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<String>>>();
+        self.commands_to_swarm
+            .lock()
+            .await
+            .send(CommandToSwarm::RequestVerification {
+                peer,
+                file_uuid,
+                secret_vector,
+                resp: sender,
+            })
+            .await?;
+        let receiving_channel = receiver.await?;
+        let result = receiving_channel.await?;
+        info!("request verification result: {:?}", result);
         result
     }
 }

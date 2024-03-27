@@ -1,14 +1,14 @@
-use crate::p2p::swarm::QueryGetResponse;
+use crate::p2p::swarm::{QueryGetResponse, VerificationResponse};
 use crate::util::grpc::immudb_grpc::SqlValue;
 use config::ConfigError;
 use error_chain::{error_chain, ExitCode};
+use libp2p::request_response::{InboundFailure, OutboundFailure, RequestId};
 use libp2p_identity::{DecodingError, ParseError, PeerId};
 use libp2p_kad::{
     store, AddProviderError, GetClosestPeersError, GetProvidersError, GetRecordError,
     PutRecordError, QueryId,
 };
 use log::error;
-use serde_yaml;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::result;
@@ -22,7 +22,7 @@ use tokio::task::JoinError;
 use tonic::metadata::errors::InvalidMetadataValue;
 use tonic::Status;
 
-use crate::util::types::{Bytes, SwarmInstruction};
+use crate::util::types::{Bytes, CommandToSwarm};
 
 trait ErrorHelper {
     fn help(&self) -> String;
@@ -64,6 +64,8 @@ error_chain! {
         SwarmGetRecordUnknownError(e: String) { display("getting record from swarm failed: {}", e) }
         GrpcError(e: Status) { display("grpc error: {}", e) }
         PathParsingError(e: PathBuf) { display("unable to parse path: {}", e.display()) }
+        RequestOutboundFailure(e: OutboundFailure) { display("outbound failure: {}", e) }
+        RequestInboundFailure(e: InboundFailure) { display("inbound failure: {}", e) }
         BehaviourInitFailed(e: std::io::Error) { display("p2p behaviour init failed: {}", e) }
         NoiseInitFailed(e: libp2p::noise::Error) { display("p2p noise init failed: {}", e) }
         IpParseFailed(e: libp2p::multiaddr::Error) { display("p2p ip address failed: {}", e) }
@@ -71,12 +73,13 @@ error_chain! {
         IoError(e: io::Error) { display("io error: {}", e) }
         StdError(e: String) { display("io error: {}", e) }
         TonicTransportError(e: tonic::transport::Error) { display("tonic transport error: {}", e) }
-        SwarmOperationFailed(e: SendError<SwarmInstruction>) { display("swarm operation failed: {}", e) }
+        SwarmOperationFailed(e: SendError<CommandToSwarm>) { display("swarm operation failed: {}", e) }
         SendReceiverFailed { display("sending receiver failed") }
         ChannelReceiveError(e: RecvError) { display("channel receive failed: {}", e) }
         KademliaStoreError(e: store::Error) { display("kademlia store error: {}", e) }
         InjectorError(e: String) { display("injector error: {}", e) }
         InvalidResponseChannel(e: QueryId) { display("invalid response channel for query id {:?}", e) }
+        InvalidResponseChannelForRequest(e: RequestId) { display("invalid response channel for request id {:?}", e) }
         MissingInstruction { display("no instruction provided") }
         SendingResultFailed { display("sending result over channel failed") }
         MutexIsEmpty { display("mutex not initialized correctly and is empty when unwrapping") }
@@ -95,9 +98,10 @@ error_chain! {
         NoProvidersFound { display("no providers found") }
         InvalidRecordName { display("invalid record name") }
         AsyncExecutionFailed { display("async execution failed") }
-        InvalidSwarmInstruction(e: SwarmInstruction) { display("invalid swarm instruction: {:?}", e) }
+        InvalidSwarmInstruction(e: CommandToSwarm) { display("invalid swarm instruction: {:?}", e) }
         InvalidNonZeroUsize { display("invalid non-zero usize ") }
         InvalidPeerId(e: ParseError) { display("invalid peer id: {}", e) }
+        SwarmReqResSendResponseError(e: VerificationResponse) { display("swarm request response send response error: {:?}", e) }
     }
 }
 
@@ -145,8 +149,8 @@ impl From<tonic::transport::Error> for Error {
     }
 }
 
-impl From<SendError<SwarmInstruction>> for Error {
-    fn from(e: SendError<SwarmInstruction>) -> Self {
+impl From<SendError<CommandToSwarm>> for Error {
+    fn from(e: SendError<CommandToSwarm>) -> Self {
         ErrorKind::SwarmOperationFailed(e).into()
     }
 }
@@ -166,6 +170,12 @@ impl From<result::Result<(), Error>> for Error {
 impl From<RecvError> for Error {
     fn from(e: RecvError) -> Self {
         ErrorKind::ChannelReceiveError(e).into()
+    }
+}
+
+impl From<oneshot::Receiver<std::result::Result<String, Error>>> for Error {
+    fn from(_: oneshot::Receiver<std::result::Result<String, Error>>) -> Self {
+        ErrorKind::SendReceiverFailed.into()
     }
 }
 
@@ -250,14 +260,20 @@ impl From<oneshot::Receiver<std::result::Result<Vec<PeerId>, Error>>> for Error 
     }
 }
 
+impl From<oneshot::Receiver<result::Result<QueryGetResponse, Error>>> for Error {
+    fn from(_: oneshot::Receiver<result::Result<QueryGetResponse, Error>>) -> Self {
+        ErrorKind::SendReceiverFailed.into()
+    }
+}
+
 impl From<result::Result<QueryGetResponse, Error>> for Error {
     fn from(_: result::Result<QueryGetResponse, Error>) -> Self {
         ErrorKind::SendingResultFailed.into()
     }
 }
 
-impl From<oneshot::Receiver<result::Result<QueryGetResponse, Error>>> for Error {
-    fn from(_: oneshot::Receiver<result::Result<QueryGetResponse, Error>>) -> Self {
-        ErrorKind::SendReceiverFailed.into()
+impl From<result::Result<String, Error>> for Error {
+    fn from(_: result::Result<String, Error>) -> Self {
+        ErrorKind::SendingResultFailed.into()
     }
 }

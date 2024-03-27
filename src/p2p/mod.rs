@@ -1,8 +1,11 @@
-use crate::p2p::{
-    controller::{ISwarmController, SwarmControllerProvider},
-    swarm::{ISwarm, SwarmProvider},
+use crate::util::types::CommandToSwarm;
+use crate::{
+    p2p::{
+        controller::{ISwarmController, SwarmControllerProvider},
+        swarm::{ISwarm, SwarmProvider},
+    },
+    util::types::CommandToController,
 };
-use crate::util::types::SwarmInstruction;
 use runtime_injector::{constant, define_module, IntoSingleton};
 
 use tokio::sync::{mpsc, Mutex};
@@ -14,13 +17,13 @@ mod store;
 pub mod swarm;
 
 pub fn module() -> runtime_injector::Module {
-    let (sender, receiver) = mpsc::channel::<SwarmInstruction>(5);
+    let (sender_from_controller, receiver_in_swarm) = mpsc::channel::<CommandToSwarm>(5);
     define_module! {
         services = [
             SwarmControllerProvider.singleton(),
             SwarmProvider.singleton(),
-            constant(Mutex::new(sender)),
-            constant(Mutex::new(receiver)),
+            constant(Mutex::new(sender_from_controller)),
+            constant(Mutex::new(receiver_in_swarm)),
         ],
         interfaces = {
             dyn ISwarmController = [ SwarmControllerProvider.singleton() ],

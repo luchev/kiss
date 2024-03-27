@@ -99,6 +99,40 @@ impl IGrpcHandler for GrpcHandler {
 
 #[async_trait]
 impl KissService for Inner {
+    async fn verify_file_at_peer(
+        &self,
+        request: Request<VerifyFileAtPeerRequest>,
+    ) -> Result<Response<VerifyFileAtPeerResponse>, Status> {
+        let request = request.into_inner();
+        info!(
+            "received a verify file at peer request for {} from {}",
+            request.file_uuid, request.peer_id
+        );
+        let res = self
+            .swarm_controller
+            .request_verification(
+                PeerId::from_str(request.peer_id.as_str())
+                    .map_err(|e| Status::invalid_argument(e.to_string()))?,
+                request.file_uuid.clone(),
+                Vec::new(),
+            )
+            .await;
+
+        match res {
+            Err(e) => {
+                info!("failed to verify file at peer {}", request.peer_id);
+                Err(Status::internal(e.to_string()))
+            }
+            Ok(_) => {
+                info!("verified file at peer {}", request.peer_id);
+                Ok(Response::new(VerifyFileAtPeerResponse {
+                    file_uuid: request.file_uuid,
+                    peer_id: request.peer_id,
+                    verified: true,
+                }))
+            }
+        }
+    }
     // async fn put(
     //     &self,
     //     request: Request<PutRequest>,
