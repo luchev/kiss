@@ -10,6 +10,7 @@ use crate::util::grpc::kiss_grpc::{
 };
 use crate::util::hasher::{self, hash};
 use crate::util::{ErrorKind, Res};
+use crate::verifier::por::{VerificationClient, VerificationClientConfig};
 use async_trait::async_trait;
 use libp2p_identity::PeerId;
 use log::{debug, info};
@@ -104,34 +105,72 @@ impl KissService for Inner {
         request: Request<VerifyFileAtPeerRequest>,
     ) -> Result<Response<VerifyFileAtPeerResponse>, Status> {
         let request = request.into_inner();
-        info!(
-            "received a verify file at peer request for {} from {}",
-            request.file_uuid, request.peer_id
-        );
-        let res = self
-            .swarm_controller
-            .request_verification(
-                PeerId::from_str(request.peer_id.as_str())
-                    .map_err(|e| Status::invalid_argument(e.to_string()))?,
-                request.file_uuid.clone(),
-                Vec::new(),
-            )
-            .await;
 
-        match res {
-            Err(e) => {
-                info!("failed to verify file at peer {}", request.peer_id);
-                Err(Status::internal(e.to_string()))
-            }
-            Ok(_) => {
-                info!("verified file at peer {}", request.peer_id);
-                Ok(Response::new(VerifyFileAtPeerResponse {
-                    file_uuid: request.file_uuid,
-                    peer_id: request.peer_id,
-                    verified: true,
-                }))
+        let contracts = self
+            .ledger
+            .lock()
+            .await
+            .get_contracts(request.file_uuid.clone())
+            .await
+            .map_err(|e| Status::unknown(e.to_string()))?;
+
+        let mut result = vec![];
+        for contract in contracts.iter() {
+            let verification_client =
+                VerificationClient::new(VerificationClientConfig::from_contract(
+                    contract.secret_n.clone(),
+                    contract.secret_m.clone(),
+                    contract.rows,
+                    contract.cols,
+                ));
+            let challenge = verification_client.make_challenge_vector();
+            let response = self
+                .swarm_controller
+                .request_verification(
+                    contract.peer_id,
+                    request.file_uuid.clone(),
+                    challenge.clone(),
+                )
+                .await;
+            match response {
+                Ok(response) => result.push(VerificationForPeer {
+                    peer_id: contract.peer_id.to_string(),
+                    verified: verification_client.audit(challenge, response),
+                }),
+                Err(_) => result.push(VerificationForPeer {
+                    peer_id: contract.peer_id.to_string(),
+                    verified: false,
+                }),
             }
         }
+
+        // let res = self
+        //     .swarm_controller
+        //     .request_verification(
+        //         PeerId::from_str(request.peer_id.as_str())
+        //             .map_err(|e| Status::invalid_argument(e.to_string()))?,
+        //         request.file_uuid.clone(),
+        //         Vec::new(),
+        //     )
+        //     .await;
+
+        // match res {
+        //     Err(e) => {
+        //         info!("failed to verify file at peer {}", request.peer_id);
+        //         Err(Status::internal(e.to_string()))
+        //     }
+        //     Ok(verified) => {
+        //         info!("verified file at peer {}", request.peer_id);
+        //         Ok(Response::new(VerifyFileAtPeerResponse {
+        //             file_uuid: request.file_uuid,
+        //             peer_id: request.peer_id,
+        //             verified,
+        //         }))
+        //     }
+        // }
+        Ok(Response::new(VerifyFileAtPeerResponse {
+            verifications: result,
+        }))
     }
     // async fn put(
     //     &self,
@@ -199,8 +238,19 @@ impl KissService for Inner {
             .ok_or_else(|| Status::internal("no closest peer found".to_string()))?;
 
         let mut ledger = self.ledger.lock().await;
+        let client_config = VerificationClientConfig::from_file(&request.content);
+        let (secret_n, secret_m, rows, cols) = client_config.to_contract();
         ledger
-            .create_contract(closest_peer, file_uuid, file_hash, request.ttl)
+            .create_contract(
+                closest_peer,
+                file_uuid,
+                file_hash,
+                request.ttl,
+                secret_n,
+                secret_m,
+                rows,
+                cols,
+            )
             .await
             .map_err(|e| Status::unknown(e.to_string()))?;
 
@@ -215,10 +265,10 @@ impl KissService for Inner {
             )
             .await;
 
-        let res = self
-            .swarm_controller
-            .put(file_uuid.clone().to_string(), request.content)
-            .await;
+        // let res = self
+        //     .swarm_controller
+        //     .put(file_uuid.clone().to_string(), request.content)
+        //     .await;
 
         debug!("put finished: {:?}", res);
 
@@ -352,9 +402,20 @@ impl KissService for Inner {
         }
         let mut ledger = self.ledger.lock().await;
         let file_uuid = Uuid::new_v4();
+        let client_config = VerificationClientConfig::from_file(&request.content);
+        let (secret_n, secret_m, rows, cols) = client_config.to_contract();
         for peer in peers.iter() {
             ledger
-                .create_contract(peer.clone(), file_uuid, file_hash.clone(), request.ttl)
+                .create_contract(
+                    peer.clone(),
+                    file_uuid,
+                    file_hash.clone(),
+                    request.ttl,
+                    secret_n.clone(),
+                    secret_m.clone(),
+                    rows,
+                    cols,
+                )
                 .await
                 .map_err(|e| Status::unknown(e.to_string()))?;
         }

@@ -1,11 +1,8 @@
-use crate::util::types::CommandToSwarm;
-use crate::{
-    p2p::{
-        controller::{ISwarmController, SwarmControllerProvider},
-        swarm::{ISwarm, SwarmProvider},
-    },
-    util::types::CommandToController,
+use crate::p2p::{
+    controller::{ISwarmController, SwarmControllerProvider},
+    swarm::{ISwarm, SwarmProvider},
 };
+use crate::util::types::CommandToSwarm;
 use runtime_injector::{constant, define_module, IntoSingleton};
 
 use tokio::sync::{mpsc, Mutex};

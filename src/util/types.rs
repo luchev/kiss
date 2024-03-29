@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use crate::{p2p::swarm::QueryGetResponse, Res};
+use crate::{
+    p2p::swarm::{QueryGetResponse, VerificationResponse},
+    Res,
+};
 use libp2p_identity::PeerId;
 use tokio::sync::oneshot;
 use uuid::Uuid;
@@ -42,17 +45,8 @@ pub enum CommandToSwarm {
     RequestVerification {
         peer: PeerId,
         file_uuid: String,
-        secret_vector: Vec<u8>,
-        resp: Responder<OneReceiver<Res<String>>>,
-    },
-}
-
-pub enum CommandToController {
-    RequestVerification {
-        peer: PeerId,
-        file_uuid: String,
-        secret_vector: Vec<u8>,
-        resp: Responder<OneReceiver<Res<String>>>,
+        challenge_vector: Vec<u64>,
+        resp: Responder<OneReceiver<Res<VerificationResponse>>>,
     },
 }
 
@@ -64,4 +58,8 @@ pub struct Contract {
     pub file_hash: String,
     pub upload_date: i64,
     pub ttl: i64,
+    pub secret_n: Vec<u8>,
+    pub secret_m: Vec<u8>,
+    pub rows: i64,
+    pub cols: i64,
 }

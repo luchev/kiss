@@ -2,7 +2,6 @@ pub mod por;
 
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
-use crate::p2p::swarm;
 use crate::util::hasher::hash;
 use crate::util::Res;
 use async_trait::async_trait;
@@ -57,11 +56,13 @@ impl IVerifier for Verifier {
         let num_peers = 3_u128;
         let mut starting_uuid = 0_u128;
         let mut ending_uuid = starting_uuid + u128::MAX / num_peers;
+        // TODO enable verifier
+        // return Ok(());
         loop {
             // info!("fetching contracts");
             let contracts = {
                 let mut ledger = self.ledger.lock().await;
-                ledger.get_contracts().await?
+                ledger.get_all_contracts().await?
             };
             let time_before_start = Instant::now();
             for contract in contracts {

@@ -1,5 +1,7 @@
 #![allow(clippy::all)]
 
+use crate::util::types::Bytes;
+
 const P_BITS: u64 = 57;
 const MIN_LOOP: usize = 8;
 const P57: u64 = 144115188075855859;
@@ -7,104 +9,141 @@ const TINYMT_MASK: u64 = 0x7fffffffffffffff;
 const BYTES_UNDER_P: usize = 7;
 const CHUNK_ALIGN: usize = 56;
 
-fn main() {
-    let (client_config, server_config) = init("abcdefghijklmnopqrstuvwxyz".as_bytes().to_vec());
-    let client = Client::new(client_config);
-    let server = Server::new(server_config);
-    println!("{}", audit(&client, &server));
-}
-
-pub struct ClientConfig {
+#[derive(Debug)]
+pub struct VerificationClientConfig {
     rows: usize,
     cols: usize,
     secret_m_vector: Vec<u64>,
     secret_n_vector: Vec<u64>,
 }
 
-pub struct ServerConfig {
+impl VerificationClientConfig {
+    pub fn from_contract(secret_n: Bytes, secret_m: Bytes, rows: i64, cols: i64) -> Self {
+        Self {
+            rows: rows as usize,
+            cols: cols as usize,
+            secret_m_vector: bytes_to_u64(secret_m),
+            secret_n_vector: bytes_to_u64(secret_n),
+        }
+    }
+
+    pub fn to_contract(&self) -> (Bytes, Bytes, i64, i64) {
+        (
+            u64_to_bytes(self.secret_n_vector.clone()),
+            u64_to_bytes(self.secret_m_vector.clone()),
+            self.rows as i64,
+            self.cols as i64,
+        )
+    }
+
+    pub fn from_file(file: &Vec<u8>) -> Self {
+        let num_chunks = 1 + (file.len() - 1) / BYTES_UNDER_P;
+        let rows = (((num_chunks as f64).sqrt() / CHUNK_ALIGN as f64).ceil() * CHUNK_ALIGN as f64)
+            as usize;
+        let cols = 1 + (num_chunks - 1) / rows;
+
+        let vector_u = Random::rand_vector(cols, 2020);
+
+        let mut partials1 = vec![0_u128; rows];
+        let bytes_per_row = BYTES_UNDER_P * rows;
+        let chunk_mask = (1_u64 << (8 * BYTES_UNDER_P)) - 1;
+        let file_extended: Vec<u8> = file
+            .clone()
+            .into_iter()
+            .chain(vec![0; bytes_per_row])
+            .collect();
+        // file_extended.append(vec![0; bytes_per_row].as_mut());
+
+        for i in 0..cols {
+            let mut raw_ind = 0;
+            let raw_row = file_extended[(bytes_per_row * i)..bytes_per_row * (i + 1)].to_vec();
+            let raw_row = raw_row
+                .chunks_exact(8)
+                .map(|x| u64::from_le_bytes(x.try_into().unwrap_or_default()))
+                .collect::<Vec<u64>>();
+            for full_ind in (0..rows).step_by(8) {
+                let mut data_val = (raw_row[raw_ind] & chunk_mask) as u128;
+                partials1[full_ind] += data_val * vector_u[i] as u128;
+
+                for k in 1..7 {
+                    let data_val = ((raw_row[raw_ind + k - 1] >> (64 - k * 8))
+                        | ((raw_row[raw_ind + k] << (k * 8)) & chunk_mask))
+                        as u128;
+                    partials1[full_ind + k] += data_val * vector_u[i] as u128;
+                }
+
+                data_val = (raw_row[raw_ind + 6] >> 8) as u128;
+                partials1[full_ind + 7] += data_val * vector_u[i] as u128;
+
+                raw_ind += 7;
+            }
+        }
+        for k in 0..rows {
+            partials1[k] %= P57 as u128;
+        }
+
+        Self {
+            rows,
+            cols,
+            secret_m_vector: vector_u,
+            secret_n_vector: partials1.iter().map(|x| *x as u64).collect::<Vec<u64>>(),
+        }
+    }
+}
+
+fn bytes_to_u64(bytes: Bytes) -> Vec<u64> {
+    bytes
+        .chunks_exact(8)
+        .map(|x| u64::from_le_bytes(x.try_into().unwrap()))
+        .collect::<Vec<u64>>()
+}
+
+fn u64_to_bytes(u64s: Vec<u64>) -> Bytes {
+    u64s.iter()
+        .flat_map(|x| x.to_le_bytes().to_vec())
+        .collect::<Bytes>()
+}
+
+#[derive(Debug)]
+pub struct VerificationServerConfig {
     rows: usize,
     cols: usize,
     file: Vec<u8>,
 }
 
-pub fn init(file: Vec<u8>) -> (ClientConfig, ServerConfig) {
-    let num_chunks = 1 + (file.len() - 1) / BYTES_UNDER_P;
-    let n =
-        (((num_chunks as f64).sqrt() / CHUNK_ALIGN as f64).ceil() * CHUNK_ALIGN as f64) as usize;
-    let m = 1 + (num_chunks - 1) / n;
-
-    let vector_u = Random::rand_vector(m, 2020);
-
-    let mut partials1 = vec![0_u128; n];
-    let bytes_per_row = BYTES_UNDER_P * n;
-    let chunk_mask = (1_u64 << (8 * BYTES_UNDER_P)) - 1;
-    let file_extended: Vec<u8> = file
-        .clone()
-        .into_iter()
-        .chain(vec![0; bytes_per_row])
-        .collect();
-    // file_extended.append(vec![0; bytes_per_row].as_mut());
-
-    for i in 0..m {
-        let mut raw_ind = 0;
-        let raw_row = file_extended[(bytes_per_row * i)..bytes_per_row * (i + 1)].to_vec();
-        let raw_row = raw_row
-            .chunks_exact(8)
-            .map(|x| u64::from_le_bytes(x.try_into().unwrap_or_default()))
-            .collect::<Vec<u64>>();
-        for full_ind in (0..n).step_by(8) {
-            let mut data_val = (raw_row[raw_ind] & chunk_mask) as u128;
-            partials1[full_ind] += data_val * vector_u[i] as u128;
-
-            for k in 1..7 {
-                let data_val = ((raw_row[raw_ind + k - 1] >> (64 - k * 8))
-                    | ((raw_row[raw_ind + k] << (k * 8)) & chunk_mask))
-                    as u128;
-                partials1[full_ind + k] += data_val * vector_u[i] as u128;
-            }
-
-            data_val = (raw_row[raw_ind + 6] >> 8) as u128;
-            partials1[full_ind + 7] += data_val * vector_u[i] as u128;
-
-            raw_ind += 7;
-        }
+impl VerificationServerConfig {
+    pub fn from_file(file: Vec<u8>) -> Self {
+        let num_chunks = 1 + (file.len() - 1) / BYTES_UNDER_P;
+        let rows = (((num_chunks as f64).sqrt() / CHUNK_ALIGN as f64).ceil() * CHUNK_ALIGN as f64)
+            as usize;
+        let cols = 1 + (num_chunks - 1) / rows;
+        Self { rows, cols, file }
     }
-    for k in 0..n {
-        partials1[k] %= P57 as u128;
-    }
-
-    let client_config = ClientConfig {
-        rows: n,
-        cols: m,
-        secret_m_vector: vector_u,
-        secret_n_vector: partials1.iter().map(|x| *x as u64).collect::<Vec<u64>>(),
-    };
-
-    let server_config = ServerConfig {
-        rows: n,
-        cols: m,
-        file,
-    };
-
-    (client_config, server_config)
 }
 
-pub struct Client {
-    config: ClientConfig,
+#[derive(Debug)]
+pub struct VerificationClient {
+    config: VerificationClientConfig,
 }
 
-impl Client {
-    fn new(config: ClientConfig) -> Self {
+impl VerificationClient {
+    pub fn new(config: VerificationClientConfig) -> Self {
         Self { config }
     }
 
-    fn make_challenge_vector(&self, n: usize) -> Vec<u64> {
-        Random::rand_vector(n, 20)
+    pub fn make_challenge_vector(&self) -> Vec<u64> {
+        Random::rand_vector(self.config.rows, 20)
     }
 
-    fn audit(&self, challenge: Vec<u64>, response: Vec<u64>) -> bool {
+    pub fn audit(&self, challenge: Vec<u64>, response: Vec<u64>) -> bool {
         let mut rxr1: u128 = 0;
         let mut sxc1: u128 = 0;
+        if response.len() != self.config.cols {
+            return false;
+        }
+        if challenge.len() != self.config.rows {
+            return false;
+        }
 
         for i in 0..self.config.cols {
             rxr1 += response[i] as u128 * self.config.secret_m_vector[i] as u128;
@@ -124,16 +163,17 @@ impl Client {
     }
 }
 
-pub struct Server {
-    config: ServerConfig,
+#[derive(Debug)]
+pub struct VerificationServer {
+    config: VerificationServerConfig,
 }
 
-impl Server {
-    fn new(config: ServerConfig) -> Self {
+impl VerificationServer {
+    pub fn new(config: VerificationServerConfig) -> Self {
         Self { config }
     }
 
-    fn retrieve(&self, challenge: Vec<u64>) -> Vec<u64> {
+    pub fn fulfill_challenge(&self, challenge: Vec<u64>) -> Vec<u64> {
         let mut dot_prods1 = vec![0_u128; self.config.cols];
         let bytes_per_row = BYTES_UNDER_P * self.config.rows;
         let chunk_mask = (1_u64 << (8 * BYTES_UNDER_P)) - 1;
@@ -175,12 +215,6 @@ impl Server {
 
         return dot_prods1.iter().map(|x| *x as u64).collect::<Vec<u64>>();
     }
-}
-
-pub fn audit(client: &Client, server: &Server) -> bool {
-    let challenge = client.make_challenge_vector(server.config.rows);
-    let response = server.retrieve(challenge.clone());
-    client.audit(challenge, response)
 }
 
 struct Random {
@@ -273,6 +307,70 @@ mod tests {
     extern crate test;
     use test::{black_box, Bencher};
 
+    fn audit(client: &VerificationClient, server: &VerificationServer) -> bool {
+        let challenge = client.make_challenge_vector();
+        let response = server.fulfill_challenge(challenge.clone());
+        client.audit(challenge, response)
+    }
+
+    fn init(file: Vec<u8>) -> (VerificationClientConfig, VerificationServerConfig) {
+        let num_chunks = 1 + (file.len() - 1) / BYTES_UNDER_P;
+        let rows = (((num_chunks as f64).sqrt() / CHUNK_ALIGN as f64).ceil() * CHUNK_ALIGN as f64)
+            as usize;
+        let cols = 1 + (num_chunks - 1) / rows;
+
+        let vector_u = Random::rand_vector(cols, 2020);
+
+        let mut partials1 = vec![0_u128; rows];
+        let bytes_per_row = BYTES_UNDER_P * rows;
+        let chunk_mask = (1_u64 << (8 * BYTES_UNDER_P)) - 1;
+        let file_extended: Vec<u8> = file
+            .clone()
+            .into_iter()
+            .chain(vec![0; bytes_per_row])
+            .collect();
+        // file_extended.append(vec![0; bytes_per_row].as_mut());
+
+        for i in 0..cols {
+            let mut raw_ind = 0;
+            let raw_row = file_extended[(bytes_per_row * i)..bytes_per_row * (i + 1)].to_vec();
+            let raw_row = raw_row
+                .chunks_exact(8)
+                .map(|x| u64::from_le_bytes(x.try_into().unwrap_or_default()))
+                .collect::<Vec<u64>>();
+            for full_ind in (0..rows).step_by(8) {
+                let mut data_val = (raw_row[raw_ind] & chunk_mask) as u128;
+                partials1[full_ind] += data_val * vector_u[i] as u128;
+
+                for k in 1..7 {
+                    let data_val = ((raw_row[raw_ind + k - 1] >> (64 - k * 8))
+                        | ((raw_row[raw_ind + k] << (k * 8)) & chunk_mask))
+                        as u128;
+                    partials1[full_ind + k] += data_val * vector_u[i] as u128;
+                }
+
+                data_val = (raw_row[raw_ind + 6] >> 8) as u128;
+                partials1[full_ind + 7] += data_val * vector_u[i] as u128;
+
+                raw_ind += 7;
+            }
+        }
+        for k in 0..rows {
+            partials1[k] %= P57 as u128;
+        }
+
+        let client_config = VerificationClientConfig {
+            rows,
+            cols,
+            secret_m_vector: vector_u,
+            secret_n_vector: partials1.iter().map(|x| *x as u64).collect::<Vec<u64>>(),
+        };
+
+        let server_config = VerificationServerConfig { rows, cols, file };
+
+        (client_config, server_config)
+    }
+
     #[test]
     fn test_init() {
         let (client_config, server_config) = init("abcdefghijklmnopqrstuvwxyz".as_bytes().to_vec());
@@ -302,9 +400,31 @@ mod tests {
     #[test]
     fn test_audit() {
         let (client_config, server_config) = init("abcdefghijklmnopqrstuvwxyz".as_bytes().to_vec());
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
         assert!(audit(&client, &server));
+    }
+
+    #[test]
+    fn test_audit_separate() {
+        let file = "abcdefghijklmnopqrstuvwxyz".as_bytes().to_vec();
+        let client_config = VerificationClientConfig::from_file(&file);
+        let server_config = VerificationServerConfig::from_file(file);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        assert!(audit(&client, &server));
+    }
+
+    #[test]
+    fn test_audit_abc_for_debugging() {
+        let file = "abc".as_bytes().to_vec();
+        let client_config = VerificationClientConfig::from_file(&file);
+        let server_config = VerificationServerConfig::from_file(file);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        let response = server.fulfill_challenge(challenge.clone());
+        client.audit(challenge, response);
     }
 
     #[test]
@@ -315,8 +435,8 @@ mod tests {
                 .to_vec()
                 .repeat(400000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
         assert!(audit(&client, &server));
     }
 
@@ -328,8 +448,8 @@ mod tests {
                 .to_vec()
                 .repeat(4000000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
         assert!(audit(&client, &server));
     }
 
@@ -400,8 +520,8 @@ mod tests {
                 .to_vec()
                 .repeat(40000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
         b.iter(|| {
             black_box(audit(&client, &server));
         });
@@ -415,8 +535,8 @@ mod tests {
                 .to_vec()
                 .repeat(400000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
         b.iter(|| {
             black_box(audit(&client, &server));
         });
@@ -430,8 +550,8 @@ mod tests {
                 .to_vec()
                 .repeat(4000000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
         b.iter(|| {
             black_box(audit(&client, &server));
         });
@@ -445,10 +565,10 @@ mod tests {
                 .to_vec()
                 .repeat(40000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
-        let challenge = client.make_challenge_vector(server.config.rows);
-        let response = server.retrieve(challenge.clone());
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        let response = server.fulfill_challenge(challenge.clone());
         b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
     }
 
@@ -460,10 +580,10 @@ mod tests {
                 .to_vec()
                 .repeat(400000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
-        let challenge = client.make_challenge_vector(server.config.rows);
-        let response = server.retrieve(challenge.clone());
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        let response = server.fulfill_challenge(challenge.clone());
         b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
     }
 
@@ -475,10 +595,10 @@ mod tests {
                 .to_vec()
                 .repeat(4000000),
         );
-        let client = Client::new(client_config);
-        let server = Server::new(server_config);
-        let challenge = client.make_challenge_vector(server.config.rows);
-        let response = server.retrieve(challenge.clone());
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        let response = server.fulfill_challenge(challenge.clone());
         b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
     }
 }

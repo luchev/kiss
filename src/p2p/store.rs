@@ -18,17 +18,17 @@ use crate::storage::IStorage;
 /// Local implementation of a `RecordStore`.
 pub struct LocalStore {
     /// The identity of the peer owning the store.
-    local_key: KBucketKey<PeerId>,
+    _local_key: KBucketKey<PeerId>,
     /// The configuration of the store.
     config: LocalStoreConfig,
     /// The stored (regular) records.
     storage: Svc<dyn IStorage>,
     /// The stored provider records.
-    providers: HashMap<Key, SmallVec<[ProviderRecord; K_VALUE.get()]>>,
+    _providers: HashMap<Key, SmallVec<[ProviderRecord; K_VALUE.get()]>>,
     /// The set of all provider records for the node identified by `local_key`.
     ///
     /// Must be kept in sync with `providers`.
-    provided: HashSet<ProviderRecord>,
+    _provided: HashSet<ProviderRecord>,
 }
 
 /// Configuration for a `LocalStore`.
@@ -66,11 +66,11 @@ impl LocalStore {
         storage: Svc<dyn IStorage>,
     ) -> Self {
         LocalStore {
-            local_key: KBucketKey::from(local_id),
+            _local_key: KBucketKey::from(local_id),
             config,
             storage,
-            provided: HashSet::default(),
-            providers: HashMap::default(),
+            _provided: HashSet::default(),
+            _providers: HashMap::default(),
         }
     }
 }

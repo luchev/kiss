@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::p2p::swarm::QueryGetResponse;
-use crate::util::types::{Bytes, CommandToController, OneReceiver};
+use crate::p2p::swarm::{QueryGetResponse, VerificationResponse};
+use crate::util::types::{Bytes, OneReceiver};
 use crate::util::{types::CommandToSwarm, Res};
 use async_trait::async_trait;
 use libp2p_identity::PeerId;
@@ -46,8 +46,8 @@ pub trait ISwarmController: Service {
         &self,
         peer: PeerId,
         file_uuid: String,
-        secret_vector: Vec<u8>,
-    ) -> Res<String>;
+        secret_vector: Vec<u64>,
+    ) -> Res<Vec<u64>>;
 }
 
 pub struct SwarmController {
@@ -152,22 +152,22 @@ impl ISwarmController for SwarmController {
         &self,
         peer: PeerId,
         file_uuid: String,
-        secret_vector: Vec<u8>,
-    ) -> Res<String> {
-        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<String>>>();
+        challenge_vector: Vec<u64>,
+    ) -> Res<Vec<u64>> {
+        let (sender, receiver) = oneshot::channel::<OneReceiver<Res<VerificationResponse>>>();
         self.commands_to_swarm
             .lock()
             .await
             .send(CommandToSwarm::RequestVerification {
                 peer,
                 file_uuid,
-                secret_vector,
+                challenge_vector,
                 resp: sender,
             })
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
         info!("request verification result: {:?}", result);
-        result
+        Ok(result?.response_vector)
     }
 }

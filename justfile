@@ -9,7 +9,7 @@ put data:
     -plaintext \
     -import-path proto \
     -proto kiss.proto \
-    -d "{\"name\": \"key1\", \"content\": \"`echo {{data}} | base64`\", \"ttl\": \"1200\"}" \
+    -d "{\"name\": \"key1\", \"content\": \"`echo {{data}} | perl -pe 'chomp if eof' | base64`\", \"ttl\": \"1200\"}" \
     "[::1]:2000" \
     kiss_grpc.KissService/Store
 
@@ -22,12 +22,12 @@ get uuid:
     '[::1]:2000' \
     kiss_grpc.KissService/Retrieve
 
-verify-at peer_id file_uuid:
+verify file_uuid:
     grpcurl \
     -plaintext \
     -import-path proto \
     -proto kiss.proto \
-    -d "{\"peer_id\": \"{{peer_id}}\", \"file_uuid\": \"{{file_uuid}}\"}" \
+    -d "{\"file_uuid\": \"{{file_uuid}}\"}" \
     "[::1]:2000" \
     kiss_grpc.KissService/VerifyFileAtPeer
 
@@ -105,3 +105,11 @@ run-random-keeper:
 
 thesis:
     cd docs/Thesis/ && tectonic -X build
+
+create-db:
+    docker run -d --name immudb -p 3322:3322 codenotary/immudb:latest
+
+remove-db:
+    docker rm -f immudb
+
+recreate-db: remove-db create-db

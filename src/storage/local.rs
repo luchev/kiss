@@ -182,7 +182,7 @@ impl IStorage for LocalStorage {
         Ok(deserialized_record)
     }
 
-    async fn remove(&self, path: PathBuf) -> Res<()> {
+    async fn remove(&self, _path: PathBuf) -> Res<()> {
         Ok(())
         // let path = path
         //     .to_str()

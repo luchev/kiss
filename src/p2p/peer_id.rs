@@ -4,7 +4,7 @@ use log::debug;
 
 use crate::util::Res;
 
-pub fn generate_keypair() -> Keypair {
+pub fn _generate_keypair() -> Keypair {
     Keypair::generate_ed25519()
 }
 
@@ -13,7 +13,7 @@ pub fn keypair_to_base64_proto(keypair: Keypair) -> String {
         .encode(keypair.to_protobuf_encoding().unwrap_or_default())
 }
 
-pub fn keypair_from_base64_proto(encoded: String) -> Res<Keypair> {
+pub fn _keypair_from_base64_proto(encoded: String) -> Res<Keypair> {
     let decoded = base64::engine::general_purpose::STANDARD_NO_PAD
         .decode(encoded.as_bytes())
         .unwrap_or_default();
@@ -38,7 +38,6 @@ pub fn keypair_with_leading_zeros(leading_zeros: usize) -> Keypair {
 mod tests {
     use super::*;
     use crate::util::hasher::hash;
-    use rand::Rng;
     extern crate test;
     use test::{black_box, Bencher};
 

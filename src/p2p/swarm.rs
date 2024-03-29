@@ -4,11 +4,11 @@ use crate::p2p::store::LocalStoreConfig;
 use crate::settings::ISettings;
 use crate::storage::IStorage;
 use crate::util::consts;
-use crate::util::types::CommandToController;
 use crate::util::{
     types::{Bytes, CommandToSwarm, OneReceiver, OneSender},
     Er, ErrorKind, Res,
 };
+use crate::verifier::por::{VerificationServer, VerificationServerConfig};
 use async_trait::async_trait;
 use base64::Engine as _;
 use futures::StreamExt;
@@ -44,13 +44,9 @@ use std::{
     fmt::Debug,
     time::Duration,
 };
-use tokio::sync::mpsc;
 use tokio::{
     select,
-    sync::{
-        mpsc::{Receiver, Sender},
-        oneshot, Mutex, MutexGuard,
-    },
+    sync::{mpsc::Receiver, oneshot, Mutex, MutexGuard},
 };
 use uuid::Uuid;
 
@@ -117,7 +113,7 @@ impl ServiceFactory<()> for SwarmProvider {
                     max_provided_keys: 150000,
                     max_providers_per_key: 20,
                 },
-                storage,
+                storage.clone(),
             );
             let mdns = Behaviour::new(mdns::Config::default(), local_peer_id).map_err(|e| {
                 InjectError::ActivationFailed {
@@ -169,6 +165,7 @@ impl ServiceFactory<()> for SwarmProvider {
 
         Ok(Swarm {
             local_peer_id,
+            storage,
             inner: Mutex::new(swarm),
             commands_from_controller,
             queries: Mutex::new(HashMap::new()),
@@ -184,6 +181,7 @@ pub trait ISwarm: Service {
 
 pub struct Swarm {
     local_peer_id: PeerId,
+    storage: Svc<dyn IStorage>,
     inner: Mutex<libp2p::Swarm<CombinedBehaviour>>,
     commands_from_controller: Svc<Mutex<Receiver<CommandToSwarm>>>,
     queries: Mutex<HashMap<QueryId, QueryResponse>>,
@@ -217,7 +215,7 @@ enum QueryResponse {
         sender: OneSender<Res<Vec<PeerId>>>,
     },
     VerificationRequest {
-        sender: OneSender<Res<String>>,
+        sender: OneSender<Res<VerificationResponse>>,
     },
 }
 
@@ -283,13 +281,13 @@ impl Swarm {
                 _ => warn!("unhandled kademlia event: {:?}", event),
             },
             SwarmEvent::Behaviour(WireEvent::ReqRes(event)) => match event {
-                request_response::Event::Message { peer, message } => match message {
+                request_response::Event::Message { peer: _, message } => match message {
                     request_response::Message::Request {
-                        request_id,
+                        request_id: _, // allows async processing
                         request,
                         channel,
                     } => {
-                        self.handle_reqres_message_request(swarm, request, channel, request_id)
+                        self.handle_reqres_message_request(swarm, request, channel)
                             .await?
                     }
                     request_response::Message::Response {
@@ -327,8 +325,11 @@ impl Swarm {
         swarm: &mut MutexGuard<'_, libp2p::Swarm<CombinedBehaviour>>,
         request: VerificationRequest,
         channel: ResponseChannel<VerificationResponse>,
-        request_id: RequestId,
     ) -> Res<()> {
+        let file = self.storage.get(request.file_name.clone().into()).await?;
+        let server_config = VerificationServerConfig::from_file(file.value);
+        let server = VerificationServer::new(server_config);
+        let response = server.fulfill_challenge(request.challenge_vector);
         swarm
             .behaviour_mut()
             .req_res
@@ -336,10 +337,10 @@ impl Swarm {
                 channel,
                 VerificationResponse {
                     file_name: request.file_name,
-                    response_vector: vec![],
+                    response_vector: response,
                 },
             )
-            .map_err(|e| ErrorKind::SwarmReqResSendResponseError(e).into())
+            .map_err(|_| ErrorKind::SwarmReqResSendResponseError.into())
     }
 
     async fn handle_reqres_message_response(
@@ -351,7 +352,9 @@ impl Swarm {
             Some(QueryResponse::VerificationRequest { sender }) => sender,
             _ => Err(ErrorKind::InvalidResponseChannelForRequest(request_id))?,
         };
-        response_channel.send(Ok("success".to_string()))?;
+        response_channel
+            .send(Ok(response))
+            .map_err(|_| ErrorKind::SwarmReqResSendResponseError)?;
         Ok(())
     }
 
@@ -370,7 +373,9 @@ impl Swarm {
             Some(QueryResponse::VerificationRequest { sender }) => sender,
             _ => Err(ErrorKind::InvalidResponseChannelForRequest(request_id))?,
         };
-        response_channel.send(Err(ErrorKind::RequestInboundFailure(error).into()))?;
+        response_channel
+            .send(Err(ErrorKind::RequestInboundFailure(error).into()))
+            .map_err(|_| ErrorKind::SwarmReqResSendResponseError)?;
         Ok(())
     }
 
@@ -384,7 +389,9 @@ impl Swarm {
             Some(QueryResponse::VerificationRequest { sender }) => sender,
             _ => Err(ErrorKind::InvalidResponseChannelForRequest(request_id))?,
         };
-        response_channel.send(Err(ErrorKind::RequestOutboundFailure(error).into()))?;
+        response_channel
+            .send(Err(ErrorKind::RequestOutboundFailure(error).into()))
+            .map_err(|_| ErrorKind::SwarmReqResSendResponseError)?;
         Ok(())
     }
 
@@ -519,14 +526,14 @@ impl Swarm {
             CommandToSwarm::RequestVerification {
                 peer,
                 file_uuid,
-                secret_vector,
+                challenge_vector,
                 resp,
             } => {
                 self.handle_controller_request_verification(
                     swarm,
                     peer,
                     file_uuid,
-                    secret_vector,
+                    challenge_vector,
                     resp,
                 )
                 .await
@@ -539,17 +546,17 @@ impl Swarm {
         swarm: &mut MutexGuard<'_, libp2p::Swarm<CombinedBehaviour>>,
         peer: PeerId,
         file_name: String,
-        secret_vector: Vec<u8>,
-        resp: OneSender<OneReceiver<Res<String>>>,
+        challenge_vector: Vec<u64>,
+        resp: OneSender<OneReceiver<Res<VerificationResponse>>>,
     ) -> Res<()> {
-        let (sender, receiver) = oneshot::channel::<Res<String>>();
+        let (sender, receiver) = oneshot::channel::<Res<VerificationResponse>>();
         resp.send(receiver)?;
 
         let request_id = swarm.behaviour_mut().req_res.send_request(
             &peer,
             VerificationRequest {
                 file_name,
-                secret_vector,
+                challenge_vector,
             },
         );
 
@@ -713,13 +720,13 @@ pub struct CombinedBehaviour {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerificationRequest {
     pub file_name: String,
-    pub secret_vector: Vec<u8>,
+    pub challenge_vector: Vec<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerificationResponse {
     pub file_name: String,
-    pub response_vector: Vec<u8>,
+    pub response_vector: Vec<u64>,
 }
 
 impl From<KademliaEvent> for WireEvent {

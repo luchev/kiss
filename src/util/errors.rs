@@ -101,7 +101,7 @@ error_chain! {
         InvalidSwarmInstruction(e: CommandToSwarm) { display("invalid swarm instruction: {:?}", e) }
         InvalidNonZeroUsize { display("invalid non-zero usize ") }
         InvalidPeerId(e: ParseError) { display("invalid peer id: {}", e) }
-        SwarmReqResSendResponseError(e: VerificationResponse) { display("swarm request response send response error: {:?}", e) }
+        SwarmReqResSendResponseError { display("swarm request response send response error") }
     }
 }
 
@@ -262,6 +262,12 @@ impl From<oneshot::Receiver<std::result::Result<Vec<PeerId>, Error>>> for Error 
 
 impl From<oneshot::Receiver<result::Result<QueryGetResponse, Error>>> for Error {
     fn from(_: oneshot::Receiver<result::Result<QueryGetResponse, Error>>) -> Self {
+        ErrorKind::SendReceiverFailed.into()
+    }
+}
+
+impl From<oneshot::Receiver<result::Result<VerificationResponse, Error>>> for Error {
+    fn from(_: oneshot::Receiver<result::Result<VerificationResponse, Error>>) -> Self {
         ErrorKind::SendReceiverFailed.into()
     }
 }
