@@ -143,35 +143,11 @@ impl KissService for Inner {
                 }),
             }
         }
-
-        // let res = self
-        //     .swarm_controller
-        //     .request_verification(
-        //         PeerId::from_str(request.peer_id.as_str())
-        //             .map_err(|e| Status::invalid_argument(e.to_string()))?,
-        //         request.file_uuid.clone(),
-        //         Vec::new(),
-        //     )
-        //     .await;
-
-        // match res {
-        //     Err(e) => {
-        //         info!("failed to verify file at peer {}", request.peer_id);
-        //         Err(Status::internal(e.to_string()))
-        //     }
-        //     Ok(verified) => {
-        //         info!("verified file at peer {}", request.peer_id);
-        //         Ok(Response::new(VerifyFileAtPeerResponse {
-        //             file_uuid: request.file_uuid,
-        //             peer_id: request.peer_id,
-        //             verified,
-        //         }))
-        //     }
-        // }
         Ok(Response::new(VerifyFileResponse {
             verifications: result,
         }))
     }
+
     // async fn put(
     //     &self,
     //     request: Request<PutRequest>,
