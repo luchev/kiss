@@ -29,7 +29,7 @@ verify file_uuid:
     -proto kiss.proto \
     -d "{\"file_uuid\": \"{{file_uuid}}\"}" \
     "[::1]:2000" \
-    kiss_grpc.KissService/VerifyFileAtPeer
+    kiss_grpc.KissService/VerifyFile
 
 providers uuid:
     grpcurl \

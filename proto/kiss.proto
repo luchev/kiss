@@ -64,7 +64,7 @@ message PutToResponse {
     string uuid = 1;
 }
 
-message VerifyFileAtPeerRequest {
+message VerifyFileRequest {
     string file_uuid = 1;
 }
 
@@ -73,7 +73,7 @@ message VerificationForPeer {
     bool verified = 2;
 }
 
-message VerifyFileAtPeerResponse {
+message VerifyFileResponse {
     repeated VerificationForPeer verifications = 1;
 }
 
@@ -85,5 +85,5 @@ service KissService {
     rpc StartProviding(StartProvidingRequest) returns (StartProvidingResponse);
     rpc PutTo(PutToRequest) returns (PutToResponse);
     rpc GetClosestPeers(GetClosestPeersRequest) returns (GetClosestPeersResponse);
-    rpc VerifyFileAtPeer(VerifyFileAtPeerRequest) returns (VerifyFileAtPeerResponse);
+    rpc VerifyFile(VerifyFileRequest) returns (VerifyFileResponse);
 }

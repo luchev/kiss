@@ -100,10 +100,10 @@ impl IGrpcHandler for GrpcHandler {
 
 #[async_trait]
 impl KissService for Inner {
-    async fn verify_file_at_peer(
+    async fn verify_file(
         &self,
-        request: Request<VerifyFileAtPeerRequest>,
-    ) -> Result<Response<VerifyFileAtPeerResponse>, Status> {
+        request: Request<VerifyFileRequest>,
+    ) -> Result<Response<VerifyFileResponse>, Status> {
         let request = request.into_inner();
 
         let contracts = self
@@ -168,7 +168,7 @@ impl KissService for Inner {
         //         }))
         //     }
         // }
-        Ok(Response::new(VerifyFileAtPeerResponse {
+        Ok(Response::new(VerifyFileResponse {
             verifications: result,
         }))
     }
