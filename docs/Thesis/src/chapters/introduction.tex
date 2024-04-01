@@ -9,18 +9,21 @@ in exchange for a fee.
 On the other hand, the user has to trust the entity to keep their data safe and private and not misuse it.
 They also might prefer to pay with their storage or computation power instead of money, or 
 they might not want to be locked into a single provider.
-Such cases are often when the user is a university or a government.
+Such cases are often when the user is a university, an NGO, or occasionally private users.
 
 To address such use cases and the concerns with cloud storage, decentralized storage systems have been proposed.
 
 We will focus on the most popular type of decentralized storage, which is decentralized hash tables (DHT).
 They are often used as the basis of NoSQL databases, such as Cassandra \cite{cassandra},
 which are used by companies such as Facebook, Twitter, and Netflix, in order to serve millions of users.
-While they can be used for centralized storage, they are mostly used as decentralized storage,
+While in the example above these databases are used within the premises of a cloud or a private datacenter,
+they are mostly used as decentralized storage solutions,
 therefore they focus on privacy, security, fault tolerance, and resistance to censorship.
 
 The goal of this thesis is to design and implement a secure and fault-tolerant decentralized storage system
 that can compete with centralized storage systems.
+Decentralized networks work on top of untrusted networks (unregulated networks with potential security risks),
+such as the Internet.
 In particular, we will focus on the integrity of the data stored on the network,
 as this is the main problem that is not addressed by existing decentralized storage systems.
 In the following sections, we will introduce decentralized networks,
@@ -35,11 +38,11 @@ The user does not need to worry about the physical location of the storage, the 
 the replication, the backups, etc., as it is abstracted away by the cloud storage provider.
 If we want to build a decentralized storage system, we need to provide the same guarantees and features
 as centralized storage systems.
-For this purpose we will explore the requirements for Amazon's S3,
+For this purpose we will explore the requirements for Amazon's S3 \cite{s3-faq},
 which is one of the most popular cloud storage providers.
 
 \begin{enumerate}
-    \item The system can store from 0 to 5 terabytes of data in a single object.
+    \item The system can store up to 5 terabytes of data in a single object.
     \item The system can store an unlimited number of objects.
     \item The system can store an object for an unlimited amount of time.
     \item The cloud provider will not access the data for any purpose, except when required to do so by law.
@@ -52,7 +55,7 @@ which is one of the most popular cloud storage providers.
     \item The system can provide 99.99\% availability.
     \item The system can provide 99.99\% of the time the objects will be retrieved in less than 100 milliseconds.
     \item Deletes are guaranteed to be permanent, and no data can be recovered after a deletion.
-    \item The system provides different types of replication - region and cross-region.
+    \item The system provides different types of replication --- region and cross-region.
 \end{enumerate}
 
 These features come at a cost, which is usually a fee for the storage and the bandwidth.
@@ -60,13 +63,13 @@ These features come at a cost, which is usually a fee for the storage and the ba
 If we want to build a decentralized storage system, we need to provide the same guarantees and features.
 While we cannot restrict which users can access the data, we can encrypt it,
 which will make it unreadable to anyone who does not have the decryption key.
-There is one feature that is hard to achieve in a decentralized network - deletion.
+There is one feature that is hard to achieve in a decentralized network --- deletion.
 Because the data is stored on multiple nodes, and we cannot guarantee that all of them will delete the file,
 but since the data is encrypted, it is not readable to anyone who does not have the decryption key.
 
 Most of the features are covered by existing decentralized storage systems, but the one that is not is durability.
 Durability or data integrity is the main focus of this thesis.
-We will approach the problem by using the same method as centralized storage systems - verification.
+We will approach the problem by using the same method as centralized storage systems --- verification.
 Before we discuss the verification method, we will briefly talk about decentralized networks and security,
 in order to provide the necessary background for the rest of the thesis.
 
@@ -80,7 +83,7 @@ They are a type of network where each node acts as both a client and a server.
 This means that each node can request and provide services to other nodes.
 There is also no central server, although there may be a central directory to help nodes find each other.
 
-Decentralized networks can be classified into two categories - unstructured and structured.
+Decentralized networks can be classified into two categories --- unstructured and structured.
 Structured networks have a predefined topology and are more efficient in terms of routing and resource discovery.
 Often used topologies are circular and hypercube.
 The most popular structured network is Kademlia \cite{kademlia}, which uses a hypercube topology.
@@ -118,12 +121,12 @@ which is inherently insecure.
 
 S/Kademlia \cite{skademlia} summarizes the main attacks on decentralized networks:
 \begin{enumerate}
-    \item \textbf{Eclipse attacks} - an attacker isolates a node from the rest of the network.
-    \item \textbf{Sybil attacks} - a single entity pretends to be multiple entities.
-    \item \textbf{Churn attacks} - an attacker joins and leaves the network repeatedly.
-    \item \textbf{Adversarial routing} - an attacker returns adversarial routing information.
-    \item \textbf{Denial-of-service attacks} - an attacker floods the network with requests.
-    \item \textbf{Storage attacks} - an attacker manipulates the data stored on a node.
+    \item \textbf{Eclipse attacks} --- an attacker isolates a node from the rest of the network.
+    \item \textbf{Sybil attacks} --- a single entity pretends to be multiple entities.
+    \item \textbf{Churn attacks} --- an attacker joins and leaves the network repeatedly.
+    \item \textbf{Adversarial routing} --- an attacker returns adversarial routing information.
+    \item \textbf{Denial-of-service attacks} --- an attacker floods the network with requests.
+    \item \textbf{Storage attacks} --- an attacker manipulates the data stored on a node.
 \end{enumerate}
 
 Kademlia and S/Kademlia cover most of these attacks and are mostly secure against them.
@@ -141,8 +144,8 @@ However, if we want durable storage, we need to address these attacks.
 
 Storage attacks can be classified into two categories:
 \begin{enumerate}
-    \item \textbf{Data availability attacks} - an attacker claims to store data, but does not.
-    \item \textbf{Data integrity attacks} - an attacker claims to store data, but stores different data.
+    \item \textbf{Data availability attacks} --- an attacker claims to store data, but does not.
+    \item \textbf{Data integrity attacks} --- an attacker claims to store data, but stores different data.
 \end{enumerate}
 
 Checking if a node stores the data it claims to store can be as simple as asking the node to return the data.
@@ -155,13 +158,13 @@ if the data is stored correctly.
 If we want to design a decentralized storage system that is similar and can compete with centralized systems,
 we need to provide the same guarantees and features:
 \begin{enumerate}
-    \item \textbf{Scalability} - the system should be able to handle many users and data.
-    \item \textbf{Performance} - the system should be fast.
-    \item \textbf{Resilience} - the system should be able to recover from attacks.
-    \item \textbf{Reliability} - the system should be able to recover from failures.
-    \item \textbf{Availability} - data stored on the network should be accessible at all times.
-    \item \textbf{Integrity} - data stored on the network should not be tampered with.
-    \item \textbf{Security} - data stored on the network, and accessing the data should be secure.
+    \item \textbf{Scalability} --- the system should be able to handle many users and data.
+    \item \textbf{Performance} --- the system should be fast.
+    \item \textbf{Resilience} --- the system should be able to recover from attacks.
+    \item \textbf{Reliability} --- the system should be able to recover from failures.
+    \item \textbf{Availability} --- data stored on the network should be accessible at all times.
+    \item \textbf{Integrity} --- data stored on the network should not be possible to be tampered with.
+    \item \textbf{Security} --- data stored on the network, and accessing the data should be secure.
 \end{enumerate}
 
 \textbf{Scalability} is covered by most networks, regardless of being centralized or decentralized.
@@ -202,13 +205,13 @@ as they have a vested interest in the integrity of the data.
 However, we also need to make sure that malicious nodes are also doing audits.
 
 We can achieve this by using rewards and penalties.
-We will reward nodes for performing audits and penalize them for not performing audits.
-First, let us focus on the penalties.
 If a node is found to be storing data incorrectly (by failing an audit), we will penalize the node.
 If a node is found to not be performing audits, we will penalize it.
+On the other hand, if a node is storing data correctly (by passing an audit), we will reward the node.
+And if a node is performing audits, we will reward it.
 
-The only way to penalize a node is to remove it from the network.
-It would be better if we could have lighter penalties.
+One way to penalize nodes is to remove them from the network.
+However, it would be better if we could have lighter penalties.
 Here we are proposing a reputation system based on a ledger store, e.g., a blockchain.
 We will use a blockchain to store the reputation of the nodes.
 This will allow us to have a light penalty system, as we can downgrade the reputation of the node

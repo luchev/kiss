@@ -15,8 +15,8 @@
 
 % Storage attacks can be classified into two categories:
 % \begin{enumerate}
-%     \item \textbf{Data availability attacks} - an attacker claims to store data, but does not.
-%     \item \textbf{Data integrity attacks} - an attacker claims to store data, but stores different data.
+%     \item \textbf{Data availability attacks} --- an attacker claims to store data, but does not.
+%     \item \textbf{Data integrity attacks} --- an attacker claims to store data, but stores different data.
 % \end{enumerate}
 
 % Checking if a node stores the data it claims to store can be as simple as asking the node to return the data.
@@ -34,9 +34,9 @@ Filecoin makes the assumption that PoR protocols do not check the whole file,
 which is not true in the protocols we are looking at.
 Filecoin also mentions two types of new attacks:
 Sybil attack, where the malicious peers create multiple identities but store the same data in 1 place.
-And Outsourcing attacks - malicious peers claim to be able to store more data than they actually can,
+And Outsourcing attacks --- malicious peers claim to be able to store more data than they actually can,
 by storing the data elsewhere (e.g., in the network) and rely on quickly fetching it when requested.
-Maybe we can use timeouts for the audits to prevent this - because PoR should be very fast (no network delay).
-Proof of Spacetime can be used as well - require the server to run PoR every X time and then use some form Of
+Maybe we can use timeouts for the audits to prevent this --- because PoR should be very fast (no network delay).
+Proof of Spacetime can be used as well --- require the server to run PoR every X time and then use some form Of
 chained hashes or signatures to collect all the proofs and verify them in a single audit (not sure If
 this works with the current PoR protocols, but it's an idea).
