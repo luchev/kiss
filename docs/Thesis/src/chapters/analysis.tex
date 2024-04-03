@@ -1,6 +1,95 @@
 \label{chapter:analysis}
 \chapter{Analysis}
 
+In the Prior Work chapter \ref{chapter:prior-work}, we discussed how the project started as a decentralized
+storage system with verification and then evolved into integrating PoR into the verification,
+as soon as limitations of the decentralized verification mechanism were discovered.
+In this chapter we will discuss how we are solving the problem of storage attacks
+and how does PoR integrate into the reputation system.
+
+\section{Malicious peers}
+
+There could be many types of malicious peers in a decentralized network,
+but we will cover only the relevant ones for the scope of the project.
+The Related Work chapter \ref{chapter:related-work} covers other systems and
+how they handle the other types of attacks, not covered here.
+
+There are two types of attacks that can affect the integrity of the data in the network:
+\begin{enumerate}
+    \item \textbf{Data availability attacks} --- an attacker claims to store data, but does not.
+    \item \textbf{Data integrity attacks} --- an attacker claims to store data, but stores different data.
+\end{enumerate}
+
+While the two seem similar, we will cover them separately, because they are performed by different types of attackers
+and the detection mechanisms are different.
+We would like to investigate the different behaviors of peers and how to deal with them.
+How severe should the punishment for each type of attack be?
+
+\textbf{Data availability attacks} could be performed by the following peer behaviors:
+\begin{enumerate}
+    \item \textbf{Not storing the data} --- the peer does not store the data at all.
+    \item \textbf{Peer goes offline permanently} --- the peer goes offline at some point in the future after accepting to store the data.
+    \item \textbf{Peer goes offline temporarily} --- the peer goes offline for a short period of time.
+        This could be a peer that is restarting or lost connection to the network.
+        This is not necessarily a malicious peer, but it should be accounted for,
+        because malicious peers could be performing an eclipse attack.
+    \item \textbf{The peer is slow to respond} --- the peer is slow to respond to requests.
+        This could happen when a peer is overloaded or has a slow connection.
+        It could also be a malicious peer that is not storing the data and tries to request it
+        from another peer in the network, before answering the request.
+\end{enumerate}
+
+\textbf{Data integrity attacks} could be performed by the following peer behaviors:
+\begin{enumerate}
+    \item \textbf{Storing corrupted data} --- the peer stores corrupted data.
+        It could be that the peer is trying to save space by storing partial data.
+        Or perhaps the peer is trying to simply disrupt the network.
+    \item \textbf{Storing corrupted metadata} --- the peer stores the correct data, but the metadata is corrupted.
+        This could mean storing the wrong expiry date or the wrong key.
+        This kind of behavior either wouldn't affect the operation of the network or it would fall
+        under the other types of behaviors.
+\end{enumerate}
+
+The impact of all of these behaviors on the network is always dependent on the time it takes to detect them.
+If the time to verify a piece of data is too long, a malicious peer could delete it and then
+request it from another peer in the network just before the audit.
+Thereby passing the audit, but not contributing to the network.
+This is why it is a key requirement to have fast verification mechanisms.
+
+For each of these behaviors, we need to define a proper punishment.
+A peer that is not storing data should be punished on each audit, until their reputation is so low
+that they are not trusted anymore and are removed from the network.
+A peer that goes offline permanently would fall under the same category, as it would fail all its audits.
+A peer that goes offline temporarily should be punished for the failed audits,
+but the punishment should be such that for a short period of being offline the peer should not use 
+too much of its reputation.
+When a peer is slow to respond to requests, the audit will be considered failed and the peer will be punished
+as if it was not storing the data.
+
+For the data integrity attacks, and in particular for storing corrupted data,
+the punishment should be the same as for the data availability attacks.
+
+The questions we need to answer are:
+\begin{enumerate}
+    \item How many audits can we perform in parallel?
+    \item What is the performance impact of the audits on the network?
+    \item How do we balance the punishment so that a peer that has been offline for a short period of time
+        is not punished too much?
+    \item What is a short period of time to be offline?
+    \item Can we make the punishment scale with time? The longer the peer is offline, the more severe the punishment.
+    \item What does it mean for a peer to be slow to respond?
+\end{enumerate}
+
+We have mostly answered the last question in our previous work, where we have evaluated the performance of
+the PoR scheme we have implemented.
+To answer the question fully, we also need to account for the network latency.
+However, for small enough files, we cannot guarantee that the peer is storing the data
+and not just fetching it from another peer in the network.
+\wtf{We could "ping" the other peer to record the network latency, but they could also cheat that.}
+
+...
+
+
 % The one exception is storage attacks.
 % No decentralized network has a solution for storage attacks.
 
@@ -24,7 +113,7 @@
 % Ideally, we would like to reduce the amount of traffic between nodes and still be able to check
 % if the data is stored correctly.
 
-Notes
+Notes \wtf{format this explanation at the beginning of the chapter - explaining how the reputation system works}
 
 Filecoin uses the coin as payments, we want to use the coin as a stake.
 The coin indicates reputation, not wealth.

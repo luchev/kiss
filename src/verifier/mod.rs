@@ -5,7 +5,7 @@ use crate::p2p::controller::ISwarmController;
 use crate::util::hasher::hash;
 use crate::util::Res;
 use async_trait::async_trait;
-use log::info;
+use log::{debug, info};
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
@@ -14,6 +14,8 @@ use std::time::Instant;
 use time::Duration;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+use self::por::{VerificationClient, VerificationClientConfig};
 
 interface! {
     dyn IVerifier = [
@@ -56,44 +58,52 @@ impl IVerifier for Verifier {
         let num_peers = 3_u128;
         let mut starting_uuid = 0_u128;
         let mut ending_uuid = starting_uuid + u128::MAX / num_peers;
-        // TODO enable verifier
-        // return Ok(());
         loop {
-            // info!("fetching contracts");
             let contracts = {
                 let mut ledger = self.ledger.lock().await;
                 ledger.get_all_contracts().await?
             };
             let time_before_start = Instant::now();
             for contract in contracts {
-                let (file_uuid, file_hash, peer_id) =
-                    (contract.file_uuid, contract.file_hash, contract.peer_id);
-
-                let uuid_uint = Uuid::from_str(file_uuid.as_str())
+                let uuid_uint = Uuid::from_str(contract.file_uuid.as_str())
                     .unwrap_or_default()
                     .as_u128();
                 if uuid_uint < starting_uuid || uuid_uint > ending_uuid {
-                    info!("skipping: {}", file_uuid);
+                    debug!("skipping: {}", contract.file_uuid);
                     continue;
                 }
 
-                let swarm_result = self.swarm_controller.get(file_uuid.clone()).await;
-                match swarm_result {
-                    Ok(x) => {
-                        info!(
-                            "file found at peer: {}, expected: {}",
-                            peer_id, x.origin_peer_id
-                        );
-                        let swarm_hash = hash(x.file.to_owned().as_slice());
-                        if swarm_hash == file_hash {
-                            info!("file verified: {}", file_uuid);
-                        } else {
-                            info!("file not verified: {}", file_uuid);
-                        }
-                    }
-                    Err(e) => {
-                        info!("file not found: {}", file_uuid);
-                    }
+                let verification_client =
+                    VerificationClient::new(VerificationClientConfig::from_contract(
+                        contract.secret_n.clone(),
+                        contract.secret_m.clone(),
+                        contract.rows,
+                        contract.cols,
+                    ));
+                let challenge = verification_client.make_challenge_vector();
+                let response = self
+                    .swarm_controller
+                    .request_verification(
+                        contract.peer_id,
+                        contract.file_uuid.clone(),
+                        challenge.clone(),
+                    )
+                    .await;
+                match response {
+                    Ok(response) => match verification_client.audit(challenge, response) {
+                        true => info!(
+                            "verification successful for file {} at peer {}",
+                            contract.file_uuid, contract.peer_id
+                        ),
+                        false => info!(
+                            "verification failed for file {} at peer {}",
+                            contract.file_uuid, contract.peer_id
+                        ),
+                    },
+                    Err(_) => info!(
+                        "verification failed for file {} at peer {}",
+                        contract.file_uuid, contract.peer_id
+                    ),
                 }
             }
             iteration += 1;

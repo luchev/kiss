@@ -1,6 +1,7 @@
 \label{chapter:introduction}
 \chapter{Introduction}
 
+\wtf{I think a part of this will be moved to the Abstract}
 Cloud storage is a key component of modern computing.
 It allows users to store and access their data from anywhere in the world.
 A lot of the popular cloud storage providers are centralized, meaning owned and operated by a single entity.
@@ -21,7 +22,7 @@ they are mostly used as decentralized storage solutions,
 therefore they focus on privacy, security, fault tolerance, and resistance to censorship.
 
 The goal of this thesis is to design and implement a secure and fault-tolerant decentralized storage system
-that can compete with centralized storage systems.
+that can compete with centralized storage systems, whose features we've listed in \ref{section:cloud}.
 Decentralized networks work on top of untrusted networks (unregulated networks with potential security risks),
 such as the Internet.
 In particular, we will focus on the integrity of the data stored on the network,
@@ -30,51 +31,6 @@ In the following sections, we will introduce decentralized networks,
 define what security and integrity means, discuss the motivation for this work,
 and propose a solution to the integrity problem in modern decentralized networks.
 We will then talk about the requirements for the system and how we will evaluate it.
-
-\section{Overview of cloud storage}
-
-Cloud storage provides a way to store and access data over the Internet.
-The user does not need to worry about the physical location of the storage, the hardware, the maintenance,
-the replication, the backups, etc., as it is abstracted away by the cloud storage provider.
-If we want to build a decentralized storage system, we need to provide the same guarantees and features
-as centralized storage systems.
-For this purpose we will explore the requirements for Amazon's S3 \cite{s3-faq},
-which is one of the most popular cloud storage providers.
-
-\begin{enumerate}
-    \item The system can store up to 5 terabytes of data in a single object.
-    \item The system can store an unlimited number of objects.
-    \item The system can store an object for an unlimited amount of time.
-    \item The cloud provider will not access the data for any purpose, except when required to do so by law.
-    \item Files will be stored under keys, which are unique identifiers and
-        can be constructed to mimic a hierarchical structure.
-    \item The system will provide a simple REST API to store and retrieve the objects.
-    \item Files stored by the user can be accessed only by the user, unless the user decides to share the file.
-    \item Data is stored encrypted, and the user can provide their own encryption key.
-    \item The system can provide 99.999999999\% durability of the data (achieved via verification).
-    \item The system can provide 99.99\% availability.
-    \item The system can provide 99.99\% of the time the objects will be retrieved in less than 100 milliseconds.
-    \item Deletes are guaranteed to be permanent, and no data can be recovered after a deletion.
-    \item The system provides different types of replication --- region and cross-region.
-\end{enumerate}
-
-These features come at a cost, which is usually a fee for the storage and the bandwidth.
-
-If we want to build a decentralized storage system, we need to provide the same guarantees and features.
-While we cannot restrict which users can access the data, we can encrypt it,
-which will make it unreadable to anyone who does not have the decryption key.
-There is one feature that is hard to achieve in a decentralized network --- deletion.
-Because the data is stored on multiple nodes, and we cannot guarantee that all of them will delete the file,
-but since the data is encrypted, it is not readable to anyone who does not have the decryption key.
-
-Most of the features are covered by existing decentralized storage systems, but the one that is not is durability.
-Durability or data integrity is the main focus of this thesis.
-We will approach the problem by using the same method as centralized storage systems --- verification.
-Before we discuss the verification method, we will briefly talk about decentralized networks and security,
-in order to provide the necessary background for the rest of the thesis.
-
-\wtf{I can move the whole introduction to decentralized networks and security to the Related Work section.
-But then the reader will not have the necessary background, and will need to read the Related Work section first.}
 
 \section{Overview of decentralized networks}
 
@@ -89,21 +45,21 @@ Often used topologies are circular and hypercube.
 The most popular structured network is Kademlia \cite{kademlia}, which uses a hypercube topology.
 It is also the foundation for most modern decentralized storage systems.
 
-\section{Anonymity}
+% \section{Anonymity}
 
-Security is a major concern in decentralized networks,
-as they are open to anyone and there is no central authority to enforce rules.
-The definition of security can be different from system to system.
-Some systems focus on anonymity of the users and nodes storing the data,
-while others discard anonymity in order to track the nodes and the data they store.
-Solving anonymity is done by using completely different methods such as
-onion routing (used by Tor \cite{tor}) and cover traffic (Tarzan \cite{tarzan}).
-We will not focus on anonymity, as it disallows us from tracking the integrity of data stored on the network.
+% Security is a major concern in decentralized networks,
+% as they are open to anyone and there is no central authority to enforce rules.
+% The definition of security can be different from system to system.
+% Some systems focus on anonymity of the users and nodes storing the data,
+% while others discard anonymity in order to track the nodes and the data they store.
+% Solving anonymity is done by using completely different methods such as
+% onion routing (used by Tor \cite{tor}) and cover traffic (Tarzan \cite{tarzan}).
+% We will not focus on anonymity, as it disallows us from tracking the integrity of data stored on the network.
 
-Most decentralized networks focus on efficient routing and resource discovery.
-Security is often an afterthought, if it is considered at all.
-After multiple networks with $O(\log n)$ query time were proposed \cite{chord, kademlia, pastry},
-the focus shifted to security.
+% Most decentralized networks focus on efficient routing and resource discovery.
+% Security is often an afterthought, if it is considered at all.
+% After multiple networks with $O(\log n)$ query time were proposed \cite{chord, kademlia, pastry},
+% the focus shifted to security.
 
 \section{Security}
 
@@ -190,6 +146,8 @@ availability of five (99.999\%) or more nines.
 
 \section{Solving the integrity problem}
 
+\wtf{I would also move this to the Analysis}
+
 To solve the integrity problem, we need to be able to check if the data is stored correctly.
 To achieve this we need a verification/auditing mechanism, which is efficient and secure.
 We will use a Proof of Retrievability (PoR) scheme, which will allow us to efficiently check the 
@@ -231,6 +189,17 @@ it in a ledger store.
 When a node is suspicious of the correctness of the audit, it can check the ledger store to see if the audit
 was performed correctly.
 This could also be used to check if the audits are being performed at all.
+
+\section{Hypothesis}
+
+In this work we want to answer the following questions:
+\begin{enumerate}
+    \item How effective is PoR in solving the integrity problem in decentralized networks?
+    \item Is a reputation system based on a ledger a viable measure against malicious nodes?
+    \item How does the validation system affect the performance of the network?
+    \item Does the validation system affect the other features of the system (performance, security, etc.)?
+\end{enumerate}
+
 
 \label{section:evaluation}
 \section{Evaluation and testing}

@@ -388,3 +388,46 @@ which is again constant.
 Public verifiability is also possible with logarithmic overhead.
 
 Proofs of Retrievability are an important instrument to ensure integrity in decentralized storage.
+
+\label{section:cloud}
+\section{Overview of cloud storage}
+
+Cloud storage provides a way to store and access data over the Internet.
+The user does not need to worry about the physical location of the storage, the hardware, the maintenance,
+the replication, the backups, etc., as it is abstracted away by the cloud storage provider.
+If we want to build a decentralized storage system, we need to provide the same guarantees and features
+as centralized storage systems.
+For this purpose we will explore the requirements for Amazon's S3 \cite{s3-faq},
+which is one of the most popular cloud storage providers.
+
+\begin{enumerate}
+    \item The system can store up to 5 terabytes of data in a single object.
+    \item The system can store an unlimited number of objects.
+    \item The system can store an object for an unlimited amount of time.
+    \item The cloud provider will not access the data for any purpose, except when required to do so by law.
+    \item Files will be stored under keys, which are unique identifiers and
+        can be constructed to mimic a hierarchical structure.
+    \item The system will provide a simple REST API to store and retrieve the objects.
+    \item Files stored by the user can be accessed only by the user, unless the user decides to share the file.
+    \item Data is stored encrypted, and the user can provide their own encryption key.
+    \item The system can provide 99.999999999\% durability of the data (achieved via verification).
+    \item The system can provide 99.99\% availability.
+    \item The system can provide 99.99\% of the time the objects will be retrieved in less than 100 milliseconds.
+    \item Deletes are guaranteed to be permanent, and no data can be recovered after a deletion.
+    \item The system provides different types of replication --- region and cross-region.
+\end{enumerate}
+
+These features come at a cost, which is usually a fee for the storage and the bandwidth.
+
+If we want to build a decentralized storage system, we need to provide the same guarantees and features.
+While we cannot restrict which users can access the data, we can encrypt it,
+which will make it unreadable to anyone who does not have the decryption key.
+There is one feature that is hard to achieve in a decentralized network --- deletion.
+Because the data is stored on multiple nodes, and we cannot guarantee that all of them will delete the file,
+but since the data is encrypted, it is not readable to anyone who does not have the decryption key.
+
+Most of the features are covered by existing decentralized storage systems, but the one that is not is durability.
+Durability or data integrity is the main focus of this thesis.
+We will approach the problem by using the same method as centralized storage systems --- verification.
+Before we discuss the verification method, we will briefly talk about decentralized networks and security,
+in order to provide the necessary background for the rest of the thesis.
