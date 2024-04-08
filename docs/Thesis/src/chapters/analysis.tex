@@ -1,11 +1,15 @@
-\label{chapter:analysis}
 \chapter{Analysis}
+\label{chapter:analysis}
 
-In the Prior Work chapter \ref{chapter:prior-work}, we discussed how the project started as a decentralized
+In the Prior Work \autoref{cha:prior-work}, we discussed how the project started as a decentralized
 storage system with verification and then evolved into integrating PoR into the verification,
 as soon as limitations of the decentralized verification mechanism were discovered.
 In this chapter we will discuss how we are solving the problem of storage attacks
 and how does PoR integrate into the reputation system.
+It is worth noting that apart from malicious peers, it is also possible for well-behaved peers to
+lose data due to hardware failures (bit rot).
+We will not cover this case as a special case, because it is a light version of what malicious
+peers are capable of doing.
 
 \section{Malicious peers}
 
@@ -55,16 +59,33 @@ If the time to verify a piece of data is too long, a malicious peer could delete
 request it from another peer in the network just before the audit.
 Thereby passing the audit, but not contributing to the network.
 This is why it is a key requirement to have fast verification mechanisms.
+This is an expensive attack to execute for the attacker, because they need to perform a lot of
+work to pass the audit.
+The attacker also needs to contribute considerable amount of their bandwidth to execute such an attack.
+For the above reasons, we will not consider this attack in our analysis.
 
-For each of these behaviors, we need to define a proper punishment.
-A peer that is not storing data should be punished on each audit, until their reputation is so low
-that they are not trusted anymore and are removed from the network.
+\section{Reputation system}
+
+To keep track of the behavior of the peers in the network, we will use a reputation system.
+In short, we want well-behaved peers to have a high reputation and malicious peers to have a low reputation.
+Peers with higher reputation will be prioritized by the network, while peers with lower reputation will be
+avoided and potentially removed from the network.
+A key part of designing the reputation system is defining how much reputation is adjusted in each case.
+First, we will look into what situations lead to reputation adjustment, and then we will
+analyze how much reputation should be adjusted in each case.
+
+Reputation will be increased when a peer is behaving as expected,
+i.e., storing data and providing data, as well as performing audits will lead to an increase in reputation.
+
+Reputation should be decreased in the case of failure to comply with the network rules.
+A peer that is not storing data should have their reputation reduced on each audit,
+until their reputation is so low that they are not trusted anymore and are removed from the network.
 A peer that goes offline permanently would fall under the same category, as it would fail all its audits.
 A peer that goes offline temporarily should be punished for the failed audits,
 but the punishment should be such that for a short period of being offline the peer should not use 
 too much of its reputation.
-When a peer is slow to respond to requests, the audit will be considered failed and the peer will be punished
-as if it was not storing the data.
+When a peer is slow to respond to requests, the audit will be considered failed and the peer will have
+its reputation reduced as if it was not storing the data.
 
 For the data integrity attacks, and in particular for storing corrupted data,
 the punishment should be the same as for the data availability attacks.
