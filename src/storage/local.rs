@@ -2,11 +2,12 @@ use super::{key_to_path, IStorage};
 use crate::util::{types::Bytes, ErrorKind, Res};
 use async_trait::async_trait;
 use base64::Engine;
+use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use libp2p::kad::Record;
 use libp2p_identity::PeerId;
 use libp2p_kad::RecordKey;
-use log::{info, warn};
+use log::{debug, warn};
 use object_store::{
     local::{self, LocalFileSystem},
     path::Path,
@@ -141,7 +142,7 @@ impl<'de> Deserialize<'de> for RecordWrapper {
 impl IStorage for LocalStorage {
     async fn put(&self, data: Record) -> Res<()> {
         let path = key_to_path(&data.key)?;
-        info!("storing {}", path.clone().display());
+        debug!("storing: {}", path.clone().display());
         let data = RecordWrapper(data);
         let serialized_data =
             serde_yaml::to_string(&data).map_err(ErrorKind::StoragePutSerdeError)?;
@@ -151,7 +152,7 @@ impl IStorage for LocalStorage {
                 serialized_data.into(),
             )
             .await
-            .map_err(ErrorKind::StoragePutFailed)?;
+            .map_err(ErrorKind::ObjectStoreError)?;
         Ok(())
     }
 
@@ -159,12 +160,12 @@ impl IStorage for LocalStorage {
         let path = path
             .to_str()
             .ok_or_else(|| ErrorKind::PathParsingError(path.clone()))?;
-        info!("retrieving {}", path);
+        debug!("retrieving: {}", path);
         let bytes = self
             .local_storage
             .get(&Path::from(path))
             .await
-            .map_err(ErrorKind::StoragePutFailed)?
+            .map_err(ErrorKind::ObjectStoreError)?
             .into_stream()
             .map_err(ErrorKind::StorageConvertToStreamFailed)
             .map_ok(Bytes::from)
@@ -182,18 +183,32 @@ impl IStorage for LocalStorage {
         Ok(deserialized_record)
     }
 
-    async fn remove(&self, _path: PathBuf) -> Res<()> {
+    async fn remove(&self, path: &Path) -> Res<()> {
+        debug!("removing: {}", path);
+        self.local_storage
+            .delete(path)
+            .await
+            .map_err(ErrorKind::ObjectStoreError)?;
         Ok(())
-        // let path = path
-        //     .to_str()
-        //     .ok_or_else(|| ErrorKind::PathParsingError(path.clone()))?;
-        // info!("deleting {}", path);
-        // let res = self
-        //     .local_storage
-        //     .delete(&Path::from(path))
-        //     .await
-        //     .map_err(ErrorKind::StorageDeleteFailed)?;
-        // Ok(res)
+    }
+
+    async fn list(&self) -> Res<Vec<Path>> {
+        let mut paths = self
+            .local_storage
+            .list(None)
+            .await
+            .map_err(ErrorKind::ObjectStoreError)?;
+
+        let mut result = vec![];
+        while let Some(meta) = paths
+            .next()
+            .await
+            .transpose()
+            .map_err(ErrorKind::ObjectStoreError)?
+        {
+            result.push(meta.location);
+        }
+        Ok(result)
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::util::{Er, ErrorKind, Res};
 use async_trait::async_trait;
 use libp2p::kad::Record;
+use object_store::path::Path;
 use std::path::PathBuf;
 pub mod local;
 use self::local::LocalStorage;
@@ -17,7 +18,8 @@ use std::str;
 pub trait IStorage: Service {
     async fn put(&self, data: Record) -> Res<()>;
     async fn get(&self, path: PathBuf) -> Res<Record>;
-    async fn remove(&self, path: PathBuf) -> Res<()>;
+    async fn remove(&self, path: &Path) -> Res<()>;
+    async fn list(&self) -> Res<Vec<Path>>;
 }
 
 pub struct StorageProvider;

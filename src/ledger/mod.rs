@@ -8,6 +8,7 @@ use crate::util::{
 };
 use async_std::task::block_on;
 use async_trait::async_trait;
+use futures::TryFutureExt;
 use libp2p_identity::PeerId;
 use log::info;
 use runtime_injector::{
@@ -50,6 +51,12 @@ pub trait ILedger: Service {
     async fn get_contract(&mut self, contract_uuid: String) -> Res<Contract>;
     async fn get_all_contracts(&mut self) -> Res<Vec<Contract>>;
     async fn get_contracts(&mut self, file_uuid: String) -> Res<Vec<Contract>>;
+    async fn get_reputation(&mut self, peer_id: PeerId) -> Res<i64>;
+    async fn get_staked(&mut self, peer_id: PeerId) -> Res<i64>;
+    async fn increase_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
+    async fn decrease_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
+    async fn stake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
+    async fn unstake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
 }
 
 #[derive(Debug)]
@@ -256,54 +263,170 @@ impl ILedger for ImmuLedger {
         Ok(())
     }
 
-    // async fn create_contract_old(
-    //     &mut self,
-    //     file_uuid: Uuid,
-    //     file_hash: String,
-    //     ttl: i64,
-    // ) -> Res<()> {
-    //     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
-    //     let params: Vec<NamedParam> = vec![
-    //         NamedParam {
-    //             name: "contract_uuid".to_string(),
-    //             value: Some(SqlValue {
-    //                 value: Some(Value::S(Uuid::new_v4().to_string())),
-    //             }),
-    //         },
-    //         NamedParam {
-    //             name: "file_uuid".to_string(),
-    //             value: Some(SqlValue {
-    //                 value: Some(Value::S(file_uuid.to_string())),
-    //             }),
-    //         },
-    //         NamedParam {
-    //             name: "file_hash".to_string(),
-    //             value: Some(SqlValue {
-    //                 value: Some(Value::S(file_hash)),
-    //             }),
-    //         },
-    //         NamedParam {
-    //             name: "upload_date".to_string(),
-    //             value: Some(SqlValue {
-    //                 value: Some(Value::N(now)),
-    //             }),
-    //         },
-    //         NamedParam {
-    //             name: "ttl".to_string(),
-    //             value: Some(SqlValue {
-    //                 value: Some(Value::N(ttl)),
-    //             }),
-    //         },
-    //     ];
+    async fn get_reputation(&mut self, peer_id: PeerId) -> Res<i64> {
+        let sql = "SELECT reputation FROM reputation WHERE peer_id = @peer_id;".to_string();
+        let params: Vec<NamedParam> = vec![NamedParam {
+            name: "peer_id".to_string(),
+            value: Some(SqlValue {
+                value: Some(Value::S(peer_id.to_base58())),
+            }),
+        }];
 
-    //     let sql = "UPSERT
-    //             INTO contracts(contract_uuid, file_uuid, file_hash, upload_date, ttl)
-    //             VALUES (@contract_uuid, @file_uuid, @file_hash, @upload_date, @ttl);"
-    //         .to_string();
+        let response = self.query_execute(sql, params).await?;
+        let row = response.first().ok_or(ErrorKind::InvalidSql)?;
+        match row.get(0).as_ref() {
+            Some(SqlValue {
+                value: Some(Value::N(x)),
+            }) => Ok(x.to_owned()),
+            _ => Ok(0),
+        }
+    }
 
-    //     let _response = self.sql_execute(sql, params).await?;
-    //     Ok(())
-    // }
+    async fn get_staked(&mut self, peer_id: PeerId) -> Res<i64> {
+        let sql = "SELECT staked FROM reputation WHERE peer_id = @peer_id;".to_string();
+        let params: Vec<NamedParam> = vec![NamedParam {
+            name: "peer_id".to_string(),
+            value: Some(SqlValue {
+                value: Some(Value::S(peer_id.to_base58())),
+            }),
+        }];
+
+        let response = self.query_execute(sql, params).await?;
+        let row = response.first().ok_or(ErrorKind::InvalidSql)?;
+        match row.get(0).as_ref() {
+            Some(SqlValue {
+                value: Some(Value::N(x)),
+            }) => Ok(x.to_owned()),
+            _ => Ok(0),
+        }
+    }
+
+    async fn increase_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
+        let rep = self.get_reputation(peer_id).await?;
+
+        let sql = "
+                UPSERT
+                INTO reputation(peer_id, reputation, staked)
+                VALUES (@peer_id, @amount, 0)"
+            .to_string();
+
+        let params: Vec<NamedParam> = vec![
+            NamedParam {
+                name: "peer_id".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(peer_id.to_base58())),
+                }),
+            },
+            NamedParam {
+                name: "amount".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(rep + amount)),
+                }),
+            },
+        ];
+
+        self.sql_execute(sql, params).await
+    }
+
+    async fn decrease_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
+        let rep = self.get_reputation(peer_id).await?;
+
+        let sql = "
+                UPSERT
+                INTO reputation(peer_id, reputation, staked)
+                VALUES (@peer_id, @amount, 0)"
+            .to_string();
+
+        let params: Vec<NamedParam> = vec![
+            NamedParam {
+                name: "peer_id".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(peer_id.to_base58())),
+                }),
+            },
+            NamedParam {
+                name: "amount".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(rep - amount)),
+                }),
+            },
+        ];
+
+        self.sql_execute(sql, params).await
+    }
+
+    async fn stake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
+        let rep = self.get_reputation(peer_id).await?;
+        if rep < amount {
+            return Err(ErrorKind::InsufficientReputationToStake.into());
+        }
+
+        let sql = "
+                UPSERT
+                INTO reputation(peer_id, reputation, staked)
+                VALUES (@peer_id, @rep, @amount)"
+            .to_string();
+
+        let params: Vec<NamedParam> = vec![
+            NamedParam {
+                name: "peer_id".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(peer_id.to_base58())),
+                }),
+            },
+            NamedParam {
+                name: "rep".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(rep - amount)),
+                }),
+            },
+            NamedParam {
+                name: "staked".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(rep + amount)),
+                }),
+            },
+        ];
+
+        self.sql_execute(sql, params).await
+    }
+
+    async fn unstake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
+        let rep = self.get_reputation(peer_id).await?;
+        let staked = self.get_staked(peer_id).await?;
+        if staked < amount {
+            return Err(ErrorKind::InsufficientReputationToUnstake.into());
+        }
+
+        let sql = "
+                UPSERT
+                INTO reputation(peer_id, reputation, staked)
+                VALUES (@peer_id, @rep, @staked)"
+            .to_string();
+
+        let params: Vec<NamedParam> = vec![
+            NamedParam {
+                name: "peer_id".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(peer_id.to_base58())),
+                }),
+            },
+            NamedParam {
+                name: "rep".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(rep + amount)),
+                }),
+            },
+            NamedParam {
+                name: "staked".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(staked - amount)),
+                }),
+            },
+        ];
+
+        self.sql_execute(sql, params).await
+    }
 
     async fn get_contract(&mut self, file_uuid: String) -> Res<Contract> {
         let sql = "SELECT * FROM contracts WHERE file_uuid = @file_uuid;".to_string();
@@ -320,7 +443,7 @@ impl ILedger for ImmuLedger {
     }
 
     async fn get_all_contracts(&mut self) -> Res<Vec<Contract>> {
-        let sql = "SELECT * FROM contracts LIMIT 100;".to_string();
+        let sql = "SELECT * FROM contracts;".to_string();
 
         let response = self.query_execute(sql, vec![]).await?;
         let contracts: Res<Vec<_>> = response.into_iter().map(map_row_to_contract).collect();
@@ -353,7 +476,7 @@ fn map_row_to_contract(row: Vec<SqlValue>) -> Res<Contract> {
         peer_id: match row.get(1).as_ref() {
             Some(SqlValue {
                 value: Some(Value::S(x)),
-            }) => PeerId::from_str(x).map_err(|e| ErrorKind::InvalidPeerId(e))?,
+            }) => PeerId::from_str(x).map_err(ErrorKind::InvalidPeerId)?,
             _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
         },
         file_uuid: match row.get(2).as_ref() {
@@ -446,7 +569,7 @@ impl ServiceFactory<()> for LedgerProvider {
         };
 
         let handle = Handle::current();
-        let ledger = block_on(async { handle.spawn(create_contract_table(ledger)).await })
+        let ledger = block_on(async { handle.spawn(create_tables(ledger)).await })
             .map_err(|e| InjectError::ActivationFailed {
                 service_info: ServiceInfo::of::<ImmuLedger>(),
                 inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
@@ -485,6 +608,12 @@ async fn login(
     Ok((client.to_owned(), token))
 }
 
+async fn create_tables(ledger: ImmuLedger) -> Res<ImmuLedger> {
+    create_contract_table(ledger)
+        .and_then(create_reputation_table)
+        .await
+}
+
 async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
     let query = "CREATE TABLE IF NOT EXISTS contracts (
             contract_uuid   VARCHAR[36],
@@ -498,6 +627,19 @@ async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
             rows            INTEGER,
             cols            INTEGER,
             PRIMARY KEY (file_uuid)
+        );"
+    .to_string();
+
+    ledger.sql_execute(query, vec![]).await?;
+    Ok(ledger)
+}
+
+async fn create_reputation_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
+    let query = "CREATE TABLE IF NOT EXISTS reputation (
+            peer_id         VARCHAR[53],
+            reputation      INTEGER,
+            staked          INTEGER,
+            PRIMARY KEY (peer_id)
         );"
     .to_string();
 

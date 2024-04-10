@@ -113,3 +113,25 @@ remove-db:
     docker rm -f immudb
 
 recreate-db: remove-db create-db
+
+put-bytes numbytes:
+    openssl rand -base64 {{numbytes}} > /tmp/bytes
+    grpcurl \
+    -plaintext \
+    -import-path proto \
+    -proto kiss.proto \
+    -d "{\"name\": \"key1\", \"content\": \"`cat /tmp/bytes | perl -pe 'chomp if eof' | base64`\", \"ttl\": \"1200\"}" \
+    "[::1]:2000" \
+    kiss_grpc.KissService/Store
+
+put-bytes-times numbytes times:
+    for i in $(seq 1 {{times}}); do \
+        openssl rand -base64 {{numbytes}} > /tmp/bytes; \
+        grpcurl \
+        -plaintext \
+        -import-path proto \
+        -proto kiss.proto \
+        -d "{\"name\": \"key1\", \"content\": \"`cat /tmp/bytes | perl -pe 'chomp if eof' | base64`\", \"ttl\": \"1200\"}" \
+        "[::1]:2000" \
+        kiss_grpc.KissService/Store; \
+    done

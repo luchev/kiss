@@ -8,7 +8,7 @@ use libp2p_kad::{
     store, AddProviderError, GetClosestPeersError, GetProvidersError, GetRecordError,
     PutRecordError, QueryId,
 };
-use log::error;
+use log::{error, info};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::result;
@@ -44,8 +44,7 @@ error_chain! {
         ConfigErr(e: ConfigError) { display("loading config failed: {}", e) }
         SettingsDependencyFail { display("") }
         SettingsParseError(e: String) { display("") }
-        StoragePutFailed(e: object_store::Error) { display("storing file failed: {}", e) }
-        StorageDeleteFailed(e: object_store::Error) { display("deleting file failed: {}", e) }
+        ObjectStoreError(e: object_store::Error) { display("object store error: {}", e) }
         StoragePutSerdeError(e: serde_yaml::Error) { display("storing file failed due to serde: {}", e) }
         StorageGetSerdeError(e: serde_yaml::Error) { display("getting file failed due to serde: {}", e) }
         StorageGetFailed(e: object_store::Error) { display("retrieving file failed: {}", e) }
@@ -102,6 +101,8 @@ error_chain! {
         InvalidNonZeroUsize { display("invalid non-zero usize ") }
         InvalidPeerId(e: ParseError) { display("invalid peer id: {}", e) }
         SwarmReqResSendResponseError { display("swarm request response send response error") }
+        InsufficientReputationToStake { display("insufficient reputation to stake") }
+        InsufficientReputationToUnstake { display("insufficient reputation to unstake") }
     }
 }
 
@@ -205,9 +206,17 @@ impl From<oneshot::Receiver<result::Result<HashSet<PeerId>, Error>>> for Error {
 
 impl From<runtime_injector::InjectError> for Error {
     fn from(e: runtime_injector::InjectError) -> Self {
-        match e.source() {
-            Some(msg) => ErrorKind::InjectorError(format!("{}", msg)).into(),
-            None => ErrorKind::InjectorError("unknown error".to_string()).into(),
+        match e {
+            runtime_injector::InjectError::ActivationFailed {
+                service_info,
+                inner,
+            } => ErrorKind::InjectorError(format!(
+                "injector error for service {}: {:?}",
+                service_info.name(),
+                inner
+            ))
+            .into(),
+            _ => ErrorKind::InjectorError("unknown error".to_string()).into(),
         }
     }
 }

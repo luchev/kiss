@@ -2,3 +2,35 @@
 \label{chapter:implementation}
 
 \section{Reputation System}
+\label{section:reputation-system}
+
+The backbone of the reputation system is the immutable database Immudb \cite{immudb}.
+Immudb is a lightweight, high-speed immutable database that is designed to be used as a key-value store.
+It is based on the Merkle tree data structure, which allows for efficient verification of the integrity of the data.
+The database is designed to be tamper-proof, meaning that although the database supports updates and deletes,
+the history of the data is always preserved.
+If a record is changed or deleted,
+the database keeps a record of the change, and the history of the record can be traced back to its creation.
+This property is crucial for the reputation system, as it ensures that the reputation scores are not tampered with,
+or if they are tampered with the client of the database can detect the tampering.
+
+Before we delve deeper into how the reputation system is implemented,
+we need to understand the limitations of the database.
+
+One downside of the database is that it is not innately designed to be distributed.
+This means that the database is not designed to be run on multiple nodes,
+and it does not support replication out of the box.
+In a real-world scenario, running the database on a single node is a huge flaw,
+as it makes the database a single point of failure.
+For the purposes of our experiments, we will run the database on a single node.
+However, we will briefly discuss how the database can be made distributed in the future.
+The first approach is by distributing the Immudb itself.
+We could shard the data and run multiple instances of the database on different peers.
+Since the database is immutable, peers can be sure that the data is consistent across all the nodes.
+For example, sharding the data could be done by taking the file key, or the hash of the file key as the shard key.
+This way it would be easy to locate where the metadata for a given file is stored.
+The second approach is to use the storage system itself, completely removing the need for the database.
+This would require more work to ensure the system can support the same operations as the database,
+but it would simplify the querying, as the metadata would be stored in the same place as the files.
+
+The second downside of the database is that it does not support atomic transactions.

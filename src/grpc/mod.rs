@@ -44,11 +44,12 @@ impl ServiceFactory<()> for GrpcProvider {
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>()?.grpc().port;
         let swarm_controller = injector.get::<Svc<dyn ISwarmController>>()?;
+        let ledger = injector.get::<Svc<Mutex<ImmuLedger>>>()?;
 
         Ok(GrpcHandler {
             inner: Inner {
                 swarm_controller,
-                ledger: injector.get::<Svc<Mutex<ImmuLedger>>>()?,
+                ledger,
             },
             port,
         })
@@ -93,7 +94,6 @@ impl IGrpcHandler for GrpcHandler {
             .add_service(KissServiceServer::new(self.inner.clone()))
             .serve_with_incoming(TcpListenerStream::new(listener))
             .await?;
-
         Ok(())
     }
 }
@@ -117,12 +117,7 @@ impl KissService for Inner {
         let mut result = vec![];
         for contract in contracts.iter() {
             let verification_client =
-                VerificationClient::new(VerificationClientConfig::from_contract(
-                    contract.secret_n.clone(),
-                    contract.secret_m.clone(),
-                    contract.rows,
-                    contract.cols,
-                ));
+                VerificationClient::new(VerificationClientConfig::from_contract(&contract));
             let challenge = verification_client.make_challenge_vector();
             let response = self
                 .swarm_controller

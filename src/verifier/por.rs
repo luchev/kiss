@@ -1,6 +1,6 @@
 #![allow(clippy::all)]
 
-use crate::util::types::Bytes;
+use crate::util::types::{Bytes, Contract};
 
 const P_BITS: u64 = 57;
 const MIN_LOOP: usize = 8;
@@ -18,12 +18,21 @@ pub struct VerificationClientConfig {
 }
 
 impl VerificationClientConfig {
-    pub fn from_contract(secret_n: Bytes, secret_m: Bytes, rows: i64, cols: i64) -> Self {
+    pub fn from_contract(contract: &Contract) -> Self {
+        Self {
+            rows: contract.rows as usize,
+            cols: contract.cols as usize,
+            secret_m_vector: bytes_to_u64(&contract.secret_m),
+            secret_n_vector: bytes_to_u64(&contract.secret_n),
+        }
+    }
+
+    pub fn from_contract_fields(secret_n: Bytes, secret_m: Bytes, rows: i64, cols: i64) -> Self {
         Self {
             rows: rows as usize,
             cols: cols as usize,
-            secret_m_vector: bytes_to_u64(secret_m),
-            secret_n_vector: bytes_to_u64(secret_n),
+            secret_m_vector: bytes_to_u64(&secret_m),
+            secret_n_vector: bytes_to_u64(&secret_n),
         }
     }
 
@@ -91,7 +100,7 @@ impl VerificationClientConfig {
     }
 }
 
-fn bytes_to_u64(bytes: Bytes) -> Vec<u64> {
+fn bytes_to_u64(bytes: &Bytes) -> Vec<u64> {
     bytes
         .chunks_exact(8)
         .map(|x| u64::from_le_bytes(x.try_into().unwrap()))

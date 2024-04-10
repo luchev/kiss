@@ -5,6 +5,7 @@ use libp2p::kad::store::{Error, RecordStore, Result};
 use libp2p::kad::{KBucketKey, ProviderRecord, Record, K_VALUE};
 use libp2p_identity::PeerId;
 use log::debug;
+use object_store::path::Path;
 use runtime_injector::Svc;
 use smallvec::SmallVec;
 use std::borrow::Cow;
@@ -118,20 +119,23 @@ impl RecordStore for LocalStore {
     }
 
     fn remove(&mut self, key: &Key) {
-        match key_to_path(key) {
-            Ok(path) => {
-                let handle = Handle::current();
-                let records = self.storage.clone();
-                match block_on(async {
-                    handle
-                        .spawn(async move { records.remove(path).await })
-                        .await
-                }) {
-                    Ok(Ok(x)) => debug!("removed record: {:?}", x),
-                    _ => debug!("failed to remove record"),
-                }
+        let path = key_to_path(key);
+        if let Some(local_path) = path
+            .map(|path| path.to_str().map(Path::from))
+            .unwrap_or_default()
+        {
+            let handle = Handle::current();
+            let records = self.storage.clone();
+            match block_on(async {
+                handle
+                    .spawn(async move { records.remove(&local_path).await })
+                    .await
+            }) {
+                Ok(Ok(_)) => debug!("record removed"),
+                _ => debug!("failed to remove record"),
             }
-            Err(_) => debug!("failed to remove record"),
+        } else {
+            debug!("failed to remove record");
         }
     }
 

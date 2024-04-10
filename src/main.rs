@@ -5,7 +5,7 @@
 #![deny(clippy::indexing_slicing)]
 #![deny(clippy::expect_used)]
 #![deny(clippy::panic)]
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 #![feature(test)]
 // #![feature(trivial_bounds)]
 // #![deny(clippy::todo)]

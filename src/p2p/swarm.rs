@@ -243,7 +243,7 @@ impl Swarm {
         event: SwarmEvent<WireEvent, SwarmError>,
         swarm: &mut MutexGuard<'t, libp2p::Swarm<CombinedBehaviour>>,
     ) -> Res<()> {
-        info!("swarm event {:?}", event);
+        debug!("swarm event {:?}", event);
         match event {
             SwarmEvent::NewListenAddr { address, .. } => {
                 info!("listening on {address:?}");
@@ -497,7 +497,7 @@ impl Swarm {
         swarm: &mut MutexGuard<'a, libp2p::Swarm<CombinedBehaviour>>,
     ) -> Res<()> {
         let instruction = instruction.ok_or(ErrorKind::MissingInstruction)?;
-        info!("instruction {:?}", instruction);
+        debug!("instruction {:?}", instruction);
         match instruction {
             CommandToSwarm::PutLocal { key, value, resp } => {
                 self.handle_controller_put(swarm, key, value, resp).await

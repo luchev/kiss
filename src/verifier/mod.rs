@@ -2,10 +2,10 @@ pub mod por;
 
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
-use crate::util::hasher::hash;
-use crate::util::Res;
+use crate::util::{consts, Res};
 use async_trait::async_trait;
-use log::{debug, info};
+use libp2p::PeerId;
+use log::{debug, info, warn};
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
@@ -37,33 +37,39 @@ impl ServiceFactory<()> for VerifierProvider {
         Ok(Verifier {
             ledger,
             swarm_controller,
+            iteration: Mutex::new(1),
+            starting_uuid: Mutex::new(0),
+            ending_uuid: Mutex::new(u128::MAX / consts::NUM_PEERS),
         })
     }
 }
 
 #[async_trait]
 pub trait IVerifier: Service {
-    async fn start(&self) -> Res<()>;
+    async fn start(&self) -> Res<()>; // TALK can't be mut
 }
 
 pub struct Verifier {
     ledger: Svc<Mutex<ImmuLedger>>,
     swarm_controller: Svc<dyn ISwarmController>,
+    iteration: Mutex<u128>,
+    starting_uuid: Mutex<u128>,
+    ending_uuid: Mutex<u128>,
 }
 
 #[async_trait]
 impl IVerifier for Verifier {
     async fn start(&self) -> Res<()> {
-        let mut iteration = 1;
-        let num_peers = 3_u128;
-        let mut starting_uuid = 0_u128;
-        let mut ending_uuid = starting_uuid + u128::MAX / num_peers;
         loop {
             let contracts = {
                 let mut ledger = self.ledger.lock().await;
                 ledger.get_all_contracts().await?
             };
             let time_before_start = Instant::now();
+            let starting_uuid = *self.starting_uuid.lock().await;
+            let ending_uuid = *self.ending_uuid.lock().await;
+            let mut success = 0;
+            let mut failure = 0;
             for contract in contracts {
                 let uuid_uint = Uuid::from_str(contract.file_uuid.as_str())
                     .unwrap_or_default()
@@ -74,12 +80,7 @@ impl IVerifier for Verifier {
                 }
 
                 let verification_client =
-                    VerificationClient::new(VerificationClientConfig::from_contract(
-                        contract.secret_n.clone(),
-                        contract.secret_m.clone(),
-                        contract.rows,
-                        contract.cols,
-                    ));
+                    VerificationClient::new(VerificationClientConfig::from_contract(&contract));
                 let challenge = verification_client.make_challenge_vector();
                 let response = self
                     .swarm_controller
@@ -91,37 +92,75 @@ impl IVerifier for Verifier {
                     .await;
                 match response {
                     Ok(response) => match verification_client.audit(challenge, response) {
-                        true => info!(
-                            "verification successful for file {} at peer {}",
-                            contract.file_uuid, contract.peer_id
-                        ),
-                        false => info!(
-                            "verification failed for file {} at peer {}",
-                            contract.file_uuid, contract.peer_id
-                        ),
+                        true => {
+                            self.reward_peer(contract.peer_id).await;
+                            success += 1;
+                        }
+                        false => {
+                            self.punish_peer(contract.peer_id).await;
+                            failure += 1;
+                        }
                     },
-                    Err(_) => info!(
-                        "verification failed for file {} at peer {}",
-                        contract.file_uuid, contract.peer_id
-                    ),
+                    Err(_) => {
+                        self.punish_peer(contract.peer_id).await;
+                        failure += 1;
+                    }
                 }
             }
-            iteration += 1;
-            if iteration == num_peers + 1 {
-                iteration = 0;
-                starting_uuid = 0;
-                ending_uuid = starting_uuid + u128::MAX / num_peers;
-            } else if iteration == num_peers {
-                starting_uuid += u128::MAX / num_peers;
-                ending_uuid = u128::MAX;
-            } else {
-                starting_uuid += u128::MAX / num_peers;
-                ending_uuid = starting_uuid + u128::MAX / num_peers;
-            }
+
+            self.next_iteration().await;
+            info!(
+                "iteration: {}, successfully verified: {}, corrupted: {}",
+                *self.iteration.lock().await,
+                success,
+                failure
+            );
             tokio::time::sleep_until(tokio::time::Instant::from_std(
-                time_before_start + Duration::minutes(1),
+                time_before_start + consts::VERIFICATION_TIMEOUT,
             ))
             .await;
+        }
+    }
+}
+
+impl Verifier {
+    pub async fn punish_peer(&self, peer_id: PeerId) {
+        let res = {
+            self.ledger
+                .lock()
+                .await
+                .decrease_reputation(peer_id, consts::AUDIT_PENALTY)
+                .await
+        };
+        debug!("decreasing reputation after punishment result: {:?}", res)
+    }
+
+    pub async fn reward_peer(&self, peer_id: PeerId) {
+        let res = {
+            self.ledger
+                .lock()
+                .await
+                .increase_reputation(peer_id, consts::AUDIT_REWARD)
+                .await
+        };
+        debug!("increasing reputation after audit result: {:?}", res)
+    }
+
+    async fn next_iteration(&self) {
+        let mut iteration = self.iteration.lock().await;
+        let mut starting_uuid = self.starting_uuid.lock().await;
+        let mut ending_uuid = self.ending_uuid.lock().await;
+        *iteration += 1;
+        if *iteration == consts::NUM_PEERS + 1 {
+            *iteration = 0;
+            *starting_uuid = 0;
+            *ending_uuid = *starting_uuid + u128::MAX / consts::NUM_PEERS;
+        } else if *iteration == consts::NUM_PEERS {
+            *starting_uuid += u128::MAX / consts::NUM_PEERS;
+            *ending_uuid = u128::MAX;
+        } else {
+            *starting_uuid += u128::MAX / consts::NUM_PEERS;
+            *ending_uuid = *starting_uuid + u128::MAX / consts::NUM_PEERS;
         }
     }
 }

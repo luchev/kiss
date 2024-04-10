@@ -18,4 +18,5 @@ ledger:
   password: immudb
   address: 127.0.0.1:3322
 malicious_behavior:
+  # type: delete_all
   type: none

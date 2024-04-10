@@ -1,6 +1,7 @@
 use super::IMalice;
 use crate::{storage::IStorage, util::Res};
 use async_trait::async_trait;
+use log::{debug, info};
 use runtime_injector::Svc;
 
 #[derive()]
@@ -17,10 +18,14 @@ impl MaliceDeleteAll {
 #[async_trait]
 impl IMalice for MaliceDeleteAll {
     async fn start(&self) -> Res<()> {
-        log::info!("init delete all malice");
+        info!("init delete all malice");
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            // do stuff
+            let paths = self.storage.list().await?;
+            for path in paths {
+                debug!("malice deleting: {}", path);
+                self.storage.remove(&path).await?;
+            }
         }
     }
 }

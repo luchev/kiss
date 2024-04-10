@@ -5,7 +5,7 @@ use crate::util::types::{Bytes, OneReceiver};
 use crate::util::{types::CommandToSwarm, Res};
 use async_trait::async_trait;
 use libp2p_identity::PeerId;
-use log::info;
+use log::{debug, info};
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
@@ -70,7 +70,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("put result: {:?}", result);
+        debug!("put result: {:?}", result);
 
         result
     }
@@ -90,7 +90,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("put to result: {:?}", result);
+        debug!("put to result: {:?}", result);
 
         result
     }
@@ -105,7 +105,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("start providing: {:?}", result);
+        debug!("start providing: {:?}", result);
         result
     }
 
@@ -118,7 +118,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("get result: {:?}", result);
+        debug!("get result: {:?}", result);
         result
     }
 
@@ -131,7 +131,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("get providers result: {:?}", result);
+        debug!("get providers result: {:?}", result);
         result
     }
 
@@ -144,7 +144,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("get closest peers result: {:?}", result);
+        debug!("get closest peers result: {:?}", result);
         result
     }
 
@@ -167,7 +167,7 @@ impl ISwarmController for SwarmController {
             .await?;
         let receiving_channel = receiver.await?;
         let result = receiving_channel.await?;
-        info!("request verification result: {:?}", result);
+        debug!("request verification result: {:?}", result);
         Ok(result?.response_vector)
     }
 }

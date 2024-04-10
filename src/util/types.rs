@@ -50,7 +50,7 @@ pub enum CommandToSwarm {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Contract {
     pub contract_uuid: String,
     pub peer_id: PeerId,
