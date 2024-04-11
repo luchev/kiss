@@ -11,3 +11,5 @@ pub const AUDIT_REWARD: i64 = 1;
 pub const AUDIT_PENALTY: i64 = 5;
 pub const VERIFICATION_TIMEOUT: Duration = Duration::seconds(5);
 pub const NUM_PEERS: u128 = 3;
+pub const DATABASE_NAME: &str = "kiss";
+pub const REPLICATION_FACTOR: usize = 3;

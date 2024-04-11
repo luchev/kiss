@@ -1,7 +1,10 @@
+use crate::util::consts;
 use crate::util::grpc::immudb_grpc::{
-    immu_service_client::ImmuServiceClient, sql_value::Value, CreateDatabaseRequest, KeyRequest,
-    KeyValue, LoginRequest, NamedParam, SetRequest, SqlExecRequest, SqlQueryRequest, SqlValue,
+    immu_service_client::ImmuServiceClient, sql_value::Value, CreateDatabaseRequest, Database,
+    KeyRequest, KeyValue, LoginRequest, NamedParam, NewTxRequest, NewTxResponse, SetRequest,
+    SqlExecRequest, SqlQueryRequest, SqlValue, TxMetadata,
 };
+use crate::util::grpc::immudb_grpc::{OpenSessionRequest, TxMode};
 use crate::util::{
     types::{Bytes, Contract},
     Er, ErrorKind, Res,
@@ -31,6 +34,7 @@ pub trait ILedger: Service {
     async fn set(&mut self, key: String, value: Bytes) -> Res<()>;
     async fn get(&mut self, key: String) -> Res<String>;
     async fn create_database(&mut self, name: String) -> Res<()>;
+    async fn use_database(&mut self, name: String) -> Res<()>;
     async fn create_contract(
         &mut self,
         peer_id: PeerId,
@@ -43,6 +47,20 @@ pub trait ILedger: Service {
         cols: i64,
     ) -> Res<()>;
     async fn sql_execute(&mut self, query: String, params: Vec<NamedParam>) -> Res<()>;
+    async fn sql_execute_tx(
+        &mut self,
+        query: String,
+        params: Vec<NamedParam>,
+        session_id: String,
+        transaction_id: String,
+    ) -> Res<()>;
+    async fn query_execute_tx(
+        &mut self,
+        sql: String,
+        params: Vec<NamedParam>,
+        session_id: String,
+        transaction_id: String,
+    ) -> Res<Vec<Vec<SqlValue>>>;
     async fn query_execute(
         &mut self,
         sql: String,
@@ -128,6 +146,25 @@ impl ILedger for ImmuLedger {
             },
         );
         let _response = client.create_database_v2(request).await?;
+        info!("created database");
+        Ok(())
+    }
+
+    async fn use_database(&mut self, name: String) -> Res<()> {
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
+
+        let mut map = MetadataMap::new();
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        let request = tonic::Request::from_parts(
+            map,
+            Extensions::default(),
+            Database {
+                database_name: name,
+            },
+        );
+        let response = client.use_database(request).await?.into_inner();
+        self.token = response.token;
         Ok(())
     }
 
@@ -137,6 +174,33 @@ impl ILedger for ImmuLedger {
 
         let mut map = MetadataMap::new();
         map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        let request = tonic::Request::from_parts(
+            map,
+            Extensions::default(),
+            SqlExecRequest {
+                sql,
+                params,
+                no_wait: false,
+            },
+        );
+        let _response = client.sql_exec(request).await?;
+        Ok(())
+    }
+
+    async fn sql_execute_tx(
+        &mut self,
+        sql: String,
+        params: Vec<NamedParam>,
+        session_id: String,
+        transaction_id: String,
+    ) -> Res<()> {
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
+
+        let mut map = MetadataMap::new();
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        map.insert("sessionid", format!("{}", session_id).parse()?);
+        map.insert("transactionid", format!("{}", transaction_id).parse()?);
         let request = tonic::Request::from_parts(
             map,
             Extensions::default(),
@@ -160,6 +224,39 @@ impl ILedger for ImmuLedger {
 
         let mut map = MetadataMap::new();
         map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        let request = tonic::Request::from_parts(
+            map,
+            Extensions::default(),
+            SqlQueryRequest {
+                sql,
+                params,
+                reuse_snapshot: false,
+            },
+        );
+        let response = client.sql_query(request).await?;
+        let result: Vec<_> = response
+            .into_inner()
+            .rows
+            .into_iter()
+            .map(|row| row.values)
+            .collect();
+        Ok(result)
+    }
+
+    async fn query_execute_tx(
+        &mut self,
+        sql: String,
+        params: Vec<NamedParam>,
+        session_id: String,
+        transaction_id: String,
+    ) -> Res<Vec<Vec<SqlValue>>> {
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
+
+        let mut map = MetadataMap::new();
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        map.insert("sessionid", format!("{}", session_id).parse()?);
+        map.insert("transactionid", format!("{}", transaction_id).parse()?);
         let request = tonic::Request::from_parts(
             map,
             Extensions::default(),
@@ -302,12 +399,85 @@ impl ILedger for ImmuLedger {
     }
 
     async fn increase_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
-        let rep = self.get_reputation(peer_id).await?;
+        // let sql = "
+        //     BEGIN TRANSACTION;
+        //     SELECT reputation FROM reputation WHERE peer_id = @peer_id;
+        //     COMMIT;"
+        //     .to_string();
+        // let params: Vec<NamedParam> = vec![NamedParam {
+        //     name: "peer_id".to_string(),
+        //     value: Some(SqlValue {
+        //         value: Some(Value::S(peer_id.clone().to_base58())),
+        //     }),
+        // }];
+        let (session_id, transaction_id) = {
+            let mut client = self.client.lock().await;
+            let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
+
+            let mut map = MetadataMap::new();
+            map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+            let request = tonic::Request::from_parts(
+                map,
+                Extensions::default(),
+                OpenSessionRequest {
+                    username: "immudb".as_bytes().to_vec(),
+                    password: "immudb".as_bytes().to_vec(),
+                    database_name: consts::DATABASE_NAME.to_string(),
+                },
+            );
+            let session_id = client.open_session(request).await?.into_inner().session_id;
+
+            let mut map = MetadataMap::new();
+            map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+            map.insert("sessionid", format!("{}", session_id).parse()?);
+            let request = tonic::Request::from_parts(
+                map,
+                Extensions::default(),
+                NewTxRequest {
+                    mode: TxMode::ReadWrite as i32,
+                },
+            );
+            let transaction_id = client.new_tx(request).await?.into_inner().transaction_id;
+
+            (session_id, transaction_id)
+        };
+
+        let sql = "SELECT * FROM reputation WHERE peer_id = @peer_id;".to_string();
+        let params: Vec<NamedParam> = vec![NamedParam {
+            name: "peer_id".to_string(),
+            value: Some(SqlValue {
+                value: Some(Value::S(peer_id.to_base58())),
+            }),
+        }];
+
+        let response = self
+            .query_execute_tx(sql, params, session_id.clone(), transaction_id.clone())
+            .await?;
+        let row = response.first();
+        let reputation = match row {
+            Some(row) => match row.get(1).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::N(x)),
+                }) => x.to_owned(),
+                _ => 0,
+            },
+            None => 0,
+        };
+
+        let staked = match row {
+            Some(row) => match row.get(2).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::N(x)),
+                }) => x.to_owned(),
+                _ => 0,
+            },
+            None => 0,
+        };
 
         let sql = "
-                UPSERT
-                INTO reputation(peer_id, reputation, staked)
-                VALUES (@peer_id, @amount, 0)"
+            UPSERT
+            INTO reputation(peer_id, reputation, staked)
+            VALUES (@peer_id, @reputation, @staked)"
             .to_string();
 
         let params: Vec<NamedParam> = vec![
@@ -318,14 +488,39 @@ impl ILedger for ImmuLedger {
                 }),
             },
             NamedParam {
-                name: "amount".to_string(),
+                name: "reputation".to_string(),
                 value: Some(SqlValue {
-                    value: Some(Value::N(rep + amount)),
+                    value: Some(Value::N(reputation + amount)),
+                }),
+            },
+            NamedParam {
+                name: "staked".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(staked)),
                 }),
             },
         ];
 
-        self.sql_execute(sql, params).await
+        let res = self
+            .sql_execute_tx(sql, params, session_id.clone(), transaction_id.clone())
+            .await;
+
+        let mut client = self.client.lock().await;
+        let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
+
+        let mut map = MetadataMap::new();
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        map.insert("sessionid", format!("{}", session_id).parse()?);
+        map.insert("transactionid", format!("{}", transaction_id).parse()?);
+        let request = tonic::Request::from_parts(map, Extensions::default(), ());
+        client.commit(request).await?;
+
+        let mut map = MetadataMap::new();
+        map.insert("authorization", format!("Bearer {}", self.token).parse()?);
+        map.insert("sessionid", format!("{}", session_id).parse()?);
+        let request = tonic::Request::from_parts(map, Extensions::default(), ());
+        client.close_session(request).await?;
+        Ok(())
     }
 
     async fn decrease_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
@@ -569,7 +764,7 @@ impl ServiceFactory<()> for LedgerProvider {
         };
 
         let handle = Handle::current();
-        let ledger = block_on(async { handle.spawn(create_tables(ledger)).await })
+        let ledger = block_on(async { handle.spawn(init_database(ledger)).await })
             .map_err(|e| InjectError::ActivationFailed {
                 service_info: ServiceInfo::of::<ImmuLedger>(),
                 inner: Box::<Er>::new(ErrorKind::JoinError(e).into()),
@@ -608,10 +803,26 @@ async fn login(
     Ok((client.to_owned(), token))
 }
 
-async fn create_tables(ledger: ImmuLedger) -> Res<ImmuLedger> {
-    create_contract_table(ledger)
+async fn init_database(ledger: ImmuLedger) -> Res<ImmuLedger> {
+    create_database(ledger)
+        .and_then(use_database)
+        .and_then(create_contract_table)
         .and_then(create_reputation_table)
         .await
+}
+
+async fn create_database(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
+    ledger
+        .create_database(consts::DATABASE_NAME.to_string())
+        .await?;
+    Ok(ledger)
+}
+
+async fn use_database(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
+    ledger
+        .use_database(consts::DATABASE_NAME.to_string())
+        .await?;
+    Ok(ledger)
 }
 
 async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {

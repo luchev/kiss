@@ -160,7 +160,9 @@ impl ServiceFactory<()> for SwarmProvider {
             )
             .map_err(|e| InjectError::ActivationFailed {
                 service_info: ServiceInfo::of::<Swarm>(),
-                inner: Box::<Er>::new(ErrorKind::SwarmListenFailed(e).into()),
+                inner: Box::<Er>::new(
+                    ErrorKind::SwarmListenFailed(e, settings.swarm().port).into(),
+                ),
             })?;
 
         Ok(Swarm {
@@ -611,7 +613,7 @@ impl Swarm {
         key: Uuid,
         resp: OneSender<OneReceiver<Res<Vec<PeerId>>>>,
     ) -> Res<()> {
-        info!("getting closest to: {:?}", key);
+        debug!("getting closest to: {:?}", key);
         let (sender, receiver) = oneshot::channel::<Res<Vec<PeerId>>>();
         resp.send(receiver)?;
 

@@ -1,10 +1,14 @@
 \chapter{Implementation}
 \label{chapter:implementation}
 
-\section{Reputation System}
-\label{section:reputation-system}
+\section{Using the immutable database Immudb}
+\label{section:using-immudb}
 
-The backbone of the reputation system is the immutable database Immudb \cite{immudb}.
+The backbone of the integrity of the system is the immutable database Immudb \cite{immudb}.
+An immutable database ensures we can store the metadata necessary to run the system
+in a tamper-proof way.
+The database acts as a form of catalog for the files stored in the network,
+storing the keys and metadata required to perform audits.
 Immudb is a lightweight, high-speed immutable database that is designed to be used as a key-value store.
 It is based on the Merkle tree data structure, which allows for efficient verification of the integrity of the data.
 The database is designed to be tamper-proof, meaning that although the database supports updates and deletes,
@@ -14,8 +18,7 @@ the database keeps a record of the change, and the history of the record can be 
 This property is crucial for the reputation system, as it ensures that the reputation scores are not tampered with,
 or if they are tampered with the client of the database can detect the tampering.
 
-Before we delve deeper into how the reputation system is implemented,
-we need to understand the limitations of the database.
+\subsection{Using Immudb at scale}
 
 One downside of the database is that it is not innately designed to be distributed.
 This means that the database is not designed to be run on multiple nodes,
@@ -33,4 +36,73 @@ The second approach is to use the storage system itself, completely removing the
 This would require more work to ensure the system can support the same operations as the database,
 but it would simplify the querying, as the metadata would be stored in the same place as the files.
 
-The second downside of the database is that it does not support atomic transactions.
+\subsection{Atomic Operations in Immudb}
+
+The second downside of the database is that it does not support complex queries.
+
+For example, we need to atomically update the reputation of a peer after a successful audit.
+Since audits may happen in parallel, we need to ensure that the reputation is updated correctly.
+This means that we need to read the current reputation of the peer, increment it, and write it back to the database.
+This operation needs to be atomic, as we do not want to lose any updates.
+
+\begin{lstlisting}[language=SQL, caption={SQL query to update the reputation of a peer}, label={lst:sql-query}]
+BEGIN TRANSACTION;
+DECLARE @value INT;
+SELECT @value = reputation FROM reputations WHERE peer_id = @peer_id;
+UPDATE reputations SET reputation = @value + 1 WHERE peer_id = @peer_id;
+COMMIT TRANSACTION;
+\end{lstlisting}
+
+The above query would work in a traditional SQL database, but it would not work in Immudb,
+because Immudb supports only simple SELECT, INSERT, UPDATE, and DELETE operations.
+Luckily it does support transactions, which we can use to ensure that the operation is atomic.
+
+Immudb supports two ways of authentication, both making use of a token.
+The first way is to log in as a temporary user, which enables the use of single SQL queries.
+For example, after a login, we can execute an INSERT followed by a SELECT followed by another INSERT.
+These queries are independent of each other.
+If we want to use transactions, we need to log in and establish a session, followed by initiating a transaction.
+These two operations return unique tokens that we need to pass as headers with each subsequent request.
+Initiating a transaction is the equivalent of the SQL BEGIN TRANSACTION command.
+This way, the database knows which session and transaction we are referring to.
+The session token is used to authenticate the user,
+while the transaction token is used to ensure that the operations are atomic.
+After we execute the operations, we need to commit the transaction to make the changes permanent.
+Lastly we need to close the session to free up resources.
+
+\subsection{Conflict Resolution}
+
+Immudb does not support conflict resolution out of the box.
+Under the hood, immudb uses transactions even in the case of a non-session login.
+The delay in the transactions is minimal, but it can affect the queries.
+In particular, if two writes happen at the same time (or close to each other),
+the database will return an error --- \texttt{ErrTxReadConflict}.
+This error stands for "tx read conflict" and it means that the transaction was not successful
+because another transaction was committed in the meantime.
+It occurs even when the query is not a transaction,
+so for example when adding a new file to the database, and we write the contract to the database, it can fail.
+Immudb does not provide a way to automatically retry the transaction,
+so we had to implement the retry mechanism in the client.
+The official documentation acknowledges this issue and mentions that MVCC (Multi-Version Concurrency Control)
+is on the roadmap, but not yet implemented, hence such failures are expected and need to be handled by the client.
+
+\section{Reputation System}
+\label{section:reputation-system}
+
+The backbone of the reputation system is the immutable database Immudb \cite{immudb}.
+We will consider the database as a single source of truth for the reputation of the peers.
+
+The reputation system is designed to keep track of the behavior of the peers in the network.
+When a peer accepts to store a file, it stakes a certain amount of reputation points.
+Staking is temporary decrease of reputation points,
+which is returned to the peer after the expiry date of the file.
+\wtf{I'm still playing around with this idea, I'm not sure if this is the best way to do it.
+Perhaps the staked reputation will be returned gradually with each successful audit.
+The whole idea of adding "staking" is to ensure the peer has a big hit in reputation from the beginning.
+This way a new peer in the network cannot just accept a lot of files as soon as it joins and then go offline.}
+Every time an audit is performed the reputation of the peer on which the audit was performed is adjusted.
+If the audit is successful, the reputation of the peer is increased,
+and if the audit fails, the reputation of the peer is decreased.
+Finally, a peer is awarded reputation points for performing audits.
+The increase and decrease numbers are configurable and can be adjusted to fit the network requirements.
+We will discuss the different possibilities for adjusting the reputation in the \autoref{chapter:evaluation}

@@ -1,7 +1,7 @@
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
 use crate::settings::ISettings;
-use crate::util::consts::{GRPC_TIMEOUT, LOCALHOST};
+use crate::util::consts::{self, GRPC_TIMEOUT, LOCALHOST};
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissService;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissServiceServer;
 use crate::util::grpc::kiss_grpc::{
@@ -79,8 +79,12 @@ impl IGrpcHandler for GrpcHandler {
             .parse::<SocketAddr>()
             .map_err(|e| ErrorKind::SettingsParseError(e.to_string()))?;
 
-        let listener = TcpListener::bind(addr).await?;
-        let real_addr = listener.local_addr()?;
+        let listener = TcpListener::bind(addr)
+            .await
+            .map_err(|e| ErrorKind::IoDetailed(e, self.port))?;
+        let real_addr = listener
+            .local_addr()
+            .map_err(|e| ErrorKind::IoDetailed(e, self.port))?;
 
         info!("grpc listening on {}", real_addr);
 
@@ -202,50 +206,75 @@ impl KissService for Inner {
         let file_uuid = Uuid::new_v4();
 
         let closest = self.swarm_controller.get_closest_peers(file_uuid).await;
-        info!("closest peers: {:?}", closest);
-        let closest_peer = *closest
-            .map_err(|e| Status::internal(e.to_string()))?
-            .first()
-            .ok_or_else(|| Status::internal("no closest peer found".to_string()))?;
+        debug!("closest peers: {:?}", closest);
+        let closest_peers =
+            closest.map_err(|e| Status::internal(format!("no closest peers {}", e.to_string())))?;
 
-        let mut ledger = self.ledger.lock().await;
-        let client_config = VerificationClientConfig::from_file(&request.content);
-        let (secret_n, secret_m, rows, cols) = client_config.to_contract();
-        ledger
-            .create_contract(
-                closest_peer,
-                file_uuid,
-                file_hash,
-                request.ttl,
-                secret_n,
-                secret_m,
-                rows,
-                cols,
-            )
-            .await
-            .map_err(|e| Status::unknown(e.to_string()))?;
+        for peer in closest_peers.iter().take(consts::REPLICATION_FACTOR) {
+            let client_config = VerificationClientConfig::from_file(&request.content);
+            let (secret_n, secret_m, rows, cols) = client_config.to_contract();
+            // retry writing the contract tot he ledger 10 times:
+            let mut success = false;
+            let mut last_error = String::new();
+            for _ in 0..10 {
+                let res = self
+                    .ledger
+                    .lock()
+                    .await
+                    .create_contract(
+                        *peer,
+                        file_uuid,
+                        file_hash.clone(),
+                        request.ttl,
+                        secret_n.clone(),
+                        secret_m.clone(),
+                        rows,
+                        cols,
+                    )
+                    .await;
+                if let Err(e) = res {
+                    last_error = e.to_string();
+                } else {
+                    success = true;
+                    break;
+                }
+            }
+            if !success {
+                return Err(Status::internal(format!(
+                    "failed to write contract to immudb: {}",
+                    last_error
+                )));
+            }
+        }
 
-        debug!("created contract for {}", file_uuid);
-
-        let res = self
+        let result = self
             .swarm_controller
             .put_to(
                 file_uuid.clone().to_string(),
                 request.content.clone(),
-                vec![closest_peer],
+                closest_peers
+                    .iter()
+                    .take(consts::REPLICATION_FACTOR)
+                    .cloned()
+                    .collect(),
             )
             .await;
 
-        // let res = self
-        //     .swarm_controller
-        //     .put(file_uuid.clone().to_string(), request.content)
-        //     .await;
+        debug!("put finished: {:?}", result);
 
-        debug!("put finished: {:?}", res);
-
-        match res {
+        match result {
             Ok(_) => {
-                info!("stored file {}", file_uuid);
+                info!(
+                    "stored file {} at peers [{}]",
+                    file_uuid,
+                    closest_peers
+                        .iter()
+                        .take(consts::REPLICATION_FACTOR)
+                        .cloned()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
                 Ok(Response::new(StoreResponse {
                     name: file_uuid.to_string(),
                 }))
@@ -319,7 +348,7 @@ impl KissService for Inner {
             .await
             .map_err(|e| Status::internal(e.to_string()))
             .map(|peers| {
-                info!("get closest peers result: {:?}", peers);
+                debug!("get closest peers result: {:?}", peers);
                 Ok(Response::new(GetClosestPeersResponse {
                     uuid: request.uuid,
                     peer_uuids: peers.into_iter().map(|x| x.to_string()).collect(),

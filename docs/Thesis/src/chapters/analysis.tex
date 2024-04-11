@@ -15,7 +15,7 @@ peers are capable of doing.
 
 There could be many types of malicious peers in a decentralized network,
 but we will cover only the relevant ones for the scope of the project.
-The Related Work chapter \ref{chapter:related-work} covers other systems and
+The Related Work \autoref{chapter:related-work} covers other systems and
 how they handle the other types of attacks, not covered here.
 
 There are two types of attacks that can affect the integrity of the data in the network:
@@ -58,11 +58,39 @@ The impact of all of these behaviors on the network is always dependent on the t
 If the time to verify a piece of data is too long, a malicious peer could delete it and then
 request it from another peer in the network just before the audit.
 Thereby passing the audit, but not contributing to the network.
-This is why it is a key requirement to have fast verification mechanisms.
-This is an expensive attack to execute for the attacker, because they need to perform a lot of
-work to pass the audit.
+This is one of the reasons that it is a key requirement to have fast verification mechanisms.
+While this is a possible attack, it is an expensive one to execute,
+because the attacker needs to perform a lot of work to pass the audit.
 The attacker also needs to contribute considerable amount of their bandwidth to execute such an attack.
 For the above reasons, we will not consider this attack in our analysis.
+
+\section{Using Proof of Retrievability (PoR) to prevent attacks}
+
+Preventing a Data availability attack can be done by querying the peer whether it has the data.
+In this case we assume that the peer is honest and will return a simple answer whether it has the data or not.
+The assumption that a peer will be honest is naive, but allows us to easily check if the peer is responsive.
+One of the reasons we want to separate this attack is, so we can analyze peers going offline separately.
+We will discuss how to handle temporary and permanent offline peers in the evaluation section.
+\wtf{maybe it shouldn't be in the evaluation section, I just want to say we need to look at data
+before we can say how to handle it.}
+
+Preventing a Data integrity attack can be done by requesting the peer to return the data and checking if
+the data is correct.
+This is a more complex operation, because the data could be large, and the network could be slow.
+This is a stronger requirement for the network, because peers performing this attack are a superset
+of the peers performing the data availability attack.
+
+In order to address data integrity attacks, we make use of Proof of Retrievability (PoR).
+PoR is a cryptographic protocol that allows a peer to prove to a verifier that it is storing a file.
+The verifier does not need to know the file, but only a small secret that is generated from the file.
+The verifier can then challenge the peer to prove that it is storing the file by sending a challenge and
+comparing the response to an expected response.
+Both the challenge and the response are small.
+The exact size depends on the PoR protocol used, and in our case is $O(\sqrt{N})$ \cite{poralgebra} for
+both the challenge and the response, where $N$ is the size of the file in bytes.
+
+Since the PoR protocol is cheap to execute both on the network and on the computation side of the verifier,
+it can be used to address both types of attacks.
 
 \section{Reputation system}
 
@@ -106,7 +134,10 @@ the PoR scheme we have implemented.
 To answer the question fully, we also need to account for the network latency.
 However, for small enough files, we cannot guarantee that the peer is storing the data
 and not just fetching it from another peer in the network.
-\wtf{We could "ping" the other peer to record the network latency, but they could also cheat that.}
+\wtf{I need to find a way to use this data https://wondernetwork.com/pings/Dagupan/Alblasserdam.
+It suggests that the average ping between Dagupan, Philippines to Alblasserdam, Netherlands is
+815ms and peak time latency is 1800ms, so we can use 2s as a timeout for the audit.}
+
 
 ...
 

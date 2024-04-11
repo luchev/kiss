@@ -1,0 +1,18 @@
+storage:
+  type: local
+  path: data/dev
+  create: true
+grpc:
+  port: 5410
+swarm:
+  keypair: CAESQNke3KMGR5bN7UT1x8Tzw/wnoWyFKE3bOHmt8w4jVUqIPL3JNQ9xZJeIHZODOGC6i9PiqryEkZrWJBedIWdkZKQ
+  leading_zeros: 2
+  port: 6025
+  bootstrap: []
+ledger:
+  type: immudb
+  username: immudb
+  password: immudb
+  address: 127.0.0.1:3322
+malicious_behavior:
+  type: none

@@ -8,7 +8,7 @@ use libp2p_kad::{
     store, AddProviderError, GetClosestPeersError, GetProvidersError, GetRecordError,
     PutRecordError, QueryId,
 };
-use log::{error, info};
+use log::error;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::result;
@@ -38,6 +38,7 @@ error_chain! {
     }
     errors {
         UnknownError { display("unknown error") }
+        IoDetailed(e: io::Error, port: u16) { display("io error on port {}: {}", port, e) }
         DockerConnectionFailed(e: String) { display("could not connect to docker unix socket: {}", e) }
         LocalStorageFail(e: object_store::Error) { display("local storage failure: {}", e) }
         FilesystemErr(e: io::Error) { display("directory creation failed: {}", e) }
@@ -68,7 +69,7 @@ error_chain! {
         BehaviourInitFailed(e: std::io::Error) { display("p2p behaviour init failed: {}", e) }
         NoiseInitFailed(e: libp2p::noise::Error) { display("p2p noise init failed: {}", e) }
         IpParseFailed(e: libp2p::multiaddr::Error) { display("p2p ip address failed: {}", e) }
-        SwarmListenFailed(e: libp2p::TransportError<std::io::Error>) { display("p2p listen failed: {}", e) }
+        SwarmListenFailed(e: libp2p::TransportError<std::io::Error>, port: u16) { display("p2p listen failed on port {}: {}", port, e) }
         IoError(e: io::Error) { display("io error: {}", e) }
         StdError(e: String) { display("io error: {}", e) }
         TonicTransportError(e: tonic::transport::Error) { display("tonic transport error: {}", e) }

@@ -22,3 +22,12 @@ submodules
 .DS_store
 _minted-*
 build/
+config/peer1*.yaml
+config/peer2*.yaml
+config/peer3*.yaml
+config/peer4*.yaml
+config/peer5*.yaml
+config/peer6*.yaml
+config/peer7*.yaml
+config/peer8*.yaml
+config/peer9*.yaml
