@@ -1,6 +1,21 @@
 \chapter{Implementation}
 \label{chapter:implementation}
 
+\section{Ledger}
+
+The only component in the system we have implemented that is not distributed is the ledger.
+The ledger acts as the catalog for the files stored in the network,
+as well as the reputation of the peers.
+Ideally the ledger should be distributed in order for the system to be fully decentralized.
+An example of a distributed ledger technology is any blockchain.
+Initially we considered using one of Near, Solana, or Substrate \cite{near, solana, substrate}.
+These are all blockchains implemented in Rust, which is the language we are using for the implementation.
+This would have allowed us to easily integrate the ledger more easily with the rest of the system.
+However, we decided against using a blockchain for the ledger for this implementation
+mainly because of the complexity of integrating with a blockchain.
+We see this as a future work in order to make the system production ready,
+and we will discuss the integration with a blockchain in the \autoref{chapter:future-work}.
+
 \section{Using the immutable database Immudb}
 \label{section:using-immudb}
 
@@ -86,6 +101,71 @@ so we had to implement the retry mechanism in the client.
 The official documentation acknowledges this issue and mentions that MVCC (Multi-Version Concurrency Control)
 is on the roadmap, but not yet implemented, hence such failures are expected and need to be handled by the client.
 
+\subsection{Using Immudb to store the files (rejected idea)}
+
+One way for us to verify that a malicious peer is not modifying/deleting the files is
+to store the files in an immutable database (this does nothing against bit rot or hardware failures).
+Since it is immutable, it preserves the history of the data, and we can always request to see the history
+of the file to verify that it has not been tampered with.
+So why do we not run an Immudb instance on each peer and store the files in it?
+The reason is that this introduces additional complexity.
+
+While the peer cannot modify the file, without leaving a trace,
+it can always wipe the database and recreate it.
+This will remove the history and make it seem like no changes were made.
+Any data stored on the peer is at risk of being deleted or modified,
+and therefore cannot be trusted.
+Perhaps we can check the timestamp of the time of storing the file,
+but this can be easily modified by the peer if they use a modified Immudb instance.
+
+These and more considerations would need to be made if we were to use this approach.
+It enables a different class of attacks for which we would need to augment the system.
+In particular, we would need to implement ways to deal with these attacks in the Kademlia layer,
+and we would need to implement a new storage interface for Immudb, that Kademlia can use.
+
+While this is not impossible, it is considerably more work than adapting Kademlia to
+work with PoR and store files on the disk.
+
+\section{Kademlia}
+
+Kademlia is the distributed hash table (DHT) that we use to store the files in the network.
+We are using the implementation from the official Rust libp2p crate \cite{rustlibp2p}.
+We have made some extensions to the implementation to support our use cases.
+One of these is the local storage, which we will discuss in the following section.
+We have also included a direct peer to peer communication channel,
+which is referred to as a request-response protocol in the libp2p documentation,
+and we use it to perform audits required for the Proof of Retrievability.
+This was required since the base implementation of Kademlia is closed for extension,
+and we needed a way to communicate with the peers directly.
+
+An important note here is that the Kademlia implementation supports only some basic operations,
+some of which differ from the original Kademlia paper.
+For example, the storage operation stores the value on the current node,
+while the original Kademlia paper stores the value on the closest node to the key.
+Therefore, to achieve the original behavior of the Kademlia paper,
+we had to implement part of the Kademlia protocol ourselves.
+For the PUT operation in particular, we first use GET_CLOSEST_PEERS to find the closest peers to the key,
+and then perform the PUT operation on the peers we found.
+This was not a huge downside since it allowed us to easily inject the PoR protocol into this operation.
+The initialization step of the PoR protocol happens when we store the file for the first time.
+We have to create a secret vector that the Keeper where the file will be stored does not know.
+So once we find the closest peers to the key, we initialize the PoR secret vector,
+and then we store the file on the Keeper,
+while simultaneously storing the PoR secret as well as additional metadata in the ledger.
+
+\section{Local Storage}
+
+TODO
+
+\section{Malicious Peer Behaviors}
+
+TODO
+
+\section{Proof of Retrievability}
+
+TODO
+
+
 \section{Reputation System}
 \label{section:reputation-system}
 
@@ -96,7 +176,7 @@ The reputation system is designed to keep track of the behavior of the peers in 
 When a peer accepts to store a file, it stakes a certain amount of reputation points.
 Staking is temporary decrease of reputation points,
 which is returned to the peer after the expiry date of the file.
-\wtf{I'm still playing around with this idea, I'm not sure if this is the best way to do it.
+\wtf{TODO: I'm still playing around with this idea, I'm not sure if this is the best way to do it.
 Perhaps the staked reputation will be returned gradually with each successful audit.
 The whole idea of adding "staking" is to ensure the peer has a big hit in reputation from the beginning.
 This way a new peer in the network cannot just accept a lot of files as soon as it joins and then go offline.}

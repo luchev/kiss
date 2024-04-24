@@ -34,7 +34,7 @@ which was used as an index of the stored files and necessary metadata.
 During the audit, the Verifier would request the hash of the file from the Keeper
 and compare it with the file hash stored in the ledger.
 The communication between the Keepers and the Verifier was done over gRPC.
-The architecture is shown in \ref{fig:architecture-v1}.
+The architecture is shown in \autoref{fig:architecture-v1}.
 
 \begin{figure}
     \centering
@@ -56,11 +56,11 @@ The storage module was replaced with a custom implementation, which made use of 
 using an S3-compatible API.
 The Verifier was decentralized, so it was no longer a single point of failure.
 The Verifier and Keeper nodes were merged into a single node as two modules,
-which would perform both storage and audit operations as seen in Figure \ref{fig:architecture-v2}.
+which would perform both storage and audit operations as seen in \autoref{fig:architecture-v2}.
 In doing so, the communication between the Verifier and the Keeper was rewritten to happen over Kademlia.
 A new auditing mechanism was introduced, which was based on a Proof of Retrievability (PoR) scheme.
 After introducing PoR, we had to rewrite the storage and audit logic to support it
-as seen in \ref{fig:store-procedure-v2} and \ref{fig:verify-procedure-v2}.
+as seen in \autoref{fig:store-procedure-v2} and \autoref{fig:verify-procedure-v2}.
 Finally, some attacks were addressed, such as the Sybil attack and the Eclipse attack by introducing
 a requirement to solve a cryptographic puzzle upon joining the network.
 
