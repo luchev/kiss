@@ -324,6 +324,8 @@ that a server is storing some part of the data, but not necessarily all of it.
 For the audits Filecoin uses a custom protocol named Proof of Replication, which is a variant of PoR.
 In simple words, Proof of Replication works by storing each replica of a file encrypted with a different key,
 which makes each file different, it then issues cryptographic challenges as audits.
+This prevents Sybil attacks, where the malicious peers create multiple
+identities but store the same data in 1 place.
 To build on top of it also makes use of Proof of Spacetime, which is a protocol that proves that a node
 has been storing data for a certain amount of time.
 

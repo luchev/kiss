@@ -187,3 +187,15 @@ Finding the balance between audits and the overhead of the audits, and the penal
 is crucial for the success of the system.
 We will evaluate the system by running it with different parameters and observing the behavior of the nodes.
 We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.
+
+\section{TODO reputation}
+\wtf{TODO: I'm still playing around with this idea, I'm not sure if this is the best way to do it.
+Perhaps the staked reputation will be returned gradually with each successful audit.
+The whole idea of adding "staking" is to ensure the peer has a big hit in reputation from the beginning.
+This way a new peer in the network cannot just accept a lot of files as soon as it joins and then go offline.}
+Every time an audit is performed the reputation of the peer on which the audit was performed is adjusted.
+If the audit is successful, the reputation of the peer is increased,
+and if the audit fails, the reputation of the peer is decreased.
+Finally, a peer is awarded reputation points for performing audits.
+The increase and decrease numbers are configurable and can be adjusted to fit the network requirements.
+We will discuss the different possibilities for adjusting the reputation in the \autoref{chapter:evaluation}
