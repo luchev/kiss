@@ -567,6 +567,42 @@ mod tests {
     }
 
     #[bench]
+    fn bench_client_make_challenge_1mb(b: &mut Bencher) {
+        let (client_config, _) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(40000),
+        );
+        let client = VerificationClient::new(client_config);
+        b.iter(|| black_box(client.make_challenge_vector()));
+    }
+
+    #[bench]
+    fn bench_client_make_challenge_10mb(b: &mut Bencher) {
+        let (client_config, _) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(400000),
+        );
+        let client = VerificationClient::new(client_config);
+        b.iter(|| black_box(client.make_challenge_vector()));
+    }
+
+    #[bench]
+    fn bench_client_make_challenge_100mb(b: &mut Bencher) {
+        let (client_config, _) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(4000000),
+        );
+        let client = VerificationClient::new(client_config);
+        b.iter(|| black_box(client.make_challenge_vector()));
+    }
+
+    #[bench]
     fn bench_audit_client_1mb(b: &mut Bencher) {
         let (client_config, server_config) = init(
             "abcdefghijklmnopqrstuvwxyz"
@@ -609,5 +645,47 @@ mod tests {
         let challenge = client.make_challenge_vector();
         let response = server.fulfill_challenge(challenge.clone());
         b.iter(|| black_box(client.audit(challenge.clone(), response.clone())));
+    }
+
+    #[bench]
+    fn bench_server_response_1mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(40000),
+        );
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        b.iter(|| black_box(server.fulfill_challenge(challenge.clone())));
+    }
+
+    #[bench]
+    fn bench_server_response_10mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(400000),
+        );
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        b.iter(|| black_box(server.fulfill_challenge(challenge.clone())));
+    }
+
+    #[bench]
+    fn bench_server_response_100mb(b: &mut Bencher) {
+        let (client_config, server_config) = init(
+            "abcdefghijklmnopqrstuvwxyz"
+                .as_bytes()
+                .to_vec()
+                .repeat(40000000),
+        );
+        let client = VerificationClient::new(client_config);
+        let server = VerificationServer::new(server_config);
+        let challenge = client.make_challenge_vector();
+        b.iter(|| black_box(server.fulfill_challenge(challenge.clone())));
     }
 }

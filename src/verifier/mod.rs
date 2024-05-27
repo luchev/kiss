@@ -2,6 +2,7 @@ pub mod por;
 
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
+use crate::util::debug::print_now;
 use crate::util::{consts, Res};
 use async_trait::async_trait;
 use libp2p::PeerId;
@@ -10,8 +11,8 @@ use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
 use std::str::FromStr;
-use std::time::Instant;
-use time::Duration;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use time::{Duration, OffsetDateTime, Time};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -66,6 +67,7 @@ impl IVerifier for Verifier {
                 ledger.get_all_contracts().await?
             };
             let time_before_start = Instant::now();
+
             let starting_uuid = *self.starting_uuid.lock().await;
             let ending_uuid = *self.ending_uuid.lock().await;
             let mut success = 0;
@@ -97,11 +99,13 @@ impl IVerifier for Verifier {
                             success += 1;
                         }
                         false => {
+                            print_now(format!("audit failed for: {}", contract.file_uuid).as_str());
                             self.punish_peer(contract.peer_id).await;
                             failure += 1;
                         }
                     },
                     Err(_) => {
+                        print_now(format!("audit failed for: {}", contract.file_uuid).as_str());
                         self.punish_peer(contract.peer_id).await;
                         failure += 1;
                     }

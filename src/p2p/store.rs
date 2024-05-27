@@ -52,7 +52,7 @@ impl Default for LocalStoreConfig {
     fn default() -> Self {
         Self {
             max_records: 1024,
-            max_value_bytes: 65 * 1024,
+            max_value_bytes: 1024 * 1024 * 1024,
             max_provided_keys: 1024,
             max_providers_per_key: K_VALUE.get(),
         }

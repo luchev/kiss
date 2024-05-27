@@ -7,7 +7,7 @@ use futures::TryStreamExt;
 use libp2p::kad::Record;
 use libp2p_identity::PeerId;
 use libp2p_kad::RecordKey;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use object_store::{
     local::{self, LocalFileSystem},
     path::Path,
@@ -48,6 +48,7 @@ impl Serialize for RecordWrapper {
         serialized.end()
     }
 }
+
 impl<'de> Deserialize<'de> for RecordWrapper {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -143,6 +144,7 @@ impl IStorage for LocalStorage {
     async fn put(&self, data: Record) -> Res<()> {
         let path = key_to_path(&data.key)?;
         debug!("storing: {}", path.clone().display());
+        info!("storing: {:?}", data.value.len());
         let data = RecordWrapper(data);
         let serialized_data =
             serde_yaml::to_string(&data).map_err(ErrorKind::StoragePutSerdeError)?;

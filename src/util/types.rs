@@ -1,4 +1,8 @@
-use std::collections::HashSet;
+use core::fmt;
+use std::{
+    collections::HashSet,
+    fmt::{Display, Formatter},
+};
 
 use crate::{
     p2p::swarm::{QueryGetResponse, VerificationResponse},
@@ -48,6 +52,22 @@ pub enum CommandToSwarm {
         challenge_vector: Vec<u64>,
         resp: Responder<OneReceiver<Res<VerificationResponse>>>,
     },
+}
+
+impl Display for CommandToSwarm {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            CommandToSwarm::Get { key, .. } => write!(f, "Get({})", key),
+            CommandToSwarm::PutLocal { key, .. } => write!(f, "PutLocal({})", key),
+            CommandToSwarm::PutRemote { key, .. } => write!(f, "PutRemote({})", key),
+            CommandToSwarm::StartProviding { key, .. } => write!(f, "StartProviding({})", key),
+            CommandToSwarm::GetProviders { key, .. } => write!(f, "GetProviders({})", key),
+            CommandToSwarm::GetClosestPeers { key, .. } => write!(f, "GetClosestPeers({})", key),
+            CommandToSwarm::RequestVerification { peer, .. } => {
+                write!(f, "RequestVerification({})", peer)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

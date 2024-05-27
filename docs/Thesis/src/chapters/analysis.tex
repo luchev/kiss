@@ -3,18 +3,18 @@
 
 In \autoref{cha:prior-work}, we discussed how the project started as a decentralized
 storage system with verification and then evolved into integrating PoR into the verification,
-as soon as limitations of the decentralized verification mechanism were discovered.
-In this chapter we will discuss how we are solving the problem of storage attacks
+as soon as limitations of the decentralized verification mechanism became apparent.
+In this chapter we discuss how we are solving the problem of storage attacks
 and how PoR integrates into the reputation system.
 It is worth noting that apart from malicious peers, it is also possible for well-behaved peers to
 lose data due to hardware failures and bit rot.
-We will not cover this case as a special case, because it is a light version of what malicious
+We do not cover this case as a special case, because it is a light version of what malicious
 peers are capable of doing.
 
 \section{Malicious peers}
 
 There could be many types of malicious peers in a decentralized network,
-but we will cover only the relevant ones for the scope of the project.
+but we cover only the relevant ones for the scope of the project.
 The Related Work \autoref{chapter:related-work} covers other systems and
 how they handle the other types of attacks, not covered here.
 
@@ -25,7 +25,7 @@ There are two types of scenarios that can affect the integrity of the data in th
         data that has become corrupted without the peer being necessarily malicious.
 \end{enumerate}
 
-While the two seem similar, we will cover them separately, because they are performed by different types of attackers
+While the two seem similar, we cover them separately, because they are performed by different types of attackers
 and the detection mechanisms are different.
 We would like to investigate the different behaviors of peers and how to deal with them.
 How severe should the punishment for each type of attack be?
@@ -66,13 +66,13 @@ While this is a possible attack, it is an expensive one to execute,
 because the attacker needs to perform a lot of work to pass the audit.
 The attacker also needs to contribute considerable amount of their bandwidth to execute such an attack.
 This is precisely the reason why we want lightweight audits for the auditor and heavier audits for the auditee.
-For the above reasons, we will not consider this attack in our analysis.
+For the above reasons, we do not consider this attack in our analysis.
 
 \section{Using Proof of Retrievability (PoR) to prevent attacks}
 
 Preventing a Data availability attack can be done by querying the peer whether it has the data.
-In this case we assume that the peer is honest and will return a simple answer whether it has the data or not.
-The assumption that a peer will be honest is naive, but allows us to easily check if the peer is responsive.
+In this case we assume that the peer is honest and always returns a simple answer whether it has the data or not.
+The assumption that a peer is honest is naive, but allows us to easily check if the peer is responsive.
 One of the reasons we want to separate this attack is, so we can analyze peers going offline separately.
 We will discuss how to handle temporary and permanent offline peers in the evaluation section.
 
@@ -101,7 +101,7 @@ If the default version is used it is important to not reveal the secret to the K
 because the Keeper could then use the secret to generate the response without storing the data.
 Ideally we want to use the public version of the PoR protocol whenever possible.
 
-In \autoref{section:reputation-system} we will discuss how the PoR protocol can be used in conjunction with
+In \autoref{section:reputation-system} we discuss how the PoR protocol can be used in conjunction with
 a reputation system to keep track of the behavior of the peers in the network long-term.
 However, there is another approach that Filecoin \cite{filecoin} uses, which is to use 
 Proof of Spacetime.
@@ -111,21 +111,21 @@ to combine the old proofs into a single proof.
 \section{Reputation system}
 \label{section:reputation-system}
 
-To keep track of the behavior of the peers in the network, we will use a reputation system.
+To keep track of the behavior of the peers in the network, we use a reputation system.
 In short, we want well-behaved peers to have a high reputation and malicious peers to have a low reputation.
 Also, well performing peers should have a higher reputation than poorly performing peers.
 e.g., a peer that responds slowly or fails audits because their hard drive malfunctioned should
 have a lower reputation than a peer that is always online and responds quickly to requests.
 While this might seem punishing to the peer that has a malfunctioning hard drive,
 it is important to keep the network healthy and to prevent the peer from causing more damage to the network.
-Peers with higher reputation will be prioritized by the network, while peers with lower reputation will be
+Peers with higher reputation are prioritized by the network, while peers with lower reputation are
 avoided and potentially removed from the network.
 A key part of designing the reputation system is defining how much reputation is adjusted in each case.
-First, we will look into what situations lead to reputation adjustment, and then we will
+First, let us look into what situations lead to reputation adjustment, and then we can
 analyze how much reputation should be adjusted in each case.
 
-Reputation will be increased when a peer is behaving as expected,
-i.e., storing data and providing data, as well as performing audits will lead to an increase in reputation.
+Reputation is increased when a peer is behaving as expected,
+i.e., storing data and providing data, as well as performing audits, all lead to an increase in reputation.
 
 Reputation should be decreased in the case of failure to comply with the network rules.
 A peer that is not storing data should have their reputation reduced on each audit,
@@ -134,7 +134,7 @@ A peer that goes offline permanently would fall under the same category, as it w
 A peer that goes offline temporarily should be punished for the failed audits,
 but the punishment should be such that for a short period of being offline the peer should not use 
 too much of its reputation.
-When a peer is slow to respond to requests, the audit will be considered failed and the peer will have
+When a peer is slow to respond to requests, the audit is considered failed and the peer has
 its reputation reduced as if it was not storing the data.
 
 For the data integrity attacks, and in particular for storing corrupted data,
@@ -172,7 +172,7 @@ The time to process the request is the sum for reading the file from disk and ex
 The time to execute the PoR protocol is around 40ms for a 100 MB file as our benchmarks show in \autoref{fig:por-keeper}.
 The time to read a 100 MB file from disk is around 14ms on an SSD and 200ms on an HDD, if we
 use the average read speed of 7000 MB/s for an SSD and 500 MB/s for an HDD.
-Assuming that most peers use HDD for cheap storage, we will use the 200ms time to read a 100MB file from disk.
+Assuming that most peers use HDD for cheap storage, we shall use the 200ms time to read a 100MB file from disk.
 Adding these up, we should expect a Keeper's response to take 500ms + 250ms for each 100 MB of data.
 
 \begin{figure}
@@ -210,7 +210,7 @@ Ranking peers in the network based on their reputation means that
 having higher reputation gives merits to a peer.
 Therefore, peers might try to game the system in order to increase their reputation.
 
-We will discuss the following attacks:
+We focus on the following attacks:
 \begin{enumerate}
     \item \textbf{Increasing reputation attack} --- a peer tries to increase its reputation.
     \item \textbf{Decreasing reputation attack} --- a peer tries to decrease another peer's reputation.
@@ -228,10 +228,10 @@ This wouldn't work, because audits are performed on a rotating basis, i.e., each
 certain subset of the network.
 If an attacker tries to audit itself not following the cycle, the other peers in the network can detect this,
 because the audits are stored in the ledger as well and can be checked by other peers in the network.
-This leads us to the situation where if a peer tries to perform a Sybil attack and cheats, it will be detected by
+This leads us to the situation where if a peer tries to perform a Sybil attack and cheats, it is detected by
 the network.
 If the peer tries to perform a Sybil attack and doesn't cheat,
-it will simply contribute to the network as any other peer.
+it simply contributes to the network as any other peer.
 
 \textbf{Decreasing reputation attack} is when a peer tries to decrease another peer's reputation.
 We can apply the same reasoning as for the increasing reputation attack.
@@ -257,7 +257,7 @@ a subset of the files in the network.
 e.g., If we have two Verifiers, in cycle one Verifier A audits the first half of the key space,
 and Verifier B audits the second half.
 In cycle two, they switch --- Verifier A audits the second half and Verifier B audits the first half.
-The length of the cycle depends on how much data is in the system --- this will determine
+The length of the cycle depends on how much data is in the system --- this determines
 how much time it takes to audit all the files in the network.
 
 Upon completing the audit of all the files, the Verifier stores the results in the ledger.
@@ -292,10 +292,9 @@ The Verifier can misbehave in the following ways:
 \textbf{Not performing audits} can be caught by inspecting the result of the audits,
 which is stored in the ledger.
 In other words, in a given cycle, when a Verifier is auditing a set of Keepers,
-it will also audit the Verifiers that were previously responsible for auditing the Keepers.
-These audits will be to compare the results of the current Verifier
-with the results of the previous Verifiers,
-which can be found in the ledger.
+it also audits the Verifiers that were previously responsible for auditing the Keepers.
+These audits are used to compare the results of the current Verifier
+with the results of the previous Verifiers, which can be found in the ledger.
 There are two ways to audit the previous Verifiers.
 One is to audit the Verifiers from the previous few cycles.
 And the second is to randomly sample the Verifiers to audit,
@@ -308,7 +307,7 @@ and write the comparison results back to the ledger.
 Random sampling is cheaper to execute, but does not provide strict guarantees
 that the audits were performed correctly in the most recent cycles.
 If we have very few Verifiers in the network, we can use the first method,
-as the cycle length will be short and the cost of auditing the previous Verifiers will be low.
+as the cycle length will be short and the cost of auditing the previous Verifiers would be low.
 If we have many Verifiers in the network, we can use the second method,
 which will not provide strict guarantees, but will be cheaper to execute.
 Finally, we can combine the two methods to get the best of both worlds.
@@ -317,17 +316,17 @@ Finally, we can combine the two methods to get the best of both worlds.
 
 \textbf{Accusing the Keeper of not storing the data} can be caught in the next cycle
 when the next Verifier audits the same Keeper.
-If the Keeper is not storing the data, the audit will fail, and the Keeper will have its reputation reduced.
-If the Keeper is storing the data, the audit will pass, and the Verifier that accused the Keeper
-will have its reputation reduced.
+If the Keeper is not storing the data, the audit would fail, and the Keeper would have its reputation reduced.
+If the Keeper is storing the data, the audit would pass, and the Verifier that accused the Keeper
+would have its reputation reduced.
 In theory this can put the Keeper in a position of power, where it can fail the audit of the Verifier
 and in the following cycle pass the audit, falsely accusing the first Verifier.
-This is not a viable attack since the Keeper will need to sacrifice its reputation to perform the attack
+This is not a viable attack since the Keeper would need to sacrifice its reputation to perform the attack
 (on a failed audit the Keeper loses reputation).
 It becomes a game of who has more reputation to lose.
 At this point, if the malicious Keeper(s) have more reputation to lose than the Verifier(s),
 they would also have full control of the network,
-since with more reputation they will have the majority of the network's trust.
+since with more reputation they would have the majority of the network's trust.
 While this is a possible attack, we will not consider it in our analysis,
 because it is a very expensive attack to perform, and we do not consider
 attacks where the malicious party has more than 50\% of the reputation in the network
@@ -338,7 +337,7 @@ or more than 50\% of the nodes in the network.
 In conclusion, if we want to introduce Verifiers and allow each peer in the system to be a Verifier,
 we need to ensure that the Verifiers are performing their duties correctly,
 similarly to how we ensure that the Keepers are storing the data correctly.
-In this case we cannot use PoR, but instead will perform simple audits on the Verifiers,
+In this case we cannot use PoR, but instead we can perform simple audits on the Verifiers,
 by comparing the other Verifiers' results with the current Verifier's results.
 We are assuming that the current Verifier is one that is honest and is performing the audits correctly.
 
@@ -347,8 +346,8 @@ they can collude and cheat the system,
 so we require the majority of the Verifiers to be honest.
 In particular, it is possible for Keepers to attack the Verifiers by
 selecting a Verifier and failing its audits.
-On the following cycle, the Keeper will be audited by another Verifier,
-and it will pass the audit, resulting in the first Verifier losing reputation.
+On the following cycle, the Keeper would be audited by another Verifier,
+and it would pass the audit, resulting in the first Verifier losing reputation.
 While this is a possible attack, it can be prevented by introducing some form of
 onion routing.
 This would prevent the Keeper from knowing which Verifier is auditing it,
@@ -417,13 +416,13 @@ in case the Verifier tries to accuse it of not storing the data.
 The downside of this approach is that it increases the complexity of the system,
 but does not provide much benefit.
 
-We will look at the four possible scenarios.
-For each of them we will assume the Verifier in the following cycle is honest
-and will perform the audit correctly.
+Let us look at the four possible scenarios.
+For each of them we shall assume the Verifier in the following cycle is honest
+and performs the audit correctly.
 If it is not honest, and lies about the result of the audit,
 then the next honest Verifier will catch it and the malicious Verifier will lose reputation.
 In other words it is okay to have a chain of malicious Verifiers,
-it will end with an honest Verifier that will catch the malicious Verifiers
+as long as it ends with an honest Verifier that will catch the malicious Verifiers
 (assuming the system is not fully consisting of malicious Verifiers).
 
 \textbf{Keeper has the data \& audit succeeds} ---

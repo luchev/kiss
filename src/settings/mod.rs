@@ -55,12 +55,19 @@ pub struct Swarm {
     pub bootstrap: Vec<SocketAddr>,
 }
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct Verifier {
+    pub enabled: bool,
+}
+
 pub trait ISettings: Service {
     fn storage(&self) -> Storage;
     fn grpc(&self) -> Grpc;
     fn swarm(&self) -> Swarm;
     fn ledger(&self) -> Ledger;
     fn malicious_behavior(&self) -> MaliciousBehavior;
+    fn verifier(&self) -> Verifier;
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -88,7 +95,7 @@ impl Default for Ledger {
 pub enum MaliciousBehavior {
     None,
     DeleteAll,
-    DeleteRandom(usize),
+    DeleteLast,
 }
 
 impl Default for MaliciousBehavior {
@@ -110,6 +117,7 @@ pub struct Settings {
     pub swarm: Swarm,
     pub ledger: Ledger,
     pub malicious_behavior: Option<MaliciousBehavior>,
+    pub verifier: Verifier,
 }
 
 impl ISettings for Settings {
@@ -131,6 +139,10 @@ impl ISettings for Settings {
 
     fn malicious_behavior(&self) -> MaliciousBehavior {
         self.malicious_behavior.clone().unwrap_or_default()
+    }
+
+    fn verifier(&self) -> Verifier {
+        self.verifier.clone()
     }
 }
 
@@ -173,6 +185,7 @@ impl Settings {
                 address: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 3322)),
             },
             malicious_behavior: MaliciousBehavior::None.into(),
+            verifier: Verifier { enabled: true },
         }
     }
 }

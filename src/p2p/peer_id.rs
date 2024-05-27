@@ -48,7 +48,7 @@ mod tests {
     fn test_encode_decode() {
         let keypair = Keypair::generate_ed25519();
         let encoded = keypair_to_base64_proto(keypair.clone());
-        let decoded = keypair_from_base64_proto(encoded);
+        let decoded = _keypair_from_base64_proto(encoded);
 
         let original = keypair.try_into_ed25519().unwrap();
         let decoded = decoded.unwrap().try_into_ed25519().unwrap();

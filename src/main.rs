@@ -26,6 +26,7 @@ use grpc::IGrpcHandler;
 use log::info;
 use p2p::swarm::ISwarm;
 use runtime_injector::Svc;
+use settings::ISettings;
 use tokio::try_join;
 use util::{die, Res};
 use verifier::IVerifier;
@@ -45,11 +46,17 @@ async fn run() -> Res<()> {
     let kad: Svc<dyn ISwarm> = injector.get()?;
     let verifier: Svc<dyn IVerifier> = injector.get()?;
     let malice: Svc<Box<dyn malice::IMalice>> = injector.get()?;
-    try_join!(
-        grpc_handler.start(),
-        kad.start(),
-        verifier.start(),
-        malice.start()
-    )
-    .map(|_| ())
+    let settings: Svc<dyn ISettings> = injector.get()?;
+
+    if settings.verifier().enabled {
+        try_join!(
+            grpc_handler.start(),
+            kad.start(),
+            verifier.start(),
+            malice.start(),
+        )
+        .map(|_| ())
+    } else {
+        try_join!(grpc_handler.start(), kad.start(), malice.start(),).map(|_| ())
+    }
 }

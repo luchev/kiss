@@ -31,3 +31,4 @@ config/peer6*.yaml
 config/peer7*.yaml
 config/peer8*.yaml
 config/peer9*.yaml
+logs/*

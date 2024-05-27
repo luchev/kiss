@@ -1,3 +1,5 @@
+set shell := ["bash", "-uc"]
+
 run env:
     ENV={{env}} RUST_LOG=info cargo run
 
@@ -67,9 +69,16 @@ test-nocap:
 release:
     cargo build --release
 
+build: release
+
 run-many count: release
     for i in $(seq 1 {{count}}); do \
-        ENV=peer$i ./target/release/kiss & \
+        RUST_LOG=info ENV=peer$i ./target/release/kiss &>logs/peer$i.log & \
+    done
+
+run-many-no-build count:
+    for i in $(seq 1 {{count}}); do \
+        RUST_LOG=info ENV=peer$i ./target/release/kiss &>logs/peer$i.log & \
     done
 
 kill-all:
@@ -89,6 +98,14 @@ remove-db:
 
 recreate-db: remove-db create-db
 
+clean-data:
+    rm -rf data/*
+
+clean-logs:
+    rm -rf logs/*
+
+clean: recreate-db clean-data clean-logs kill-all
+
 put-many numbytes:
     openssl rand -base64 {{numbytes}} > /tmp/bytes
     grpcurl \
@@ -101,12 +118,14 @@ put-many numbytes:
 
 put-many-times numbytes times:
     for i in $(seq 1 {{times}}); do \
-        openssl rand -base64 {{numbytes}} > /tmp/bytes; \
+        echo -n '{"name": "key1", "ttl": 1200, "content": "' > /tmp/grpcurl.json; \
+        openssl rand -base64 {{numbytes}} | perl -pe 'chomp if eof' | base64 | tr -d "\n" >> /tmp/grpcurl.json; \
+        echo -n '"}' >> /tmp/grpcurl.json; \
         grpcurl \
         -plaintext \
         -import-path proto \
         -proto kiss.proto \
-        -d "{\"name\": \"key1\", \"content\": \"`cat /tmp/bytes | perl -pe 'chomp if eof' | base64`\", \"ttl\": \"1200\"}" \
+        -d @ \
         "[::1]:2000" \
-        kiss_grpc.KissService/Store; \
+        kiss_grpc.KissService/Store < /tmp/grpcurl.json; \
     done

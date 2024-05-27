@@ -1,14 +1,14 @@
 \chapter{Implementation}
 \label{chapter:implementation}
 
-In this chapter we will discuss the implementation of the system.
+In this chapter we discuss the implementation of the system.
 Our main goal is answering the questions posed in \autoref{chapter:introduction}.
 In particular --- can we use PoR to solve the integrity problem,
 can the reputation system assist in solving this problem,
 and how does the validation impact the performance of the network?
 
 In \autoref{chapter:analysis} we discussed how the system would work in an ideal world,
-and in this chapter we will discuss how we have implemented the system ---
+and in this chapter we discuss how we have implemented the system ---
 what shortcuts we have taken, what trade-offs we have made,
 how do they affect the system, and what we have learned from the implementation.
 
@@ -67,14 +67,17 @@ and based on the settings in the configuration, we initialize a different malici
 i.e., we provide a different implementation for the malice module.
 An example of how this works can be seen in \autoref{lst:injector}.
 
-\begin{lstlisting}[caption={Example of dynamically loading a module}, label={lst:injector}]
+\begin{lstlisting}[language=Rust, style=colouredRust, caption={Example of dynamically loading a module}, label={lst:injector}]
 let settings = injector.get::<Svc<dyn ISettings>>()?.malicious_behavior();
 let storage = injector.get::<Svc<dyn IStorage>>()?;
 
 match settings {
-    MaliciousBehavior::None => Ok(Box::<MaliceNone>::default()),
-    MaliciousBehavior::DeleteAll => Ok(Box::new(MaliceDeleteAll::new(storage))),
-    MaliciousBehavior::DeleteRandom(_) => Ok(Box::new(<MaliceDeleteRandom>::new(storage))),
+    MaliciousBehavior::None =>
+        Ok(Box::<MaliceNone>::default()),
+    MaliciousBehavior::DeleteAll =>
+        Ok(Box::new(MaliceDeleteAll::new(storage))),
+    MaliciousBehavior::DeleteRandom(_) =>
+        Ok(Box::new(<MaliceDeleteRandom>::new(storage))),
 }
 \end{lstlisting}
 
@@ -103,7 +106,7 @@ This would have allowed us to easily integrate the ledger more easily with the r
 However, we decided against using a blockchain for the ledger for this implementation
 mainly because of the complexity of integrating with a blockchain.
 We see this as a future work in order to make the system production ready,
-and we will discuss the integration with a blockchain in the \autoref{chapter:future-work}.
+and we discuss the integration with a blockchain in the \autoref{chapter:future-work}.
 
 \section{Using the immutable database Immudb}
 \label{section:using-immudb}
@@ -129,7 +132,7 @@ This means that the database is not designed to be run on multiple nodes,
 and it does not support replication out of the box.
 In a real-world scenario, running the database on a single node is a huge flaw,
 as it makes the database a single point of failure.
-For the purposes of our experiments, we will run the database on a single node.
+For the purposes of our experiments, we run the database on a single node.
 However, we will briefly discuss how the database can be made distributed in the future.
 The first approach is by distributing the Immudb itself.
 We could shard the data and run multiple instances of the database on different peers.
@@ -181,7 +184,7 @@ Immudb does not support conflict resolution out of the box.
 Under the hood, immudb uses transactions even in the case of a non-session login.
 The delay in the transactions is minimal, but it can affect the queries.
 In particular, if two writes happen at the same time (or close to each other),
-the database will return an error --- \texttt{ErrTxReadConflict}.
+the database returns an error --- \texttt{ErrTxReadConflict}.
 This error stands for "tx read conflict" and it means that the transaction was not successful
 because another transaction was committed in the meantime.
 It occurs even when the query is not a transaction,
@@ -202,7 +205,7 @@ The reason is that this introduces additional complexity.
 
 While the peer cannot modify the file, without leaving a trace,
 it can always wipe the database and recreate it.
-This will remove the history and make it seem like no changes were made.
+This erases the history and make it seem like no changes were made.
 Any data stored on the peer is at risk of being deleted or modified,
 and therefore cannot be trusted.
 Perhaps we can check the timestamp of the time of storing the file,
@@ -221,7 +224,7 @@ work with PoR and store files on the disk.
 Kademlia is the distributed hash table (DHT) that we use to store the files in the network.
 We are using the implementation from the official Rust libp2p crate \cite{rustlibp2p}.
 We have made some extensions to the implementation to support our use cases.
-One of these is the local storage, which we will discuss in the following section.
+One of these is the local storage, which we touch upon in the following section.
 We have also included a direct peer to peer communication channel,
 which is referred to as a request-response protocol in the libp2p documentation,
 and we use it to perform audits required for the Proof of Retrievability.
@@ -238,7 +241,7 @@ For the PUT operation in particular, we first use GET\_CLOSEST\_PEERS to find th
 and then perform the PUT operation on the peers we found.
 This was not a huge downside since it allowed us to easily inject the PoR protocol into this operation.
 The initialization step of the PoR protocol happens when we store the file for the first time.
-We have to create a secret vector that the Keeper where the file will be stored does not know.
+We have to create a secret vector that the Keeper, where the file is stored, does not know.
 So once we find the closest peers to the key, we initialize the PoR secret vector,
 and then we store the file on the Keeper,
 while simultaneously storing the PoR secret as well as additional metadata in the ledger.
@@ -260,7 +263,7 @@ and storing the bytes to disk.
 Files in Kademlia are shared as Records.
 A Record is the key, value, publishers, and expiration date.
 We cannot store only the value, because when the file is requested,
-it will be requested as a Record, and we need to reconstruct the Record.
+it is requested as a Record, and we need to reconstruct the Record.
 If we are missing the metadata, we cannot construct a valid Record.
 Unfortunately, serializing and deserializing a Record is not trivial.
 The Record is not designed to be serializable, mainly due to the expiration date field.
@@ -315,7 +318,7 @@ and both cases can be implemented in the same way.
 We will refer to these behaviors as malicious behaviors.
 
 In order to test the system, we need to simulate malicious peer behaviors.
-We have implemented a few malicious peer behaviors that we will use to test the system.
+We have implemented a few malicious peer behaviors that we use to test the system.
 These behaviors get injected as a module into the peer,
 and they can be turned on or off at any time.
 The dependency injector is a huge help here, as we can easily change the behavior of the peer
@@ -372,7 +375,7 @@ service KissService {
 This definition defines a service called \texttt{KissService} with one method \texttt{Retrieve},
 that we can then implement in Rust such as \autoref{lst:grpc-server}.
 
-\begin{lstlisting}[caption={Example of a gRPC server implementation}, label={lst:grpc-server}]
+\begin{lstlisting}[caption={Example of a gRPC server implementation}, label={lst:grpc-server}, language=Rust, style=colouredRust]
 impl KissService for KissServiceImplementation {
     async fn retrieve(
         &self,
@@ -411,6 +414,13 @@ when we store a file in the network through the gRPC gateway.
     \caption{Storing a file in the network}
     \label{fig:store}
 \end{figure}
+
+An important note is that by default the gRPC crate, \texttt{tonic},
+processes requests with maximum size of 4MB.
+We need to increase this size by setting the \texttt{max\_decoding\_message\_size} and
+\texttt{max\_encoding\_message\_size} in the gRPC configuration to a higher value.
+Similarly, in the Kademlia module we have to set the \texttt{set\_max\_packet\_size}
+to a higher value, because by default Kademlia does not allow sending packages larger than 1MB.
 
 We have chosen to use an external tool to make the requests,
 instead of implementing a client, because it allows faster iteration and testing.
@@ -472,10 +482,10 @@ which the C language does.
 The last thing to mention is the random number generator used in the protocol.
 A random number generator is used to generate the secret vector that the Keeper does not know
 and the challenges for the Keeper later on.
-For the purposes of testing we are using a seeded Mersene Twister, which allows us reproducible results.
+For the purposes of testing we are using a seeded Mersenne Twister, which allows us reproducible results.
 In a real-world scenario, we would use a cryptographically secure random number generator
 such as ChaCha20 \cite{chacha}.
-For the purposes of this thesis, a seeded Mersene Twister is sufficient,
+For the purposes of this thesis, a seeded Mersenne Twister is sufficient,
 as it is predictable, and we do not want to test the random number generator.
 
 \section{Reputation System}
@@ -525,8 +535,7 @@ For the purpose of this thesis we have decided to use the immutable database Imm
 to store the reputation of the peers.
 It is centralized, but allows us to abstract ourselves from solving the problem of designing a
 decentralized and tamper-proof reputation system, which is outside the scope of this thesis.
-We will consider the database as a single source of truth for the reputation of the peers
-during our tests.
+We consider the database as a single source of truth for the reputation of the peers during our tests.
 
 The reputation system is designed to keep track of the behavior of the peers in the network.
 When a peer accepts to store a file, it stakes a certain amount of reputation points.

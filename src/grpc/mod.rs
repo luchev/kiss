@@ -2,6 +2,7 @@ use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
 use crate::settings::ISettings;
 use crate::util::consts::{self, GRPC_TIMEOUT, LOCALHOST};
+use crate::util::debug::print_now;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissService;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissServiceServer;
 use crate::util::grpc::kiss_grpc::{
@@ -19,7 +20,7 @@ use runtime_injector::{
 };
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -95,7 +96,11 @@ impl IGrpcHandler for GrpcHandler {
 
         Server::builder()
             .layer(middleware)
-            .add_service(KissServiceServer::new(self.inner.clone()))
+            .add_service(
+                KissServiceServer::new(self.inner.clone())
+                    .max_decoding_message_size(1024 * 1024 * 1024)
+                    .max_encoding_message_size(1024 * 1024 * 1024),
+            )
             .serve_with_incoming(TcpListenerStream::new(listener))
             .await?;
         Ok(())
@@ -198,6 +203,7 @@ impl KissService for Inner {
         request: Request<StoreRequest>,
     ) -> std::result::Result<Response<StoreResponse>, Status> {
         let request = request.into_inner();
+        let start_time = SystemTime::now();
         debug!("store request for {}", request.name);
 
         let file_hash = hash(&request.content);
@@ -209,6 +215,26 @@ impl KissService for Inner {
         debug!("closest peers: {:?}", closest);
         let closest_peers =
             closest.map_err(|e| Status::internal(format!("no closest peers {}", e.to_string())))?;
+
+        let result = self
+            .swarm_controller
+            .put_to(
+                file_uuid.clone().to_string(),
+                request.content.clone(),
+                closest_peers
+                    .iter()
+                    .take(consts::REPLICATION_FACTOR)
+                    .cloned()
+                    .collect(),
+            )
+            .await;
+
+        debug!("put finished: {:?}", result);
+
+        if let Err(e) = result {
+            info!("failed to store file {}, {:?}", file_uuid, e);
+            return Err(Status::internal(e.to_string()));
+        }
 
         for peer in closest_peers.iter().take(consts::REPLICATION_FACTOR) {
             let client_config = VerificationClientConfig::from_file(&request.content);
@@ -247,43 +273,23 @@ impl KissService for Inner {
             }
         }
 
-        let result = self
-            .swarm_controller
-            .put_to(
-                file_uuid.clone().to_string(),
-                request.content.clone(),
-                closest_peers
-                    .iter()
-                    .take(consts::REPLICATION_FACTOR)
-                    .cloned()
-                    .collect(),
-            )
-            .await;
+        let since_start = start_time.elapsed().unwrap().as_millis();
+        info!(
+            "stored file {} at peers [{}] for {} ms",
+            file_uuid,
+            closest_peers
+                .iter()
+                .take(consts::REPLICATION_FACTOR)
+                .cloned()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
+            since_start
+        );
 
-        debug!("put finished: {:?}", result);
-
-        match result {
-            Ok(_) => {
-                info!(
-                    "stored file {} at peers [{}]",
-                    file_uuid,
-                    closest_peers
-                        .iter()
-                        .take(consts::REPLICATION_FACTOR)
-                        .cloned()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                );
-                Ok(Response::new(StoreResponse {
-                    name: file_uuid.to_string(),
-                }))
-            }
-            Err(e) => {
-                info!("failed to store file {}", file_uuid);
-                Err(Status::internal(e.to_string()))
-            }
-        }
+        Ok(Response::new(StoreResponse {
+            name: file_uuid.to_string(),
+        }))
     }
 
     async fn retrieve(

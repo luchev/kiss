@@ -24,7 +24,8 @@ We will not account for the overhead of the system being idle in the benchmarks.
     \label{fig:1000-instances}
 \end{figure}
 
-\section{PoR}
+\section{Proof of Retrievability (PoR)}
+\label{section:por-evaluation}
 
 In this section, we will evaluate how the PoR system performs in a real-world scenario.
 We have discussed how PoR is used to ensure the integrity of the data stored on the nodes.
@@ -76,7 +77,7 @@ which is a very cache-friendly data structure.
     };
     \end{axis}
   \end{tikzpicture}
-  \caption[]{Time required for the Verifier to create the challenge for PoR.}
+  \caption{Time required for the Verifier to create the challenge for PoR.}
   \label{fig:por-verifier-create-challenge}
 \end{figure}
 
@@ -97,7 +98,7 @@ which is a very cache-friendly data structure.
     };
     \end{axis}
   \end{tikzpicture}
-  \caption[]{Time required for the Verifier to audit the challenge response PoR.}
+  \caption{Time required for the Verifier to audit the challenge response PoR.}
   \label{fig:por-verifier-audit-challenge}
 \end{figure}
 
@@ -128,11 +129,16 @@ implement PoR.
     };
     \end{axis}
   \end{tikzpicture}
-  \caption[]{Time required to create the challenge response (proof) for PoR on the Keeper side, without reading the file from disk.}
+  \caption{Time required to create the challenge response (proof) for PoR on the Keeper side, without reading the file from disk.}
   \label{fig:por-keeper-challenge-generate}
 \end{figure}
 
 \subsection{Is PoR the limiting factor in the system?}
+
+One of the main questions we want to answer in this thesis is whether the validation component
+affects the system's performance.
+From the results we can see that while the evaluation aspect introduces more workload,
+however, it is within reasonable levels.
 
 In the previous section we saw that the Verifier can generate the challenge and audit the proof very quickly.
 Since the speed of reading from an SSD is on average 7000 MB/s, the PoR protocol in the Verifier
@@ -147,17 +153,144 @@ Whether the PoR protocol is the limiting factor or not depends on what kind of s
 
 In conclusion, the Verifier can send challenges in parallel, but the Keeper nodes will still be
 the limiting factor in the system.
+% 10 1kb
+% real    0m0.804s
+% user    0m0.196s
+% sys     0m0.167s
 
-\section{TODO}
-\wtf{WIP}
+% 100 1kb
+% real    0m5.146s
+% user    0m1.779s
+% sys     0m1.264s
 
-The next 3 questions:
+\section{How fast are malicious behaviors detected?}
 
+All files are verified each cycle.
+The Verifiers split the work of verifying the files based on the file's key.
+As an example, if we have two peers (2 Keepers and 2 Verifiers),
+the Verifiers would split the files of each Keeper and take turns verifying them
+during alternating cycles.
+This is illustrated in \autoref{fig:2-verifiers}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=350pt]{gfx/2-verifiers.png}
+    \captionof{figure}{Splitting the ID space between two Verifiers}
+    \label{fig:2-verifiers}
+\end{figure}
+
+This means that when a peer becomes malicious they have at most one cycle of time,
+before they are detected.
+We are running the benchmarks in \autoref{table:storage_detection_times} with a 5s cycle time
+and various file sizes.
+The 5 seconds period is arbitrarily chosen to give us initial results.
+The cycle time when running the system in production should be set to a value proportional to
+the amount of data stored in the network.
+Based on the results from the benchmarks in \autoref{section:por-evaluation},
+we can conclude that ...
+\wtf{for each 100k files added to the system, we need to increase the cycle time by...,
+for each 1GB of data stored in the system, we need to increase the cycle time by...,
+for each X number of peers in the network, we need to increase the cycle time by...}
+
+\wtf{todo: run benchmarks and update times}
+
+\begin{table}
+  \myfloatalign
+  \pgfplotstabletypeset[
+  every head row/.style={ before row=\toprule, after row=\midrule },
+  every last row/.style={ after row=\bottomrule },
+%  every even row/.style={ %Define alternating row colouring
+%    before row={\rowcolor[gray]{0.95}}
+%  },
+  columns={x, avgy, stddevpp },
+  columns/npeers/.style={ column name=\textsc{Number of peers}, dec sep align, fixed, fixed zerofill, precision=2 },
+  columns/data/.style={ column name=\textsc{Data stored}, dec sep align, fixed, fixed zerofill, precision=2 },
+  columns/time/.style={ column name=\textsc{Time without Verifier running}, dec sep align, fixed, fixed zerofill, precision=1 },
+  columns/timever/.style={ column name=\textsc{Time with Verifier running}, dec sep align, fixed, fixed zerofill, precision=1 },
+  ]{./data/store.csv}
+  \caption{TODO caption}
+  \label{tab:pretty-table}
+\end{table}
+
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|>{\centering\arraybackslash}m{4cm}|>{\centering\arraybackslash}m{4cm}|>{\centering\arraybackslash}m{4cm}|}
+\hline
+\textbf{Files stored} & \textbf{Time to store all files} & \textbf{Time to detect malicious behavior} \\ \hline
+100x1kb & 0.0s & 0.0s \\ \hline
+1000x1kb & 0.0s & 0.0s \\ \hline
+10000x1kb & 0.0s & 0.0s \\ \hline
+100000x1kb & 0.0s & 0.0s \\ \hline
+100x1mb & 0.0s & 0.0s \\ \hline
+1000x1mb & 0.0s & 0.0s \\ \hline
+10000x1mb & 0.0s & 0.0s \\ \hline
+100x100mb & 0.0s & 0.0s \\ \hline
+\end{tabular}
+\caption{Storage and Detection Times for Various File Sizes with 5s cycle time.}
+\label{table:storage_detection_times}
+\end{table}
+
+\section{Reputation system based on a ledger}
+
+The results of the PoR are stored in a ledger, which acts as the source of truth for
+the performance of the peers in the network.
+While ideally we would like to have a decentralized ledger, for the sake of simplicity
+we will use a centralized ledger in our evaluation.
+For the purposes of evaluation we could have used a simple SQL database or a local file,
+however, we used Immudb because it is what we used in the previous iterations of the system
+and at the time we were exploring it as a potential solution for the ledger.
+
+\subsection{Immudb performance}
+
+Having a centralized ledger means a bottleneck in the system.
+\wtf{Cover how many requests per second Immudb can handle.
+Centralized is of course bad, but what is exactly limiting us when using a centralized ledger?}
+
+
+\subsection{Reputation system based on a ledger}
+\wtf{Answer the question from the hypothesis: 
     Is a reputation system based on a ledger a viable measure against malicious nodes?
-    How does the validation system affect the performance of the network?
-    Does the validation system affect the other features of the system (performance, security, etc.)?
+}
+\wtf{
+    I think in this section I'll cover what are a ledger's strong points and guarantees that
+    would be beneficial for the reputation system.
+}
+
+\section{Using Rust}
+
+\wtf{TODO: MOVE THIS TO THE END}
+
+\wtf{Cover what are the strong/weak points of using Rust for such a system.}
+
+\section{Balancing the reputation system}
+
+\subsection{Gaining and losing reputation as a Keeper}
+\wtf{Cover how the reputation awards should be balanced against the punishments to ensure
+that the system can maintain its integrity. We will assume that a node dropping to negative reputation
+results in it being kicked out of the network.}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|>{\centering\arraybackslash}m{2cm}|>{\centering\arraybackslash}m{2cm}|>{\centering\arraybackslash}m{2cm}|>{\centering\arraybackslash}m{2cm}|>{\centering\arraybackslash}m{3cm}|}
+\hline
+\textbf{Malicious nodes} & \textbf{Initial reputation} & \textbf{Rewards} & \textbf{Punishments} & \textbf{Time for a peer to lose its reputation} \\ \hline
+1\% & 0 & 0 & 0 & 0 \\ \hline
+10\% & 0 & 0 & 0 & 0 \\ \hline
+20\% & 0 & 0 & 0 & 0 \\ \hline
+\end{tabular}
+\caption{Reputation balancing and time required for a peer to lose all its reputation after becoming malicious.}
+\label{table:storage_detection_times}
+\end{table}
+
+\subsection{Gaining and losing reputation as a Verifier}
+
+\wtf{Do the same for checking the previous Verifier's audit as we do for the Keeper}
+
 
 \section{TODO}
+\wtf{Nothing has changed from here onwards}
+
 \wtf{this section needs to be rewritten}
 
 We need to evaluate the proper penalties and rewards for the nodes.
@@ -199,3 +332,18 @@ and if the audit fails, the reputation of the peer is decreased.
 Finally, a peer is awarded reputation points for performing audits.
 The increase and decrease numbers are configurable and can be adjusted to fit the network requirements.
 We will discuss the different possibilities for adjusting the reputation in the \autoref{chapter:evaluation}
+
+\wtf{TODO: notes from meeting:
+give peers some leeway from being offline - give it some time to be offline before punishing.
+take a look at the classic report for TABLES
+at the end of the evaluation add a sumamry - is the system viable or should you use amazon,
+is the system recommened for production for companies - for what use cases is it recommened,
+basically add stuff something akin to a conclusion that then can be used in the conclusion chapter,
+for tables - how many times were tests ran, what is the standard deviation, averages
+in the appendix - how did I run the tests, how to rerun them,
+in the appendix - organization of the repository,
+(table example from the classic report - related work section with short and long text)
+eval - if someone sees this PoR for the first time - how expensive is it, what is the overhead, why not use
+amazon/other s3
+por could be good for when we store files in s3 and we use por to check the integrity of the files
+}

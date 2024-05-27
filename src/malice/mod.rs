@@ -1,6 +1,7 @@
 mod deleteall;
-mod deleterandom;
+mod deletelast;
 mod none;
+
 use crate::settings::{ISettings, MaliciousBehavior};
 use crate::storage::IStorage;
 use crate::util::Res;
@@ -10,6 +11,7 @@ use runtime_injector::{
 };
 
 use self::deleteall::MaliceDeleteAll;
+use self::deletelast::MaliceDeleteLast;
 use self::none::MaliceNone;
 
 #[async_trait]
@@ -32,7 +34,7 @@ impl ServiceFactory<()> for MaliceProvider {
         match settings {
             MaliciousBehavior::None => Ok(Box::<MaliceNone>::default()),
             MaliciousBehavior::DeleteAll => Ok(Box::new(MaliceDeleteAll::new(storage))),
-            MaliciousBehavior::DeleteRandom(_) => todo!(),
+            MaliciousBehavior::DeleteLast => Ok(Box::new(MaliceDeleteLast::new(storage))),
         }
     }
 }

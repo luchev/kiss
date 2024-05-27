@@ -94,6 +94,7 @@ impl ServiceFactory<()> for SwarmProvider {
         let mut swarm = {
             let cfg = KademliaConfig::default()
                 .set_query_timeout(Duration::from_secs(60))
+                .set_max_packet_size(1024 * 1024 * 1024)
                 .to_owned();
             // let store = MemoryStore::with_config(
             //     local_peer_id,
@@ -109,7 +110,7 @@ impl ServiceFactory<()> for SwarmProvider {
                 local_peer_id,
                 LocalStoreConfig {
                     max_records: 150000,
-                    max_value_bytes: 1024 * 1024 * 200,
+                    max_value_bytes: 1024 * 1024 * 1024,
                     max_provided_keys: 150000,
                     max_providers_per_key: 20,
                 },
@@ -245,7 +246,7 @@ impl Swarm {
         event: SwarmEvent<WireEvent, SwarmError>,
         swarm: &mut MutexGuard<'t, libp2p::Swarm<CombinedBehaviour>>,
     ) -> Res<()> {
-        debug!("swarm event {:?}", event);
+        // debug!("swarm event {:?}", event);
         match event {
             SwarmEvent::NewListenAddr { address, .. } => {
                 info!("listening on {address:?}");
@@ -499,7 +500,7 @@ impl Swarm {
         swarm: &mut MutexGuard<'a, libp2p::Swarm<CombinedBehaviour>>,
     ) -> Res<()> {
         let instruction = instruction.ok_or(ErrorKind::MissingInstruction)?;
-        debug!("instruction {:?}", instruction);
+        debug!("instruction {}", instruction);
         match instruction {
             CommandToSwarm::PutLocal { key, value, resp } => {
                 self.handle_controller_put(swarm, key, value, resp).await
