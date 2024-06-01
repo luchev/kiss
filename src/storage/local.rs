@@ -144,7 +144,6 @@ impl IStorage for LocalStorage {
     async fn put(&self, data: Record) -> Res<()> {
         let path = key_to_path(&data.key)?;
         debug!("storing: {}", path.clone().display());
-        info!("storing: {:?}", data.value.len());
         let data = RecordWrapper(data);
         let serialized_data =
             serde_yaml::to_string(&data).map_err(ErrorKind::StoragePutSerdeError)?;

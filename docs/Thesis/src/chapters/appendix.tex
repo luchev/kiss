@@ -1,2 +1,74 @@
 \appendix
+\chapter{Appendix}
 \label{appendix}
+
+\section{Organization of the repository}
+
+The project is organized as follows:
+
+\dirtree{%
+.1 config \DTcomment{peer configs}.
+.1 data \DTcomment{default directory for peer's data}.
+.1 docs \DTcomment{documentation}.
+.1 logs \DTcomment{log files from peers}.
+.1 proto \DTcomment{protobuf definitions}.
+.1 src \DTcomment{rust source code}.
+.2 build.rs \DTcomment{code generation pre compilation}.
+.2 main.rs \DTcomment{main program}.
+.1 submodules \DTcomment{external packages}.
+.1 justfile \DTcomment{automation scripts}.
+}
+
+The whole project is controlled via just scripts (\url{https://github.com/casey/just}).
+The justfile contains all the necessary commands for building, running and testing the project.
+Some important commands are:
+\begin{itemize}
+    \item \texttt{just build} - builds the project.
+    \item \texttt{just run X} - builds and runs the project with config \texttt{config/X.yaml}.
+    \item \texttt{just test} - runs the unit tests.
+    \item \texttt{just run-many count} - runs \texttt{count} peers.
+    \item \texttt{just thesis} - compiles this document.
+    \item \texttt{just clean} - cleans logs, database, kills running peers --- this is run before every benchmark test.
+    \item \texttt{just put data} - inserts \texttt{data} into the network as a file.
+    \item \texttt{just get uuid} - retrieves the file under \texttt{uuid} from the network.
+\end{itemize}
+
+\section{Running the project}
+
+To run the project, you need a unix machine,
+the Rust compiler in nightly mode (cargo 1.74.0-nightly),
+the \texttt{just} tool, grpcurl, the protobuf compiler, and Docker.
+Compiling the latex files is done additionally with \texttt{tectonic}.
+
+After cloning the repository we have to initialize the submodules as seen in \autoref{lst:gh-clone}.
+\begin{lstlisting}[language=bash, caption={Cloning and setting up the repository}, label={lst:gh-clone}]
+git clone git@github.com:luchev/kiss.git
+cd kiss
+git submodule update --init --recursive
+\end{lstlisting}
+
+For the minimum setup we need two peers running \texttt{just run base} and \texttt{just run peer1}.
+Once we have two peers running we can insert a file with \texttt{just put <data>}.
+
+\section{Running the benchmarks}
+
+Running the benchmarks is done by using the just commands and reading the results from the logs.
+Most benchmarks output \texttt{info} level logs.
+Running the benchmarks is done as seen in \autoref{lst:bench}.
+While there is a script for running the benchmarks that uses the same commands, 
+it is not recommended because before each benchmark we want to make sure that
+the system is in a fully initialized state.
+Sometimes the peers need a couple of seconds to connect to each other.
+The Immudb docker image might take a while to start as well.
+All these factors and more cause the first couple of requests to either fail or take
+much longer than the rest, which skews the results.
+For this reason it is often needed to rerun the last step \texttt{just put-bytes-times}
+to make sure we get consistent results.
+
+\begin{lstlisting}[language=bash, caption={Running the benchmarks}, label={lst:bench}]
+just clean # remove logs, data, reset database
+just run-many 10 # run 10 peers
+just run base &>base.log & # run the base peer
+sleep 2 # wait for the peers to initialize and connect
+just put-bytes-times 1000000 100
+\end{lstlisting}

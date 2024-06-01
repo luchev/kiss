@@ -68,6 +68,7 @@ pub trait ISettings: Service {
     fn ledger(&self) -> Ledger;
     fn malicious_behavior(&self) -> MaliciousBehavior;
     fn verifier(&self) -> Verifier;
+    fn por(&self) -> Por;
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -110,6 +111,12 @@ pub struct Grpc {
     pub port: u16,
 }
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct Por {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Settings {
     pub storage: Storage,
@@ -118,6 +125,7 @@ pub struct Settings {
     pub ledger: Ledger,
     pub malicious_behavior: Option<MaliciousBehavior>,
     pub verifier: Verifier,
+    pub por: Por,
 }
 
 impl ISettings for Settings {
@@ -143,6 +151,10 @@ impl ISettings for Settings {
 
     fn verifier(&self) -> Verifier {
         self.verifier.clone()
+    }
+
+    fn por(&self) -> Por {
+        self.por.clone()
     }
 }
 
@@ -186,6 +198,7 @@ impl Settings {
             },
             malicious_behavior: MaliciousBehavior::None.into(),
             verifier: Verifier { enabled: true },
+            por: Por { enabled: true },
         }
     }
 }

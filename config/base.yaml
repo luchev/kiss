@@ -12,6 +12,7 @@ swarm:
     - 127.0.0.1:8801
     - 127.0.0.1:8802
     - 127.0.0.1:8803
+    - 127.0.0.1:8099
 ledger:
   type: immudb
   username: immudb
@@ -21,4 +22,6 @@ malicious_behavior:
   # type: delete_all
   type: none
 verifier:
-  enabled: false
+  enabled: true
+por:
+  enabled: true

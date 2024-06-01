@@ -1,6 +1,6 @@
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
-use crate::settings::ISettings;
+use crate::settings::{ISettings, Por};
 use crate::util::consts::{self, GRPC_TIMEOUT, LOCALHOST};
 use crate::util::debug::print_now;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissService;
@@ -44,6 +44,7 @@ impl ServiceFactory<()> for GrpcProvider {
         _request_info: &RequestInfo,
     ) -> InjectResult<Self::Result> {
         let port = injector.get::<Svc<dyn ISettings>>()?.grpc().port;
+        let por = injector.get::<Svc<dyn ISettings>>()?.por();
         let swarm_controller = injector.get::<Svc<dyn ISwarmController>>()?;
         let ledger = injector.get::<Svc<Mutex<ImmuLedger>>>()?;
 
@@ -51,6 +52,7 @@ impl ServiceFactory<()> for GrpcProvider {
             inner: Inner {
                 swarm_controller,
                 ledger,
+                por,
             },
             port,
         })
@@ -66,6 +68,7 @@ pub trait IGrpcHandler: Service {
 struct Inner {
     swarm_controller: Svc<dyn ISwarmController>,
     ledger: Svc<Mutex<ImmuLedger>>,
+    por: Por,
 }
 
 pub struct GrpcHandler {
@@ -152,52 +155,6 @@ impl KissService for Inner {
         }))
     }
 
-    // async fn put(
-    //     &self,
-    //     request: Request<PutRequest>,
-    // ) -> std::result::Result<Response<PutResponse>, Status> {
-    //     let request = request.into_inner();
-    //     info!("received a put request for {}", request.path);
-    //     let res = self
-    //         .swarm_controller
-    //         .set(request.path, request.content)
-    //         .await;
-    //     info!("kad result {:?}", res);
-    //     // self.storage
-    //     //     .put(request.path.into(), request.content)
-    //     //     .await
-    //     //     .map_err(|e| match e.kind() {
-    //     //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-    //     //         _ => Status::unknown("Unknown storage error".to_string()),
-    //     //     })?;
-
-    //     let reply = PutResponse {};
-    //     Ok(Response::new(reply))
-    // }
-
-    // async fn get(
-    //     &self,
-    //     request: Request<GetRequest>,
-    // ) -> std::result::Result<Response<GetResponse>, Status> {
-    //     let request = request.into_inner();
-    //     info!("received a get request for {}", request.path);
-    //     let res = self.swarm_controller.get(request.path).await;
-    //     info!("kad result {:?}", res);
-    //     let content =
-    //         res.map_err(|e| Status::not_found(format!("failed getting from swarm: {}", e)))?;
-    //     // let content = self
-    //     //     .storage
-    //     //     .get(request.path.into())
-    //     //     .await
-    //     //     .map_err(|e| match e.kind() {
-    //     //         ErrorKind::StoragePutFailed(e) => Status::invalid_argument(e.to_string()),
-    //     //         _ => Status::unknown("Unknown storage error".to_string()),
-    //     //     })?;
-
-    //     let reply = GetResponse { content };
-    //     Ok(Response::new(reply))
-    // }
-
     async fn store(
         &self,
         request: Request<StoreRequest>,
@@ -205,9 +162,6 @@ impl KissService for Inner {
         let request = request.into_inner();
         let start_time = SystemTime::now();
         debug!("store request for {}", request.name);
-
-        let file_hash = hash(&request.content);
-        debug!("{}", file_hash);
 
         let file_uuid = Uuid::new_v4();
 
@@ -236,40 +190,45 @@ impl KissService for Inner {
             return Err(Status::internal(e.to_string()));
         }
 
-        for peer in closest_peers.iter().take(consts::REPLICATION_FACTOR) {
-            let client_config = VerificationClientConfig::from_file(&request.content);
-            let (secret_n, secret_m, rows, cols) = client_config.to_contract();
-            // retry writing the contract tot he ledger 10 times:
-            let mut success = false;
-            let mut last_error = String::new();
-            for _ in 0..10 {
-                let res = self
-                    .ledger
-                    .lock()
-                    .await
-                    .create_contract(
-                        *peer,
-                        file_uuid,
-                        file_hash.clone(),
-                        request.ttl,
-                        secret_n.clone(),
-                        secret_m.clone(),
-                        rows,
-                        cols,
-                    )
-                    .await;
-                if let Err(e) = res {
-                    last_error = e.to_string();
-                } else {
-                    success = true;
-                    break;
+        if self.por.enabled {
+            let file_hash = hash(&request.content);
+            debug!("{}", file_hash);
+
+            for peer in closest_peers.iter().take(consts::REPLICATION_FACTOR) {
+                let client_config = VerificationClientConfig::from_file(&request.content);
+                let (secret_n, secret_m, rows, cols) = client_config.to_contract();
+                // retry writing the contract tot he ledger 10 times:
+                let mut success = false;
+                let mut last_error = String::new();
+                for _ in 0..10 {
+                    let res = self
+                        .ledger
+                        .lock()
+                        .await
+                        .create_contract(
+                            *peer,
+                            file_uuid,
+                            file_hash.clone(),
+                            request.ttl,
+                            secret_n.clone(),
+                            secret_m.clone(),
+                            rows,
+                            cols,
+                        )
+                        .await;
+                    if let Err(e) = res {
+                        last_error = e.to_string();
+                    } else {
+                        success = true;
+                        break;
+                    }
                 }
-            }
-            if !success {
-                return Err(Status::internal(format!(
-                    "failed to write contract to immudb: {}",
-                    last_error
-                )));
+                if !success {
+                    return Err(Status::internal(format!(
+                        "failed to write contract to immudb: {}",
+                        last_error
+                    )));
+                }
             }
         }
 

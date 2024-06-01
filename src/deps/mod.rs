@@ -1,3 +1,4 @@
+use crate::bench::{Bench, BenchProvider};
 use crate::ledger::{ImmuLedger, LedgerProvider};
 use crate::malice::{IMalice, MaliceProvider};
 use crate::util::Res;
@@ -40,6 +41,7 @@ pub fn dependency_injector() -> Res<Injector> {
             .singleton()
             .with_interface::<dyn IVerifier>(),
     );
+    injector.provide(BenchProvider.singleton().with_interface::<Mutex<Bench>>());
 
     Ok(injector.build())
 }

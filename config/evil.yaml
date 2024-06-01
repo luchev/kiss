@@ -1,17 +1,18 @@
 storage:
   type: local
-  path: data/peer1
+  path: data/evil
   create: true
 grpc:
   port: 1999
 swarm:
-  keypair: CAESQKV3dTAPB/2Wh3Ju7IuO9FN9m/4vn+PRxt+j+UQn9NeMezS6NMNptbSXBeaDXwMpfM1frWLUwKQy4XvojWkdUaU
+  keypair: CAESQAQZvXhMEgqFYgoxeykYCSdmLqwze3EXIVh4G89y4F9XLgKHrGPtiWvrErZSbX7eenguQobwJvZ/7GABNx4y55M
   leading_zeros: 2
   port: 8099
   bootstrap:
     - 127.0.0.1:8801
     - 127.0.0.1:8802
     - 127.0.0.1:8803
+    - 127.0.0.1:8800
 ledger:
   type: immudb
   username: immudb
@@ -19,3 +20,7 @@ ledger:
   address: 127.0.0.1:3322
 malicious_behavior:
   type: delete_all
+verifier:
+  enabled: false
+por:
+  enabled: true

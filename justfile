@@ -106,7 +106,7 @@ clean-logs:
 
 clean: recreate-db clean-data clean-logs kill-all
 
-put-many numbytes:
+put-bytes numbytes:
     openssl rand -base64 {{numbytes}} > /tmp/bytes
     grpcurl \
     -plaintext \
@@ -116,7 +116,7 @@ put-many numbytes:
     "[::1]:2000" \
     kiss_grpc.KissService/Store
 
-put-many-times numbytes times:
+put-bytes-times numbytes times:
     for i in $(seq 1 {{times}}); do \
         echo -n '{"name": "key1", "ttl": 1200, "content": "' > /tmp/grpcurl.json; \
         openssl rand -base64 {{numbytes}} | perl -pe 'chomp if eof' | base64 | tr -d "\n" >> /tmp/grpcurl.json; \
@@ -126,6 +126,6 @@ put-many-times numbytes times:
         -import-path proto \
         -proto kiss.proto \
         -d @ \
-        "[::1]:2000" \
+        "[::1]:3000" \
         kiss_grpc.KissService/Store < /tmp/grpcurl.json; \
     done

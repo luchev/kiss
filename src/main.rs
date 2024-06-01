@@ -10,6 +10,7 @@
 // #![feature(trivial_bounds)]
 // #![deny(clippy::todo)]
 
+mod bench;
 mod deps;
 mod grpc;
 mod ledger;
@@ -24,6 +25,7 @@ mod verifier;
 use deps::dependency_injector;
 use grpc::IGrpcHandler;
 use log::info;
+use malice::IMalice;
 use p2p::swarm::ISwarm;
 use runtime_injector::Svc;
 use settings::ISettings;
@@ -45,7 +47,7 @@ async fn run() -> Res<()> {
     let grpc_handler: Svc<dyn IGrpcHandler> = injector.get()?;
     let kad: Svc<dyn ISwarm> = injector.get()?;
     let verifier: Svc<dyn IVerifier> = injector.get()?;
-    let malice: Svc<Box<dyn malice::IMalice>> = injector.get()?;
+    let malice: Svc<Box<dyn IMalice>> = injector.get()?;
     let settings: Svc<dyn ISettings> = injector.get()?;
 
     if settings.verifier().enabled {

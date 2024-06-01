@@ -120,7 +120,7 @@ impl IVerifier for Verifier {
                 failure
             );
             tokio::time::sleep_until(tokio::time::Instant::from_std(
-                time_before_start + consts::VERIFICATION_TIMEOUT,
+                time_before_start + consts::VERIFICATION_CYCLE_TIME,
             ))
             .await;
         }

@@ -1,3 +1,4 @@
+use crate::bench::Bench;
 use crate::p2p::peer_id::keypair_with_leading_zeros;
 use crate::p2p::store::LocalStoreConfig;
 // use crate::p2p::memorystore::{MemoryStore, MemoryStoreConfig};
@@ -71,6 +72,7 @@ impl ServiceFactory<()> for SwarmProvider {
         let settings: Svc<dyn ISettings> = injector.get()?;
         let commands_from_controller: Svc<Mutex<Receiver<CommandToSwarm>>> = injector.get()?;
         let storage: Svc<dyn IStorage> = injector.get()?;
+        let bench = injector.get::<Svc<Mutex<Bench>>>()?;
 
         let local_key = match settings.swarm().keypair {
             Some(keypair) => Keypair::from_protobuf_encoding(
@@ -171,6 +173,7 @@ impl ServiceFactory<()> for SwarmProvider {
             storage,
             inner: Mutex::new(swarm),
             commands_from_controller,
+            bench,
             queries: Mutex::new(HashMap::new()),
             requests: Mutex::new(HashMap::new()),
         })
@@ -187,6 +190,7 @@ pub struct Swarm {
     storage: Svc<dyn IStorage>,
     inner: Mutex<libp2p::Swarm<CombinedBehaviour>>,
     commands_from_controller: Svc<Mutex<Receiver<CommandToSwarm>>>,
+    bench: Svc<Mutex<Bench>>,
     queries: Mutex<HashMap<QueryId, QueryResponse>>,
     requests: Mutex<HashMap<RequestId, QueryResponse>>,
 }
@@ -252,7 +256,7 @@ impl Swarm {
                 info!("listening on {address:?}");
             }
             SwarmEvent::Behaviour(WireEvent::Mdns(mdns::Event::Discovered(list))) => {
-                info!("discovered peers: {list:?}");
+                debug!("discovered peers: {list:?}");
                 for (peer_id, multiaddr) in list {
                     swarm
                         .behaviour_mut()
@@ -276,10 +280,10 @@ impl Swarm {
                     _ => warn!("unhandled query result: {:?}", result),
                 },
                 KademliaEvent::RoutingUpdated { .. } => {
-                    info!("routing updated",);
+                    debug!("routing updated",);
                 }
                 KademliaEvent::InboundRequest { request, .. } => {
-                    info!("inbound request: {:?}", request);
+                    debug!("inbound request: {:?}", request);
                 }
                 _ => warn!("unhandled kademlia event: {:?}", event),
             },
@@ -329,21 +333,66 @@ impl Swarm {
         request: VerificationRequest,
         channel: ResponseChannel<VerificationResponse>,
     ) -> Res<()> {
-        let file = self.storage.get(request.file_name.clone().into()).await?;
-        let server_config = VerificationServerConfig::from_file(file.value);
-        let server = VerificationServer::new(server_config);
-        let response = server.fulfill_challenge(request.challenge_vector);
-        swarm
-            .behaviour_mut()
-            .req_res
-            .send_response(
-                channel,
-                VerificationResponse {
-                    file_name: request.file_name,
-                    response_vector: response,
-                },
-            )
-            .map_err(|_| ErrorKind::SwarmReqResSendResponseError.into())
+        match self.storage.get(request.file_name.clone().into()).await {
+            Ok(file) => {
+                let server_config = VerificationServerConfig::from_file(file.value);
+                let server = VerificationServer::new(server_config);
+                let response = server.fulfill_challenge(request.challenge_vector);
+                swarm
+                    .behaviour_mut()
+                    .req_res
+                    .send_response(
+                        channel,
+                        VerificationResponse {
+                            file_name: request.file_name,
+                            response_vector: response,
+                        },
+                    )
+                    .map_err(|_| ErrorKind::SwarmReqResSendResponseError.into())
+            }
+            Err(_) => {
+                if let Some(deleted_at) = self
+                    .bench
+                    .lock()
+                    .await
+                    .deleted_files
+                    .remove(&request.file_name)
+                {
+                    let elapsed = deleted_at.elapsed().unwrap();
+                    info!(
+                        "file {} was discovered corrupted after {}",
+                        request.file_name,
+                        elapsed.as_millis()
+                    );
+                }
+                swarm
+                    .behaviour_mut()
+                    .req_res
+                    .send_response(
+                        channel,
+                        VerificationResponse {
+                            file_name: request.file_name,
+                            response_vector: Vec::new(),
+                        },
+                    )
+                    .map_err(|_| ErrorKind::SwarmReqResSendResponseError.into())
+            }
+        }
+        // let file = self.storage.get(request.file_name.clone().into()).await?;
+        // let server_config = VerificationServerConfig::from_file(file.value);
+        // let server = VerificationServer::new(server_config);
+        // let response = server.fulfill_challenge(request.challenge_vector);
+        // swarm
+        //     .behaviour_mut()
+        //     .req_res
+        //     .send_response(
+        //         channel,
+        //         VerificationResponse {
+        //             file_name: request.file_name,
+        //             response_vector: response,
+        //         },
+        //     )
+        //     .map_err(|_| ErrorKind::SwarmReqResSendResponseError.into())
     }
 
     async fn handle_reqres_message_response(

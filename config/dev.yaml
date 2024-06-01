@@ -3,7 +3,7 @@ storage:
   path: data/dev
   create: true
 grpc:
-  port: 5410
+  port: 3000
 swarm:
   keypair: CAESQNke3KMGR5bN7UT1x8Tzw/wnoWyFKE3bOHmt8w4jVUqIPL3JNQ9xZJeIHZODOGC6i9PiqryEkZrWJBedIWdkZKQ
   leading_zeros: 2
@@ -16,3 +16,7 @@ ledger:
   address: 127.0.0.1:3322
 malicious_behavior:
   type: none
+verifier:
+  enabled: false
+por:
+  enabled: true

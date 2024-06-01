@@ -2,6 +2,7 @@ mod deleteall;
 mod deletelast;
 mod none;
 
+use crate::bench::Bench;
 use crate::settings::{ISettings, MaliciousBehavior};
 use crate::storage::IStorage;
 use crate::util::Res;
@@ -9,6 +10,7 @@ use async_trait::async_trait;
 use runtime_injector::{
     interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
 };
+use tokio::sync::Mutex;
 
 use self::deleteall::MaliceDeleteAll;
 use self::deletelast::MaliceDeleteLast;
@@ -30,10 +32,11 @@ impl ServiceFactory<()> for MaliceProvider {
     ) -> InjectResult<Self::Result> {
         let settings = injector.get::<Svc<dyn ISettings>>()?.malicious_behavior();
         let storage = injector.get::<Svc<dyn IStorage>>()?;
+        let bench = injector.get::<Svc<Mutex<Bench>>>()?;
 
         match settings {
             MaliciousBehavior::None => Ok(Box::<MaliceNone>::default()),
-            MaliciousBehavior::DeleteAll => Ok(Box::new(MaliceDeleteAll::new(storage))),
+            MaliciousBehavior::DeleteAll => Ok(Box::new(MaliceDeleteAll::new(storage, bench))),
             MaliciousBehavior::DeleteLast => Ok(Box::new(MaliceDeleteLast::new(storage))),
         }
     }
