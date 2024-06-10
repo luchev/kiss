@@ -2,7 +2,6 @@ use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
 use crate::settings::{ISettings, Por};
 use crate::util::consts::{self, GRPC_TIMEOUT, LOCALHOST};
-use crate::util::debug::print_now;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissService;
 use crate::util::grpc::kiss_grpc::kiss_service_server::KissServiceServer;
 use crate::util::grpc::kiss_grpc::{
@@ -20,7 +19,7 @@ use runtime_injector::{
 };
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -129,7 +128,7 @@ impl KissService for Inner {
         let mut result = vec![];
         for contract in contracts.iter() {
             let verification_client =
-                VerificationClient::new(VerificationClientConfig::from_contract(&contract));
+                VerificationClient::new(VerificationClientConfig::from_contract(contract));
             let challenge = verification_client.make_challenge_vector();
             let response = self
                 .swarm_controller
@@ -198,6 +197,7 @@ impl KissService for Inner {
                 let client_config = VerificationClientConfig::from_file(&request.content);
                 let (secret_n, secret_m, rows, cols) = client_config.to_contract();
                 // retry writing the contract tot he ledger 10 times:
+                // writing sometimes fails
                 let mut success = false;
                 let mut last_error = String::new();
                 for _ in 0..10 {

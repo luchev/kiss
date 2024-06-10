@@ -1,4 +1,29 @@
 \chapter{Future Work}
 \label{chapter:future-work}
 
-\wtf{integrate with a blockchain to replace immudb}
+At this point the system is not ready for production use.
+As seen from the \autoref{chapter:evaluation}, the centralized ledger
+is a bottleneck.
+It is also a single point of attack --- the system is not fully decentralized
+until the ledger is also decentralized.
+For this purpose, an integration with a blockchain ledger is seen as the
+natural next step.
+In preparation for production-ready state and the usage of a blockchain,
+the data that is written to the ledger should be minimized.
+In particular, the verification results, reputation scores, etc. can all be
+stored in the system itself and only have a signed hash of the data written
+to the blockchain.
+
+The PoR algorithm we are using is not public, meaning that the verifier requires
+a secret key to verify the proof.
+Keeping secrets in a decentralized system is not possible.
+It must be replaced by a public PoR algorithm.
+Most modern PoR algorithm papers propose both a secret-based and public versions.
+The PoR algorithm we are using in this thesis also has a public version,
+albeit less efficient and more difficult to implement.
+
+On the implementation side, the major bottleneck is the communication between the different modules.
+A few of them have to be locked behind a mutex, which makes some parts of the system sequential.
+Ideally we want to parallelize all the operations that can be parallelized.
+This is achievable by using a pool of workers for the modules that support it --- ledger,
+verifier, and grpc server.

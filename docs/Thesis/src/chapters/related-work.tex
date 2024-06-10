@@ -2,6 +2,7 @@
 \label{chapter:related-work}
 
 \section{Distributed Storage Systems}
+\label{section:distributed-storage}
 
 Distributed storage comes in two flavors --- centralized and decentralized.
 Centralized systems are mostly proprietary and are either used by companies or are offered as a service.
@@ -22,6 +23,33 @@ We will mainly focus on decentralized hash tables, as they are the most popular 
 most of the decentralized storage systems.
 Unstructured networks are used for general purpose storage, but are not as efficient as 
 Blockchain based storage is niche and is not used for general purpose storage.
+
+\subsection{Security}
+\label{subsection:security}
+
+When we talk about security in decentralized systems we
+assume that the underlying network provides no security guarantees.
+Attackers can eavesdrop on the communication between nodes, modify the messages, and even drop them.
+They can also spoof IP addresses and there is no authentication of data packets in the underlying network.
+This is a reasonable assumption as most decentralized networks are built on top of the Internet,
+which is inherently insecure.
+
+S/Kademlia \cite{skademlia} summarizes the main attacks on decentralized networks:
+\begin{enumerate}
+    \item \textbf{Eclipse attacks} --- an attacker isolates a node from the rest of the network.
+    \item \textbf{Sybil attacks} --- a single entity pretends to be multiple entities.
+    \item \textbf{Churn attacks} --- an attacker joins and leaves the network repeatedly.
+    \item \textbf{Adversarial routing} --- an attacker returns adversarial routing information.
+    \item \textbf{Denial-of-service attacks} --- an attacker floods the network with requests.
+    \item \textbf{Storage attacks} --- an attacker manipulates the data stored on a node.
+\end{enumerate}
+
+Kademlia and S/Kademlia cover most of these attacks and are mostly secure against them.
+The one exception is storage attacks.
+No decentralized network has a solution for storage attacks.
+
+\subsection{Categorizing Networks}
+
 There are many ways to categorize networks, and we will cover some of them here.
 
 \begin{enumerate}
@@ -179,8 +207,8 @@ network with fake data.
 \subsubsection{Kademlia}
 
 Kademlia \cite{kademlia} is one of the most popular structured DHTs.
-It uses a hypercube topology (a binary tree organizing nodes based on their XOR distance)
-and is used as the basis for many other DHTs.
+It uses topology based on a binary tree, that organizes nodes based on their XOR distance.
+It is used as the basis for many other DHTs.
 Kademlia uses a $2^{160}$ keyspace, which is navigated using a XOR metric.
 Replication is optional and is achieved by storing the file on the $k$ closest nodes to the key of the file.
 The keys are usually hashes of the file contents.
@@ -355,12 +383,58 @@ The tendency in the security direction is to address as many attacks as possible
 with the latest networks making use of ledger stores and reputation systems.
 
 \section{Proof of Retrievability}
+\label{section:por}
 
 Proof of Retrievability (PoR) \cite{porfirst} is a cryptographic protocol that
 allows a client to verify that a server is storing a file.
 The server is challenged to prove that it is storing the file, and the client
 can verify the proof.
 PoR protocols are designed to be used to check the integrity of the data stored by cloud providers mostly.
+
+\subsection{PoR predecessors}
+
+Before PoR became an interest and a field of research, there were other methods to ensure data integrity.
+
+The most basic method is to send the whole file to the client, which is inefficient and bandwidth-consuming.
+
+Another method is to send a hash of the file, which is more efficient, but easy to attack since
+the server can store the hash of the file instead of the file itself.
+To address this, the client could send a challenge in the form of a salt to the server,
+which would then hash the salt with the file and return the hash.
+This means that the client has to preprocess the file and store salts for each file.
+This is also inefficient, as the client has to store the salts and preprocess the file.
+
+It is also possible to use a Merkle tree, which is a binary tree of hashes.
+The leaves of the tree are the hashes of the file chunks, and the internal nodes are the hashes of their children.
+The root of the tree is the hash of the file.
+The client can request a proof of a chunk by requesting the sibling nodes of the path from the leaf to the root.
+This is an okay solution, which modern PoR protocols build upon, usually to allow updates to the file.
+
+\subsection{First PoR protocols}
+
+The first paper that introduced PoR was "Proofs of Retrievability: Theory and Implementation" \cite{porfirst}.
+It is focused on providing a PoR protocol to be used in a cloud environment,
+where the client can verify that the cloud provider is storing the file.
+This is an assumption a lot of the following papers on PoR make,
+as it provides good motivation and limitations for the protocol.
+We want to use little bandwidth, little processing power on the server and client side,
+and we want the server to be unable to cheat the client.
+The protocol proposed in the paper is probabilistic and checks only certain parts of the file.
+The protocol also includes encoding of the file in advance, as well as error correction codes
+which allow the client to reconstruct the file if only some parts are corrupted.
+
+\subsection{Modern PoR}
+
+The later PoR protocols check the whole file and rely on cryptographic theory,
+which makes it close to impossible for the server to cheat the client with more than a negligible probability.
+The papers also start exploring the idea of public auditability, where the file can be audited without having
+a shared secret.
+In other words, the client does not need to store a secret in order to perform audits.
+All following papers also optimize different parts of the protocol, such as reducing bandwidth,
+reducing client storage, reducing algorithm complexity, and improving the security of the protocol.
+
+The latest non-public PoR protocols provide down to $O(1)$ client storage, $O(N)$ server storage,
+$O(log N)$ client computation, $O(N)$ server computation, and $O(log N)$ bandwidth.
 
 There are 2 state of the art PoR techniques:
 \begin{itemize}
@@ -403,6 +477,7 @@ For this purpose we will explore the requirements for Amazon's S3 \cite{s3-faq},
 which is one of the most popular cloud storage providers.
 
 \begin{enumerate}
+    \label{s3-requirements}
     \item The system can store up to 5 terabytes of data in a single object.
     \item The system can store an unlimited number of objects.
     \item The system can store an object for an unlimited amount of time.

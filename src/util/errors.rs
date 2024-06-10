@@ -43,6 +43,7 @@ error_chain! {
         LocalStorageFail(e: object_store::Error) { display("local storage failure: {}", e) }
         FilesystemErr(e: io::Error) { display("directory creation failed: {}", e) }
         ConfigErr(e: ConfigError) { display("loading config failed: {}", e) }
+        Generic(e: String) { display("{}", e) }
         SettingsDependencyFail { display("") }
         SettingsParseError(e: String) { display("") }
         ObjectStoreError(e: object_store::Error) { display("object store error: {}", e) }

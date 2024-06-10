@@ -23,5 +23,6 @@ malicious_behavior:
   type: none
 verifier:
   enabled: true
+  corrupt: false
 por:
   enabled: true

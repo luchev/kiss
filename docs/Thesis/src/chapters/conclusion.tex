@@ -1,0 +1,32 @@
+\chapter{Conclusion}
+\label{chapter:conclusion}
+
+In this thesis, we have presented a system for decentralized storage of data
+with a focus on data integrity.
+It shows how we can use PoR to bring these guarantees that cloud storage providers
+offer to decentralized storage systems, and what are the costs of doing so.
+We analyze how effective proof of retrievability is in detecting data corruption
+and how it can be used as a part of a decentralized storage system
+to increase the trust in the data stored.
+
+Adding PoR to the system allows peers to keep track of what peers are misbehaving,
+and thus, the system can be self-healing --- it can detect and remove said peers.
+While this solves the integrity problem, it is not a universal solution to attacks.
+It is always possible for a powerful enough adversary to take control of the system
+by controlling a majority of the peers.
+However, in other cases, the system can be resilient to attacks on the data,
+and can provide guarantees that the data is stored correctly.
+This comes at a cost of time and resources, as the system has to continuously
+monitor the peers and the data they store.
+
+Combining PoR, a reputation system, and the modern decentralized networks,
+we can achieve a storage system that has similar guarantees as a cloud storage provider
+as listed in \autoref{s3-requirements}.
+Solving the integrity problem was a crucial step to achieve the requirement for data durability.
+
+If a client has specific requirements, that can only be met by using decentralized storage,
+e.g., the client wants the data to not be censored, it is worth using a system like this.
+However, if a client needs simple data storage, that is durable and available,
+it is recommended to rely on cloud storage providers.
+These providers can usually provide better speeds, and they rely on proof of retrievability internally,
+which allows them to provide guarantees about the data integrity.

@@ -2,13 +2,18 @@ pub mod por;
 
 use crate::ledger::{ILedger, ImmuLedger};
 use crate::p2p::controller::ISwarmController;
+use crate::settings::ISettings;
 use crate::util::debug::print_now;
 use crate::util::{consts, Res};
+use crate::util::{Er, ErrorKind};
 use async_trait::async_trait;
+use base64::Engine as _;
 use libp2p::PeerId;
+use libp2p_identity::Keypair;
 use log::{debug, info, warn};
 use runtime_injector::{
-    interface, InjectResult, Injector, RequestInfo, Service, ServiceFactory, Svc,
+    interface, InjectError, InjectResult, Injector, RequestInfo, Service, ServiceFactory,
+    ServiceInfo, Svc,
 };
 use std::str::FromStr;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -35,12 +40,41 @@ impl ServiceFactory<()> for VerifierProvider {
     ) -> InjectResult<Self::Result> {
         let ledger: Svc<Mutex<ImmuLedger>> = injector.get()?;
         let swarm_controller = injector.get::<Svc<dyn ISwarmController>>()?;
+        let settings: Svc<dyn ISettings> = injector.get()?;
+
+        let local_key = match settings.swarm().keypair {
+            Some(keypair) => Keypair::from_protobuf_encoding(
+                &base64::engine::general_purpose::STANDARD_NO_PAD
+                    .decode(keypair)
+                    .map_err(|e| InjectError::ActivationFailed {
+                        service_info: ServiceInfo::of::<Verifier>(),
+                        inner: Box::<Er>::new(ErrorKind::KeypairBase64DecodeError(e).into()),
+                    })?,
+            )
+            .map_err(|e| InjectError::ActivationFailed {
+                service_info: ServiceInfo::of::<Verifier>(),
+                inner: Box::<Er>::new(ErrorKind::KeypairBase64DecodingError(e).into()),
+            })?,
+            None => {
+                return Err(InjectError::ActivationFailed {
+                    service_info: ServiceInfo::of::<Verifier>(),
+                    inner: Box::<Er>::new(
+                        ErrorKind::Generic("verifier requires a peer id in the config".to_string())
+                            .into(),
+                    ),
+                })
+            }
+        };
+
+        let local_peer_id = PeerId::from(local_key.public());
         Ok(Verifier {
             ledger,
             swarm_controller,
             iteration: Mutex::new(1),
             starting_uuid: Mutex::new(0),
             ending_uuid: Mutex::new(u128::MAX / consts::NUM_PEERS),
+            peer_id: local_peer_id,
+            corrupt: settings.verifier().corrupt,
         })
     }
 }
@@ -56,6 +90,8 @@ pub struct Verifier {
     iteration: Mutex<u128>,
     starting_uuid: Mutex<u128>,
     ending_uuid: Mutex<u128>,
+    peer_id: PeerId,
+    corrupt: bool,
 }
 
 #[async_trait]
@@ -70,8 +106,7 @@ impl IVerifier for Verifier {
 
             let starting_uuid = *self.starting_uuid.lock().await;
             let ending_uuid = *self.ending_uuid.lock().await;
-            let mut success = 0;
-            let mut failure = 0;
+            let mut audits = vec![];
             for contract in contracts {
                 let uuid_uint = Uuid::from_str(contract.file_uuid.as_str())
                     .unwrap_or_default()
@@ -92,22 +127,46 @@ impl IVerifier for Verifier {
                         challenge.clone(),
                     )
                     .await;
+
+                let mut is_success = false;
                 match response {
                     Ok(response) => match verification_client.audit(challenge, response) {
                         true => {
                             self.reward_peer(contract.peer_id).await;
-                            success += 1;
+                            audits.push((contract.contract_uuid.clone(), true));
+                            is_success = true;
                         }
                         false => {
-                            print_now(format!("audit failed for: {}", contract.file_uuid).as_str());
+                            // print_now(format!("audit failed for: {}", contract.file_uuid).as_str());
                             self.punish_peer(contract.peer_id).await;
-                            failure += 1;
+                            audits.push((contract.contract_uuid.clone(), false));
                         }
                     },
                     Err(_) => {
-                        print_now(format!("audit failed for: {}", contract.file_uuid).as_str());
+                        // print_now(format!("audit failed for: {}", contract.file_uuid).as_str());
                         self.punish_peer(contract.peer_id).await;
-                        failure += 1;
+                        audits.push((contract.contract_uuid.clone(), false));
+                    }
+                }
+
+                let mut previous = self
+                    .ledger
+                    .lock()
+                    .await
+                    .get_previous_verified(contract.contract_uuid.clone())
+                    .await?;
+                previous.sort_by(|a, b| a.verification_time.cmp(&b.verification_time).reverse());
+
+                if let Some(last) = previous.first() {
+                    let now = SystemTime::now();
+                    let last_time = UNIX_EPOCH + Duration::milliseconds(last.verification_time);
+                    let elapsed = now.duration_since(last_time)?;
+                    if is_success != last.succeeded {
+                        info!(
+                            "verifier {} caught cheating after {} ms",
+                            contract.peer_id,
+                            elapsed.as_millis()
+                        );
                     }
                 }
             }
@@ -116,9 +175,32 @@ impl IVerifier for Verifier {
             info!(
                 "iteration: {}, successfully verified: {}, corrupted: {}",
                 *self.iteration.lock().await,
-                success,
-                failure
+                audits.iter().filter(|(_, succeeded)| *succeeded).count(),
+                audits.iter().filter(|(_, succeeded)| !*succeeded).count()
             );
+
+            for (contract_uuid, is_success) in audits {
+                let res = if !self.corrupt {
+                    self.ledger
+                        .lock()
+                        .await
+                        .create_verified_claim(contract_uuid, self.peer_id, is_success)
+                        .await
+                } else {
+                    self.ledger
+                        .lock()
+                        .await
+                        .create_verified_claim(contract_uuid, self.peer_id, !is_success)
+                        .await
+                };
+                match res {
+                    Ok(_) => {}
+                    Err(e) => {
+                        // warn!("failed to create verified claim: {}", e);
+                    }
+                }
+            }
+
             tokio::time::sleep_until(tokio::time::Instant::from_std(
                 time_before_start + consts::VERIFICATION_CYCLE_TIME,
             ))

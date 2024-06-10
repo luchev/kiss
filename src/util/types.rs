@@ -83,3 +83,11 @@ pub struct Contract {
     pub rows: i64,
     pub cols: i64,
 }
+
+#[derive(Debug, Clone)]
+pub struct VerificationClaim {
+    pub contract_uuid: String,
+    pub verified_by_id: PeerId,
+    pub verification_time: i64,
+    pub succeeded: bool,
+}

@@ -68,6 +68,51 @@ The attacker also needs to contribute considerable amount of their bandwidth to 
 This is precisely the reason why we want lightweight audits for the auditor and heavier audits for the auditee.
 For the above reasons, we do not consider this attack in our analysis.
 
+\section{Solving the integrity problem}
+\label{section:solving-the-integrity-problem}
+
+To solve the integrity problem, we need to be able to check if the data is stored correctly.
+To achieve this we need a verification/auditing mechanism, which is efficient and secure.
+We will use a Proof of Retrievability (PoR) scheme, which will allow us to efficiently check the 
+integrity of the data stored in the network.
+PoR schemes are a type of cryptographic scheme that allows a verifier to check if a node
+stores the data it claims to store.
+The verifier does not need to download the whole file, but only exchange a few messages, which are much smaller.
+
+Once we have a method to check the integrity of the data, we need someone to perform this check.
+We will use the nodes in the network to perform the checks.
+It makes sense for honest nodes, which are users of the network, to do audits,
+as they have a vested interest in the integrity of the data.
+However, we also need to make sure that malicious nodes are also doing audits.
+
+We can achieve this by using rewards and penalties.
+If a node is found to be storing data incorrectly (by failing an audit), we will penalize the node.
+If a node is found to not be performing audits, we will penalize it.
+On the other hand, if a node is storing data correctly (by passing an audit), we will reward the node.
+And if a node is performing audits, we will reward it.
+
+One way to penalize nodes is to remove them from the network.
+However, it would be better if we could have lighter penalties.
+Here we are proposing a reputation system based on a ledger store, e.g., a blockchain.
+We will use a blockchain to store the reputation of the nodes.
+This will allow us to have a light penalty system, as we can downgrade the reputation of the node
+instead of removing it from the network.
+Using a ledger store allows us to have a transparent and immutable record of the reputation of the nodes.
+
+Using a reputation system will also allow us to reward nodes for performing audits.
+Successfully storing a file and passing audits will increase the reputation of the node.
+Successfully performing audits will also increase the reputation of the node.
+Failing to store a file or failing to perform an audit will decrease the reputation of the node.
+In the \ref{section:evaluation} we will discuss how very high or low reputation nodes will be treated.
+
+We know how to perform audits, but we also need to know how to make sure none of the
+audits are faked.
+To solve this, we would require the nodes performing an audit to record the results of the audit and keep
+it in a ledger store.
+When a node is suspicious of the correctness of the audit, it can check the ledger store to see if the audit
+was performed correctly.
+This could also be used to check if the audits are being performed at all.
+
 \section{Using Proof of Retrievability (PoR) to prevent attacks}
 
 Preventing a Data availability attack can be done by querying the peer whether it has the data.

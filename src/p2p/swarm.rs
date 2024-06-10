@@ -727,7 +727,6 @@ impl Swarm {
         };
         let (sender, receiver) = oneshot::channel::<Res<()>>();
         resp.send(receiver)?;
-        // TODO this might have a race condition where the query is not yet in the map
         let query_id = swarm
             .behaviour_mut()
             .kademlia

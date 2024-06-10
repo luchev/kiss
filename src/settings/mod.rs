@@ -59,6 +59,7 @@ pub struct Swarm {
 #[serde(rename_all = "snake_case")]
 pub struct Verifier {
     pub enabled: bool,
+    pub corrupt: bool,
 }
 
 pub trait ISettings: Service {
@@ -197,7 +198,10 @@ impl Settings {
                 address: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 3322)),
             },
             malicious_behavior: MaliciousBehavior::None.into(),
-            verifier: Verifier { enabled: true },
+            verifier: Verifier {
+                enabled: true,
+                corrupt: false,
+            },
             por: Por { enabled: true },
         }
     }

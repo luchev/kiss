@@ -22,7 +22,7 @@ impl MaliceDeleteAll {
 impl IMalice for MaliceDeleteAll {
     async fn start(&self) -> Res<()> {
         info!("init delete all malice");
-        // tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
         loop {
             let paths = self.storage.list().await?;
             for path in paths {

@@ -469,7 +469,7 @@ mod tests {
                 "abcdefghijklmnopqrstuvwxyz"
                     .as_bytes()
                     .to_vec()
-                    .repeat(40000),
+                    .repeat(40000 * 1),
             ));
         });
     }
@@ -572,7 +572,7 @@ mod tests {
             "abcdefghijklmnopqrstuvwxyz"
                 .as_bytes()
                 .to_vec()
-                .repeat(40000),
+                .repeat(40000 * 1),
         );
         let client = VerificationClient::new(client_config);
         b.iter(|| black_box(client.make_challenge_vector()));
@@ -608,7 +608,7 @@ mod tests {
             "abcdefghijklmnopqrstuvwxyz"
                 .as_bytes()
                 .to_vec()
-                .repeat(40000),
+                .repeat(40000 * 1),
         );
         let client = VerificationClient::new(client_config);
         let server = VerificationServer::new(server_config);
@@ -653,7 +653,7 @@ mod tests {
             "abcdefghijklmnopqrstuvwxyz"
                 .as_bytes()
                 .to_vec()
-                .repeat(40000),
+                .repeat(40000 * 100),
         );
         let client = VerificationClient::new(client_config);
         let server = VerificationServer::new(server_config);

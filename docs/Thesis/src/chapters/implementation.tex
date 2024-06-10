@@ -15,6 +15,8 @@ how do they affect the system, and what we have learned from the implementation.
 While answering the research questions is our main goal,
 we also want to design the system with the best software practices in mind.
 
+The code is available at \url{https://github.com/luchev/kiss}.
+
 \section{Architecture}
 
 The overall architecture has not changed much from the prior work.
@@ -109,9 +111,10 @@ We see this as a future work in order to make the system production ready,
 and we discuss the integration with a blockchain in the \autoref{chapter:future-work}.
 
 \section{Using the immutable database Immudb}
-\label{section:using-immudb}
 
-The backbone of the integrity of the system is the immutable database Immudb \cite{immudb}.
+Immudb \cite{immudb} is a ledger store that is used to store the results of the audits.
+We will be using it in the implementation as it is a simpler solution than using a blockchain.
+
 An immutable database ensures we can store the metadata necessary to run the system
 in a tamper-proof way.
 The database acts as a form of catalog for the files stored in the network,
@@ -124,6 +127,36 @@ If a record is changed or deleted,
 the database keeps a record of the change, and the history of the record can be traced back to its creation.
 This property is crucial for the reputation system, as it ensures that the reputation scores are not tampered with,
 or if they are tampered with the client of the database can detect the tampering.
+
+\subsection{Immudb performance}
+
+Having a centralized ledger means we have a potential bottleneck.
+The benchmarks that the authors of Immudb are presented in \autoref{tab:immudb}.
+While processing more than a million requests per second is impressive,
+it is not performance we can expect because we are storing the metadata for PoR in the ledger,
+which is considerably more than empty requests.
+Based on the benchmarks we can conclude that we can use Immudb as a ledger and have
+a throughput of more than a million requests per second,
+but we need a distributed version of Immudb,
+because the limiting factor becomes the network throughput and the disk read/write speed.
+Immudb is not bad as a ledger, but the fact it is not distributed limits its use in a production system.
+
+\begin{table}
+  \myfloatalign
+  \pgfplotstabletypeset[
+    every head row/.style={ before row=\toprule, after row=\midrule },
+    every last row/.style={ after row=\bottomrule },
+    columns={entries, workers, batch, batches, time, entries_per_s},
+    columns/entries/.style={string type, column name=\shortstack{\textsc{Entries}}, column type={r}},
+    columns/workers/.style={column name=\shortstack{\textsc{Workers}}, column type={r}},
+    columns/batch/.style={column name=\shortstack{\textsc{Batch}}, column type={r}},
+    columns/batches/.style={column name=\shortstack{\textsc{Batches}}, column type={r}},
+    columns/time/.style={column name=\shortstack{\textsc{Time (s)}}, column type={r}},
+    columns/entries_per_s/.style={string type, column name=\shortstack{\textsc{Entries/s}}, column type={r}},
+  ]{./data/immudb.csv}
+  \caption{Immudb performance according to the authors \cite{immudb-gh}}
+  \label{tab:immudb}
+\end{table} 
 
 \subsection{Using Immudb at scale}
 

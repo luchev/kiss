@@ -5,6 +5,7 @@ use crate::util::grpc::immudb_grpc::{
     SqlExecRequest, SqlQueryRequest, SqlValue, TxMetadata,
 };
 use crate::util::grpc::immudb_grpc::{OpenSessionRequest, TxMode};
+use crate::util::types::VerificationClaim;
 use crate::util::{
     types::{Bytes, Contract},
     Er, ErrorKind, Res,
@@ -75,6 +76,14 @@ pub trait ILedger: Service {
     async fn decrease_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
     async fn stake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
     async fn unstake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()>;
+    async fn get_previous_verified(&mut self, contract_uuid: String)
+        -> Res<Vec<VerificationClaim>>;
+    async fn create_verified_claim(
+        &mut self,
+        contract_uuid: String,
+        verified_by_id: PeerId,
+        succeeded: bool,
+    ) -> Res<()>;
 }
 
 #[derive(Debug)]
@@ -370,12 +379,15 @@ impl ILedger for ImmuLedger {
         }];
 
         let response = self.query_execute(sql, params).await?;
-        let row = response.first().ok_or(ErrorKind::InvalidSql)?;
-        match row.get(0).as_ref() {
-            Some(SqlValue {
-                value: Some(Value::N(x)),
-            }) => Ok(x.to_owned()),
-            _ => Ok(0),
+        let row = response.first();
+        match row {
+            Some(row) => Ok(match row.get(0).as_ref() {
+                Some(SqlValue {
+                    value: Some(Value::N(x)),
+                }) => x.to_owned(),
+                _ => 0,
+            }),
+            None => Ok(0),
         }
     }
 
@@ -399,17 +411,6 @@ impl ILedger for ImmuLedger {
     }
 
     async fn increase_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
-        // let sql = "
-        //     BEGIN TRANSACTION;
-        //     SELECT reputation FROM reputation WHERE peer_id = @peer_id;
-        //     COMMIT;"
-        //     .to_string();
-        // let params: Vec<NamedParam> = vec![NamedParam {
-        //     name: "peer_id".to_string(),
-        //     value: Some(SqlValue {
-        //         value: Some(Value::S(peer_id.clone().to_base58())),
-        //     }),
-        // }];
         let (session_id, transaction_id) = {
             let mut client = self.client.lock().await;
             let client = client.as_mut().ok_or(ErrorKind::MutexIsNotMutable)?;
@@ -501,7 +502,7 @@ impl ILedger for ImmuLedger {
             },
         ];
 
-        let res = self
+        let _res = self
             .sql_execute_tx(sql, params, session_id.clone(), transaction_id.clone())
             .await;
 
@@ -524,30 +525,7 @@ impl ILedger for ImmuLedger {
     }
 
     async fn decrease_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
-        let rep = self.get_reputation(peer_id).await?;
-
-        let sql = "
-                UPSERT
-                INTO reputation(peer_id, reputation, staked)
-                VALUES (@peer_id, @amount, 0)"
-            .to_string();
-
-        let params: Vec<NamedParam> = vec![
-            NamedParam {
-                name: "peer_id".to_string(),
-                value: Some(SqlValue {
-                    value: Some(Value::S(peer_id.to_base58())),
-                }),
-            },
-            NamedParam {
-                name: "amount".to_string(),
-                value: Some(SqlValue {
-                    value: Some(Value::N(rep - amount)),
-                }),
-            },
-        ];
-
-        self.sql_execute(sql, params).await
+        self.increase_reputation(peer_id, -amount).await
     }
 
     async fn stake_reputation(&mut self, peer_id: PeerId, amount: i64) -> Res<()> {
@@ -658,6 +636,69 @@ impl ILedger for ImmuLedger {
         let contracts: Res<Vec<_>> = response.into_iter().map(map_row_to_contract).collect();
         Ok(contracts?)
     }
+
+    async fn get_previous_verified(
+        &mut self,
+        contract_uuid: String,
+    ) -> Res<Vec<VerificationClaim>> {
+        let sql = "SELECT * FROM verifications WHERE contract_uuid = @contract_uuid;".to_string();
+        let params: Vec<NamedParam> = vec![NamedParam {
+            name: "contract_uuid".to_string(),
+            value: Some(SqlValue {
+                value: Some(Value::S(contract_uuid)),
+            }),
+        }];
+
+        let response = self.query_execute(sql, params).await?;
+        let claims: Res<Vec<_>> = response
+            .into_iter()
+            .map(map_row_to_verification_claim)
+            .collect();
+        Ok(claims?)
+    }
+
+    async fn create_verified_claim(
+        &mut self,
+        contract_uuid: String,
+        verified_by_id: PeerId,
+        succeeded: bool,
+    ) -> Res<()> {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as i64;
+        let params: Vec<NamedParam> = vec![
+            NamedParam {
+                name: "contract_uuid".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(contract_uuid)),
+                }),
+            },
+            NamedParam {
+                name: "verified_by_id".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::S(verified_by_id.to_base58())),
+                }),
+            },
+            NamedParam {
+                name: "verification_time".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::N(now)),
+                }),
+            },
+            NamedParam {
+                name: "succeeded".to_string(),
+                value: Some(SqlValue {
+                    value: Some(Value::B(succeeded)),
+                }),
+            },
+        ];
+
+        let sql = "UPSERT
+                INTO verifications(contract_uuid, verified_by_id, verification_time, succeeded)
+                VALUES (@contract_uuid, @verified_by_id, @verification_time, @succeeded);"
+            .to_string();
+
+        let _response = self.sql_execute(sql, params).await?;
+        Ok(())
+    }
 }
 
 fn map_row_to_contract(row: Vec<SqlValue>) -> Res<Contract> {
@@ -719,6 +760,35 @@ fn map_row_to_contract(row: Vec<SqlValue>) -> Res<Contract> {
         cols: match row.get(9).as_ref() {
             Some(SqlValue {
                 value: Some(Value::N(x)),
+            }) => x.to_owned(),
+            _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+        },
+    })
+}
+
+fn map_row_to_verification_claim(row: Vec<SqlValue>) -> Res<VerificationClaim> {
+    Ok(VerificationClaim {
+        contract_uuid: match row.get(0).as_ref() {
+            Some(SqlValue {
+                value: Some(Value::S(x)),
+            }) => x.to_owned(),
+            _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+        },
+        verified_by_id: match row.get(1).as_ref() {
+            Some(SqlValue {
+                value: Some(Value::S(x)),
+            }) => PeerId::from_str(x).map_err(ErrorKind::InvalidPeerId)?,
+            _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+        },
+        verification_time: match row.get(2).as_ref() {
+            Some(SqlValue {
+                value: Some(Value::N(x)),
+            }) => x.to_owned(),
+            _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
+        },
+        succeeded: match row.get(3).as_ref() {
+            Some(SqlValue {
+                value: Some(Value::B(x)),
             }) => x.to_owned(),
             _ => Err(ErrorKind::InvalidSqlRow(row.clone()))?,
         },
@@ -807,7 +877,8 @@ async fn init_database(ledger: ImmuLedger) -> Res<ImmuLedger> {
     create_database(ledger)
         .and_then(use_database)
         .and_then(create_contract_table)
-        .and_then(create_reputation_table)
+        .and_then(create_reputations_table)
+        .and_then(create_verifications_table)
         .await
 }
 
@@ -845,12 +916,26 @@ async fn create_contract_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
     Ok(ledger)
 }
 
-async fn create_reputation_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
+async fn create_reputations_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
     let query = "CREATE TABLE IF NOT EXISTS reputation (
             peer_id         VARCHAR[53],
             reputation      INTEGER,
             staked          INTEGER,
             PRIMARY KEY (peer_id)
+        );"
+    .to_string();
+
+    ledger.sql_execute(query, vec![]).await?;
+    Ok(ledger)
+}
+
+async fn create_verifications_table(mut ledger: ImmuLedger) -> Res<ImmuLedger> {
+    let query = "CREATE TABLE IF NOT EXISTS verifications (
+            contract_uuid     VARCHAR[36],
+            verified_by_id    VARCHAR[53],
+            verification_time INTEGER,
+            succeeded         BOOLEAN,
+            PRIMARY KEY (contract_uuid, verified_by_id)
         );"
     .to_string();
 

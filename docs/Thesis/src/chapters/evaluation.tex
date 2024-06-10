@@ -4,6 +4,7 @@
 Before we evaluate the system, we will make a few notes that apply to the evaluation of the system as a whole.
 
 \section{Notes}
+\label{section:notes}
 
 All the tests and benchmarks were performed on a single machine.
 The machine has 16GB of RAM, an M1 Apple Silicon processor 3200 MHz, and a 512GB SSD.
@@ -11,8 +12,11 @@ Due to these specs, the benchmarks are run with files between 1MB and 100MB.
 We ran benchmarks with files up to 1GB and the results were consistent with the results from the smaller files,
 i.e., the algorithms exhibit the same behavior, but rerunning the benchmarks takes a lot of time.
 
-The system is written in Rust, which means no garbage collection or runtime overhead,
-which we can see from running 1000 instances in \autoref{fig:1000-instances}.
+The system is written in Rust, which means no garbage collection or runtime overhead.
+We expect very little memory footprint while the system is idle,
+which is indeed the case as seen from running 1000 instances in \autoref{fig:1000-instances}.
+No CPU usage and around 2MB of memory per instance is used when the system is idle
+aligns with our expectations.
 Because the system consumes almost no resources when idle,
 we can run many instances on a single machine.
 We will not account for the overhead of the system being idle in the benchmarks.
@@ -24,97 +28,53 @@ We will not account for the overhead of the system being idle in the benchmarks.
     \label{fig:1000-instances}
 \end{figure}
 
-\section{Performance of the system}
-
-Our final goal is to augment a distributed storage system with verification based on PoR.
-In the process we want to ensure that the performance of the system is not degraded.
-The main part we are changing is the way files are stored, by injecting the PoR initialization,
-and the idle state of the peers --- during which they perform audits.
-We performed the benchmarks starting with 10 and up to 100 peers in the network.
-Since the tests are run on a single machine, running more peers would not give us any useful information,
-because the resources of the machine will be exhausted from running the peers in idle state.
-This is also the reason we are using files of size up to 10MB.
-Larger files would take more time to read and write to disk,
-but would not give us any additional information about the performance of the system.
-The results of the benchmarks are shown in \autoref{table:storage_vs_kad} \autoref{table:storage_times}.
-
-From \autoref{table:storage_vs_kad} we can see the overhead of running the PoR algorithm and
-writing the metadata to the ledger.
-It starts becoming noticeable for files larger than 1MB, where it takes six to ten times longer
-to store the file.
-This overhead is expected, as we are running the PoR algorithm for each peer that stores the file,
-and we write the metadata to the ledger.
-It is also not a problem because it is a one-time operation.
-
-Let us look at the Time without Verifier first.
-In these tests the first node that the storage request is sent to is not running the Verifier.
-Files under 100 KB have almost no impact on the system's performance.
-Saving 1 MB takes around 270 ms, which we can conclude by taking the 320 ms, which is the total
-time for the request, and subtracting the 50 ms that each request takes to be processed.
-This tendency is also visible for the 10 MB files, which take 2700 ms, which is 270 ms per 1 MB
-(we are ignoring the 50 ms processing time, as it becomes negligible for larger files).
-
-It is interesting to note that having 10 or 100 nodes in the network does not seem to impact the
-time to store files.
-This is the case because before running each benchmark we wait for the peers in the network
-to connect to each other.
-We do not run the tests immediately after a cold start of the system.
-
-Next, we look at the Time with Verifier running.
-The times to process a request here are significantly higher.
-This is mainly due to the outlier requests, which have to be processed while a verification is running.
-With our current architecture, the ledger module and the Kademlia swarm module are both singleton modules,
-locked behind mutexes, to ensure that no race conditions occur.
-This causes the Verifier to occasionally take a hold of these mutexes and block the
-storage requests from being processed.
-This can be circumvented by running a pool of connections to the ledger and the swarm.
-We have left this for future work as it can be circumvented by each peer running 2 nodes ---
-one for storage and one for verification.
-
-\begin{landscape}
-  \begin{table}[h]
-    \centering
-    \myfloatalign
-    \pgfplotstabletypeset[
-    every head row/.style={ before row=\toprule, after row=\midrule },
-    every last row/.style={ after row=\bottomrule },
-    columns={npeers, data, kad, time, timever, p99},
-    columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}, dec sep align, fixed, fixed zerofill },
-    columns/data/.style={ column name=\shortstack{\textsc{Data} \\ \textsc{stored}}, column type=r, string type},
-    columns/kad/.style={ column name=\shortstack{\textsc{Without PoR}}, string type, column type=r},
-    columns/time/.style={ column name=\shortstack{\textsc{Time without} \\ \textsc{Verifier running}}, string type, column type={r}},
-    columns/timever/.style={ column name=\shortstack{\textsc{Time with} \\ \textsc{Verifier running}}, string type, column type=r},
-    columns/p99/.style={ column name=\shortstack{\textsc{Longest} \\ \textsc{request time}}, string type, column type=r},
-    ]{./data/store.csv}
-    \caption{Storing files in the system with replication factor of 3}
-    \label{table:storage_vs_kad}
-  \end{table}
-\end{landscape}
-
-\begin{table}
-  \myfloatalign
-  \pgfplotstabletypeset[
-  every head row/.style={ before row=\toprule, after row=\midrule },
-  every last row/.style={ after row=\bottomrule },
-  columns={npeers, data, time, timever, p99},
-  columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}, dec sep align, fixed, fixed zerofill },
-  columns/data/.style={ column name=\shortstack{\textsc{Data} \\ \textsc{stored}}, column type=r, string type},
-  columns/time/.style={ column name=\shortstack{\textsc{Time without} \\ \textsc{Verifier running}}, string type, column type={r}},
-  columns/timever/.style={ column name=\shortstack{\textsc{Time with} \\ \textsc{Verifier running}}, string type, column type=r},
-  columns/p99/.style={ column name=\shortstack{\textsc{Longest} \\ \textsc{request time}}, string type, column type=r},
-  ]{./data/store.csv}
-  \caption{Storing files in the system with replication factor of 3}
-  \label{table:storage_times}
-\end{table}
-
 \section{Proof of Retrievability (PoR)}
 \label{section:por-evaluation}
 
-In this section, we will evaluate how the PoR system performs in a real-world scenario.
+In this section, we will evaluate how the PoR protocol performs in a real-world scenario.
 We have discussed how PoR is used to ensure the integrity of the data stored on the nodes.
-Now, we will evaluate how viable is it to use PoR in the system.
+Now, we will evaluate how viable is it to use PoR as a part of a storage system.
 Does it adhere to the \autoref{section:requirements}?
 And is it fast enough to be used in a real-world scenario?
+The protocol has two parts --- the initial storing of a file and the subsequent repeated audits.
+
+\subsection{Storing a file using PoR}
+
+When storing a file in a distributed system we have to perform some calculations on the data
+to generate the metadata required to run the PoR audits later.
+This is a one-time operation, which is not crucial to be fast,
+but it would provide better user experience if it is.
+Ideally the impact should be minimal and proportional to the size of the file,
+as seen in \autoref{fig:por-initialize}.
+
+\begin{figure}
+  \myfloatalign
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={File size (MB)},
+      ylabel={Time (ms)},
+      grid=major,
+      width=0.8\textwidth,
+      height=6cm,
+    ]
+    \addplot[mark=., blue, error bars/.cd, y dir=both, y explicit] coordinates {
+      (1, 0.221311) +- (0, 0.13)
+      (10, 3.694679) +- (0, 0.50)
+      (20, 9.369777) +- (0, 0.69)
+      (30, 14.315975) +- (0, 1.13)
+      (40, 19.139883) +- (0, 1.13)
+      (50, 23.713537) +- (0, 2.8)
+      (60, 29.072395) +- (0, 2.5)
+      (70, 34.027716) +- (0, 1.75)
+      (80, 41.878575) +- (0, 3.2)
+      (90, 49.148558) +- (0, 5.8)
+      (100, 53.950145) +- (0, 6.0)
+    };
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Time required for the first peer to initialize the metadata for PoR when storing a file.}
+  \label{fig:por-initialize}
+\end{figure}
 
 \subsection{How many audits can we perform in parallel?}
 
@@ -153,10 +113,18 @@ which is a very cache-friendly data structure.
       width=0.8\textwidth,
       height=6cm,
     ]
-    \addplot[mark=., blue] coordinates {
-      (1, 0.002736)
-      (10, 0.008674)
-      (100, 0.027069)
+    \addplot[mark=., blue, error bars/.cd, y dir=both, y explicit] coordinates {
+      (1, 0.0026) +- (0, 0.000157)
+      (10, 0.0087) +- (0, 0.000237)
+      (20, 0.01168) +- (0, 0.000577)
+      (30, 0.0148) +- (0, 0.000699)
+      (40, 0.0166) +- (0, 0.000833)
+      (50, 0.0187) +- (0, 0.000850)
+      (60, 0.0203) +- (0, 0.000891)
+      (70, 0.0218) +- (0, 0.000917)
+      (80, 0.0233) +- (0, 0.001)
+      (90, 0.0254) +- (0, 0.001)
+      (100, 0.026) +- (0, 0.000562)
     };
     \end{axis}
   \end{tikzpicture}
@@ -174,10 +142,18 @@ which is a very cache-friendly data structure.
       width=0.8\textwidth,
       height=6cm,
     ]
-    \addplot[mark=., blue] coordinates {
-      (1, 0.013733)
-      (10, 0.043281)
-      (100, 0.137354)
+    \addplot[mark=., blue, error bars/.cd, y dir=both, y explicit] coordinates {
+      (1, 0.013) +- (0, 0.000396)
+      (10, 0.0434) +- (0, 0.000971)
+      (20, 0.0612) +- (0, 0.00956)
+      (30, 0.0735) +- (0, 0.00135)
+      (40, 0.0850) +- (0, 0.0017)
+      (50, 0.0971) +- (0, 0.0051)
+      (60, 0.1052) +- (0, 0.0023)
+      (70, 0.1127) +- (0, 0.00343)
+      (80, 0.1206) +- (0, 0.0074)
+      (90, 0.1294) +- (0, 0.0109)
+      (100, 0.138) +- (0, 0.0069)
     };
     \end{axis}
   \end{tikzpicture}
@@ -205,10 +181,18 @@ implement PoR.
       width=0.8\textwidth,
       height=6cm,
     ]
-    \addplot[mark=., blue] coordinates {
-      (1, 0.21614)
-      (10, 3.002728)
-      (100, 38.900041)
+    \addplot[mark=., blue, error bars/.cd, y dir=both, y explicit] coordinates {
+      (1, 0.21) +- (0, 0.01)
+      (10, 3.26) +- (0, 0.42)
+      (20, 8.1) +- (0, 0.74)
+      (30, 11.95) +- (0, 0.93)
+      (40, 15.78) +- (0, 1.56)
+      (50, 19.83) +- (0, 0.86)
+      (60, 23.13) +- (0, 1.62)
+      (70, 26.25) +- (0, 3.13)
+      (80, 31.55) +- (0, 1.6)
+      (90, 35.69) +- (0, 1.8)
+      (100,38.46) +- (0, 3.67)
     };
     \end{axis}
   \end{tikzpicture}
@@ -237,7 +221,102 @@ Whether the PoR protocol is the limiting factor or not depends on what kind of s
 In conclusion, the Verifier can send challenges in parallel, but the Keeper nodes will still be
 the limiting factor in the system.
 
+\section{Performance of the system}
+
+Our final goal is to augment a distributed storage system with verification based on PoR.
+In the process we want to ensure that the performance of the system is not degraded.
+The main part we are changing is the way files are stored, by injecting the PoR initialization,
+and the idle state of the peers --- during which they perform audits.
+We performed the benchmarks starting with 10 and up to 100 peers in the network.
+Since the tests are run on a single machine, running more peers would not give us any useful information,
+because the resources of the machine will be exhausted from running the peers in idle state.
+This is also the reason we are using files of size up to 10MB.
+Larger files would take more time to read and write to disk,
+but would not give us any additional information about the performance of the system.
+
+From \autoref{table:storage} we can see the overhead of running the PoR algorithm and
+writing the metadata to the ledger.
+It takes six to 10 times longer for the storage request to be processed
+in comparison to running only the base Kademlia.
+While our implementation is not optimized and processes the requests sequentially,
+we can see that the overhead is significant.
+We run PoR separately for each replica that is to be stored.
+We would have expected two to three times longer processing time,
+not six times longer.
+The main cause for this is the ledger.
+Sending requests to the ledger is sequential and while the ledger has high throughput,
+a lot of requests tend to fail.
+A lot of times when we send a request to the ledger, it would fail because the state has changed.
+This is not something documented in the Immudb's documentation, but to circumvent it,
+we are retrying the requests until they succeed, which is usually on the second or third try.
+
+Despite the overhead, storing a file is a one time operation,
+so while we can improve it, it is not a critical issue.
+
+\subsection{Running a Verifier and a Keeper separately or together}
+
+The final goal is for each peer in the system to run one binary,
+that is both a Keeper and a Verifier.
+However, our implementation is not highly parallelized,
+so we expect that running the Keeper and Verifier separately will be faster.
+
+The results of the benchmarks are once again in \autoref{table:storage}.
+
+It is important to note that having 10 or 100 nodes in the network does not seem to impact the
+time to store files.
+This is the case because before running each benchmark we wait for the peers in the network
+to connect to each other.
+We do not run the tests immediately after a cold start of the system.
+
+The Time without Verifier from \autoref{table:storage} is when the node that accepts the storage request
+does not run the Verifier, and the Time with Verifier is when the node runs the Verifier as well.
+The time to process a request with the Verifier running is significantly longer.
+This is mainly due to the outlier requests, which have to be processed while a verification is running.
+The longest request time column shows the extreme outliers,
+with the standard deviation showing how much the requests vary.
+With our current architecture, the ledger module and the Kademlia swarm module are both singleton modules,
+locked behind mutexes, to ensure that no race conditions occur.
+This causes the Verifier to occasionally take a hold of these mutexes and block the
+storage requests from being processed.
+This can be circumvented by running a pool of connections to the ledger and the swarm.
+We have left this for future work as it can be circumvented by each peer running 2 nodes ---
+one for storage and one for verification.
+
+\begin{landscape}
+  \begin{table}[h]
+    \centering
+    \myfloatalign
+    \pgfplotstabletypeset[
+    col sep=comma,
+    every head row/.style={ before row=\toprule, after row=\midrule },
+    every last row/.style={ after row=\bottomrule },
+    columns={npeers, data, kad, time, timever, p99},
+    columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}, dec sep align, fixed },
+    columns/data/.style={ column name=\shortstack{\textsc{Data} \\ \textsc{stored}}, column type=r, string type},
+    columns/kad/.style={ column name=\shortstack{\textsc{Kademlia}}, string type, column type=r},
+    columns/time/.style={ column name=\shortstack{\textsc{Time without} \\ \textsc{Verifier}}, string type, column type={r}},
+    columns/timever/.style={ column name=\shortstack{\textsc{Time with} \\ \textsc{Verifier}}, string type, column type=r},
+    columns/p99/.style={ column name=\shortstack{\textsc{Longest} \\ \textsc{request time}}, string type, column type=r},
+    columns/stddev/.style={ column name=\shortstack{\textsc{Standard} \\ \textsc{deviation}}, string type, column type=r},
+    ]{./data/store.csv}
+    \caption{Storing files in the system with replication factor of 3. Each benchmark is ran 100 times. Longest request time and Standard deviation both refer to the column for Time with Verifier.}
+    \label{table:storage}
+  \end{table}
+\end{landscape}
+
 \section{How fast are malicious behaviors detected?}
+
+We are interested in how fast the system can detect a malicious peer.
+We define detecting a malicious peer by the time it takes for the system to find the first
+sign of misbehaving.
+The faster a malicious peer is detected, the faster the system can react to it.
+We expect with the increase of files in the system or increase of peers, the time to
+detect a malicious peer to decrease.
+
+\subsection{Detecting a malicious Keeper}
+
+For Keepers, the malicious behavior is corrupting data.
+We expect with the increase of files in the system, the time to detect a malicious Keeper to decrease.
 
 All files are verified each cycle.
 The Verifiers split the work of verifying the files based on the file's key.
@@ -271,6 +350,114 @@ That means that all the files need to be verified in order to discover the corru
 This is even more apparent with 10 peers where the time to discover a corrupt peer with 1000 files is
 41ms in comparison with 1120ms for 100 files.
 
+\subsection{Detecting a malicious Verifier}
+
+For Verifiers, the malicious behavior is not performing audits.
+We expect with the increase of files in the system, the time to detect a malicious Verifier to decrease.
+Detecting a malicious Verifier is very similar to detecting a malicious Keeper,
+and we could show similar results for the minimum times required to detect a malicious Keeper.
+Instead, we would like to confirm that a malicious Verifier will be detected in a reasonable time.
+Reasonable time is within two cycles, because the Verifiers are expected to perform audits every cycle.
+
+The results are shown in \autoref{table:verify_averages}.
+The average time to detect a malicious Verifier indeed remains within two cycles.
+There is no significance in the actual time - the difference between 2000ms and 5000ms average is not
+meaningful, as it depends on what time the peer initiates the auditing cycle.
+The peers do not have synchronized clocks, so one peer's cycle might just start 3000ms later than the other.
+Again, at 50 peers or more the hardware becomes overloaded and starts affecting the times to detect 
+malicious Verifiers.
+This is expected, mainly because of the communication overhead between the peers.
+
+\begin{table}
+  \centering
+  \pgfplotstabletypeset[
+    col sep=comma,
+    every head row/.style={before row=\toprule, after row=\midrule},
+    every last row/.style={after row=\bottomrule},
+    columns={npeers, data, cycle_time, avg, stddev},
+    columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}, dec sep align, fixed, fixed zerofill},
+    columns/data/.style={column name=\shortstack{\textsc{Data} \\ \textsc{stored}}, column type={r}, string type},
+    columns/cycle_time/.style={column name=\shortstack{\textsc{Time per} \\ \textsc{cycle}}, string type, column type={r}},
+    columns/avg/.style={column name=\shortstack{\textsc{Average} \\ \textsc{time}}, string type, column type={r}},
+    columns/stddev/.style={column name=\shortstack{\textsc{Standard} \\ \textsc{deviation}}, string type, column type={r}}
+  ]{./data/verify_verifier.csv}
+  \caption{Time to discover a corrupt Verifier in the network with 1 corrupt Verifier}
+  \label{table:verify_averages}
+\end{table}
+
+We are downsizing the tests to only run with 100 files in the system with six seconds cycle time.
+Performing so many verifications requires longer cycle times, otherwise the Verifiers start lagging
+behind, and we see increasing times to detect malicious peers as seen in \autoref{fig:increasing}.
+
+To deal with this, if we want to add more files to the system we would have to increase the
+cycle time, or increase the number of Verifiers.
+
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={Index},
+      ylabel={Time (ms)},
+      grid=major,
+      width=0.8\textwidth,
+      height=8cm,
+    ]
+    \pgfplotstableread[col sep=comma]{./data/increasing.csv}\datatable
+    \addplot[mark=., blue] table [x expr=\coordindex+1, y=time] {\datatable};
+    \end{axis}
+  \end{tikzpicture}
+  \caption{With too many files and short cycle times, the time to detect a malicious peer increases as the
+  Verifiers start lagging behind}
+  \label{fig:increasing}
+\end{figure}
+
+\subsection{Are the minimum times to detect a malicious peer reasonable?}
+
+During our benchmarks we are assuming that the malicious peers are partially well-behaved.
+In particular, they would not try to predict when the Verifier would audit their files.
+Under a real attack, that would not be the case.
+The malicious peer could record the time between audits and then only come online during the next audit cycle.
+If there are not too many files in the system, during an audit cycle, all the audits would be performed
+at the beginning and then there would be a downtime until the next cycle.
+During this downtime the malicious peer could go offline and save resources, making the
+files unavailable but still passing the audits.
+
+To mitigate this, the Verifier could also record how much time all the audits during a cycle take
+and then either:
+\begin{enumerate}
+  \item Run a consensus algorithm with the other peers in order to shorten the cycle time. ---
+    This would increase the load on the system and make the audits more common, but lead to increased security.
+  \item Randomize the time and order in which audits are performed. --- This would make it impossible for the
+    malicious peer to predict when the audits are performed, but it has a probabilistic nature. We are not
+    guaranteed to catch the malicious peer immediately after it becomes malicious, but statistically,
+    after enough cycles it will be caught.
+\end{enumerate}
+
+Both of these options are viable and depend on the requirements of the users of the system.
+If the users require a higher level of security and can spare the resources,
+the first option is better.
+However, if the users want to save resources they could opt for the second approach.
+We are not running the benchmarks with these options, because we are mainly interested in
+showing that the system can detect malicious behaviors in reasonable time if given the right parameters
+and resources.
+The analysis of the relation between the length of the verification cycle, the size of the data in the system,
+and how they affect the time to detect malicious behaviors, is left for future work.
+
+\subsection{Hardware limitations for the tests}
+
+In \autoref{section:notes} we discussed that the benchmarks are run on a single machine,
+and that we can run 1000 instances of the system.
+However, this is if we run them idle.
+If we run all the instances with enabled storage and verification, i.e., full load,
+we see degrading performance with more than 30 instances.
+In \autoref{table:verify_detection_times} we can see that for 10 and 20 peers,
+the results are consistent, but with 30 peers and with 50, the time to detect a peer is significantly longer.
+This is because the hardware becomes overloaded.
+
+In conclusion, with sufficient hardware the system detects malicious peers when the number of peers
+increases and the number of files stored in the network increases.
+However, if the peers become overloaded, the time to detect a malicious peer increases.
+
 \begin{table}
   \myfloatalign
   \pgfplotstabletypeset[
@@ -286,6 +473,11 @@ This is even more apparent with 10 peers where the time to discover a corrupt pe
   \label{table:verify_detection_times}
 \end{table}
 
+% 10      100x1KB     60s           20386ms
+% 10      1000x1KB    60s           107ms
+% 20      100x1KB     60s           2221ms
+% 20      1000x1KB    60s           82ms
+
 \section{Reputation system based on a ledger}
 
 The results of the PoR are stored in a ledger, which acts as the source of truth for
@@ -295,38 +487,44 @@ we will use a centralized ledger in our evaluation.
 For the purposes of evaluation we could have used a simple SQL database or a local file,
 however, we used Immudb because it is what we used in the previous iterations of the system
 and at the time we were exploring it as a potential solution for the ledger.
+Immudb turned out to have a lot of limitations and we would not recommend it for a production storage system,
+such as the one described in this thesis.
 
-\subsection{Immudb performance}
+\subsection{How does a ledger contribute to the system?}
 
-Having a centralized ledger means we have a potential bottleneck.
-The benchmarks that the authors of Immudb are presented in \autoref{tab:immudb}.
-While processing more than a million requests per second is impressive,
-it is not performance we can expect because we are storing the metadata for PoR in the ledger,
-which is considerably more than empty requests.
-Based on the benchmarks we can conclude that we can use Immudb as a ledger and have
-a throughput of more than a million requests per second,
-but we need a distributed version of Immudb,
-because the limiting factor becomes the network throughput and the disk read/write speed.
-Immudb is not bad as a ledger, but the fact it is not distributed limits its use in a production system.
+Using PoR allows peers to detect other peers, which are disrupting the integrity of the data in the system.
+However, on its own, it is not enough to ensure that malicious peers are detected and removed from the network.
 
-\begin{table}
-  \myfloatalign
-  \pgfplotstabletypeset[
-    every head row/.style={ before row=\toprule, after row=\midrule },
-    every last row/.style={ after row=\bottomrule },
-    columns={entries, workers, batch, batches, time, entries_per_s},
-    columns/entries/.style={string type, column name=\shortstack{\textsc{Entries}}, column type={r}},
-    columns/workers/.style={column name=\shortstack{\textsc{Workers}}, column type={r}},
-    columns/batch/.style={column name=\shortstack{\textsc{Batch}}, column type={r}},
-    columns/batches/.style={column name=\shortstack{\textsc{Batches}}, column type={r}},
-    columns/time/.style={column name=\shortstack{\textsc{Time (s)}}, column type={r}},
-    columns/entries_per_s/.style={string type, column name=\shortstack{\textsc{Entries/s}}, column type={r}},
-  ]{./data/immudb.csv}
-  \caption{Immudb performance according to the authors \cite{immudb-gh}}
-  \label{tab:immudb}
-\end{table} 
+Is a reputation system based on a ledger a viable measure against malicious nodes?
+We expect the ledger to be the source of truth for the reputation of peers and allow
+each peer to fetch said reputation and adjust its behavior accordingly.
+In \autoref{fig:reputation_loss} we can see how the reputation of a peer changes after it becomes malicious.
+This is observed by all peers in the network.
+The numbers are arbitrary --- how much reputation a peer has, how long it takes for the peer to be detected,
+etc. --- these are all specific to the peer.
+However, the general trend persists --- the peer loses reputation after it becomes malicious,
+and it goes in the negatives, resulting in it being mistrusted by other peers in the network.
 
-\subsection{What makes a ledger a good choice for the reputation system?}
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={Time (s)},
+      ylabel={Value},
+      grid=major,
+      width=0.8\textwidth,
+      height=8cm,
+    ]
+    \pgfplotstableread[col sep=comma]{./data/reputation_loss.csv}\datatable
+    \addplot[mark=none, blue] table [x expr=\coordindex, y=reputation] {\datatable};
+    \addplot[black, thick] coordinates {(0,0) (100,0)}; % Draws a horizontal line at y=0
+    \draw[red, thick, dashed] (axis cs:60,-70) -- (axis cs:60,60) node[pos=1, above] {Peer becomes malicious}; % Draws a vertical line at x=60 with text
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Reputation of a peer, which goes malicious after 60 seconds.}
+  \label{fig:reputation_loss}
+\end{figure}
+
 
 % \wtf{TODO: I'm still playing around with this idea, I'm not sure if this is the best way to do it.
 % Perhaps the staked reputation will be returned gradually with each successful audit.
@@ -338,13 +536,18 @@ Immudb is not bad as a ledger, but the fact it is not distributed limits its use
 % Finally, a peer is awarded reputation points for performing audits.
 % The increase and decrease numbers are configurable and can be adjusted to fit the network requirements.
 % We will discuss the different possibilities for adjusting the reputation in the \autoref{chapter:evaluation}
-\wtf{Answer the question from the hypothesis: 
-    Is a reputation system based on a ledger a viable measure against malicious nodes?
-}
-\wtf{
-    I think in this section I'll cover what are a ledger's strong points and guarantees that
-    would be beneficial for the reputation system.
-}
+
+% We need to answer the question of how often audits should be performed and how often nodes should
+% check the audit results of others.
+% The overhead of performing audits should be as low as possible, but the audits should be performed often enough
+% to ensure the integrity of the data.
+
+% Finding the balance between audits and the overhead of the audits, and the penalties and rewards for the nodes
+% is crucial for the success of the system.
+% We will evaluate the system by running it with different parameters and observing the behavior of the nodes.
+% We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.
+
+\section{Balancing the reputation system}
 
 % We need to evaluate the proper penalties and rewards for the nodes.
 % A good balance is needed between rewards and penalties to ensure that a node is
@@ -364,18 +567,6 @@ Immudb is not bad as a ledger, but the fact it is not distributed limits its use
 % We need to solve this problem by either having a maximum reputation or by having the penalties be
 % percentage-based.
 
-% We need to answer the question of how often audits should be performed and how often nodes should
-% check the audit results of others.
-% The overhead of performing audits should be as low as possible, but the audits should be performed often enough
-% to ensure the integrity of the data.
-
-% Finding the balance between audits and the overhead of the audits, and the penalties and rewards for the nodes
-% is crucial for the success of the system.
-% We will evaluate the system by running it with different parameters and observing the behavior of the nodes.
-% We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.
-
-\section{Balancing the reputation system}
-
 \wtf{for each 100k files added to the system, we need to increase the cycle time by...,
 for each 1GB of data stored in the system, we need to increase the cycle time by...,
 for each X number of peers in the network, we need to increase the cycle time by...}
@@ -393,14 +584,45 @@ results in it being kicked out of the network.}
 
 \section{Using Rust}
 
-\wtf{TODO: MOVE THIS TO THE END}
+Rust is a systems programming language that is known for its performance and safety.
+For these reasons we chose it for this project.
 
-\wtf{Cover what are the strong/weak points of using Rust for such a system.}
+Rust provides thread safety and memory safety without a garbage collector.
+Since the system is multithreaded, and it is composed of different modules
+that communicate with each other, Rust forces us to use mutexes or channels
+to communicate between threads.
+Without them, the compiler would not allow us to compile the code.
+We also get no memory leaks, as Rust has a strict ownership model.
+It is also a well-rounded language, with a lot of libraries and frameworks available,
+which makes it a good choice for a project like this.
+Also, because of the small memory footprint of the system and the low CPU usage,
+we can run many instances of the system on a single machine,
+allowing us to test the system with many peers.
+
+While the pros of using Rust are many, there are some cons as well.
+In particular, the learning curve of Rust is steep and takes time to get used to
+the different coding style.
+Even after being comfortable with the language, it takes longer to develop in Rust
+because of the strict compiler rules and explicitness of the language.
+Running benchmarks is a difficult task as they are not fully supported ---
+we have to use either external libraries or unstable features of the language.
+
+Overall, Rust is a good choice for a project like this, because of its safety and performance,
+but the extra time to develop in Rust should be taken into account.
 
 \section{Summary}
-% at the end of the evaluation add a sumamry - is the system viable or should you use amazon,
-% is the system recommened for production for companies - for what use cases is it recommened,
-% basically add stuff something akin to a conclusion that then can be used in the conclusion chapter,
-% eval - if someone sees this PoR for the first time - how expensive is it, what is the overhead, why not use
-% amazon/other s3
-% por could be good for when we store files in s3 and we use por to check the integrity of the files
+
+It is difficult for storage system with potential malicious nodes to compete
+head-to-head with centralized cloud storage providers, which optimize every aspect of their system.
+Introducing Proof of Retrievability (PoR) into the system brings us closer to the guarantees
+that cloud storage providers offer.
+This is not without its costs, as we have seen in the evaluation --- any additional work
+that the nodes have to perform will increase the time to process requests.
+It is an unavoidable trade-off between security and performance.
+However, the performance overhead of PoR is not so significant if we take into account that
+cloud services also perform integrity checks on the data stored on their servers,
+albeit with slightly lighter algorithms.
+The main bottleneck is the ledger, which in our tests is centralized.
+Even if it has high advertised throughput, under load, especially with a lot of data,
+and the many failed requests, it becomes a bottleneck.
+For PoR to be a viable solution for a storage system, the ledger has to be decentralized as well.

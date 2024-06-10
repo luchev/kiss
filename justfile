@@ -3,6 +3,9 @@ set shell := ["bash", "-uc"]
 run env:
     ENV={{env}} RUST_LOG=info cargo run
 
+run-release env:
+    ENV={{env}} RUST_LOG=info cargo run --release
+
 debug env:
     ENV={{env}} RUST_LOG=debug cargo run
 
@@ -66,6 +69,9 @@ test:
 test-nocap:
     RUST_LOG=debug cargo test -- --nocapture
 
+bench:
+    cargo bench
+
 release:
     cargo build --release
 
@@ -75,8 +81,18 @@ run-many count: release
     for i in $(seq 1 {{count}}); do \
         RUST_LOG=info ENV=peer$i ./target/release/kiss &>logs/peer$i.log & \
     done
+    sleep 3
+    pkill -f kiss
+    for i in $(seq 1 {{count}}); do \
+        RUST_LOG=info ENV=peer$i ./target/release/kiss &>logs/peer$i.log & \
+    done
 
 run-many-no-build count:
+    for i in $(seq 1 {{count}}); do \
+        RUST_LOG=info ENV=peer$i ./target/release/kiss &>logs/peer$i.log & \
+    done
+    sleep 3
+    pkill -f kiss
     for i in $(seq 1 {{count}}); do \
         RUST_LOG=info ENV=peer$i ./target/release/kiss &>logs/peer$i.log & \
     done
@@ -104,7 +120,7 @@ clean-data:
 clean-logs:
     rm -rf logs/*
 
-clean: recreate-db clean-data clean-logs kill-all
+clean: recreate-db clean-data clean-logs build kill-all
 
 put-bytes numbytes:
     openssl rand -base64 {{numbytes}} > /tmp/bytes
@@ -126,6 +142,6 @@ put-bytes-times numbytes times:
         -import-path proto \
         -proto kiss.proto \
         -d @ \
-        "[::1]:3000" \
+        "[::1]:2000" \
         kiss_grpc.KissService/Store < /tmp/grpcurl.json; \
     done

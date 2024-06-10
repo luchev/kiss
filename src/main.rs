@@ -10,7 +10,6 @@
 // #![feature(trivial_bounds)]
 // #![deny(clippy::todo)]
 
-mod bench;
 mod deps;
 mod grpc;
 mod ledger;
@@ -22,14 +21,19 @@ mod types;
 mod util;
 mod verifier;
 
+use crate::ledger::{ILedger, ImmuLedger};
+use crate::settings::ISettings;
+use crate::util::{Er, ErrorKind};
+use base64::Engine as _;
 use deps::dependency_injector;
 use grpc::IGrpcHandler;
-use log::info;
+use libp2p::PeerId;
+use libp2p_identity::Keypair;
+use log::{debug, info, warn};
 use malice::IMalice;
 use p2p::swarm::ISwarm;
 use runtime_injector::Svc;
-use settings::ISettings;
-use tokio::try_join;
+use tokio::{sync::Mutex, try_join};
 use util::{die, Res};
 use verifier::IVerifier;
 
@@ -49,6 +53,7 @@ async fn run() -> Res<()> {
     let verifier: Svc<dyn IVerifier> = injector.get()?;
     let malice: Svc<Box<dyn IMalice>> = injector.get()?;
     let settings: Svc<dyn ISettings> = injector.get()?;
+    let ledger = injector.get::<Svc<Mutex<ImmuLedger>>>()?;
 
     if settings.verifier().enabled {
         try_join!(
@@ -56,9 +61,42 @@ async fn run() -> Res<()> {
             kad.start(),
             verifier.start(),
             malice.start(),
+            start(ledger, settings),
         )
         .map(|_| ())
     } else {
-        try_join!(grpc_handler.start(), kad.start(), malice.start(),).map(|_| ())
+        try_join!(
+            grpc_handler.start(),
+            kad.start(),
+            malice.start(),
+            start(ledger, settings),
+        )
+        .map(|_| ())
+    }
+}
+
+async fn start(ledger: Svc<Mutex<ImmuLedger>>, settings: Svc<dyn ISettings>) -> Res<()> {
+    let local_key = match settings.swarm().keypair {
+        Some(keypair) => Keypair::from_protobuf_encoding(
+            &base64::engine::general_purpose::STANDARD_NO_PAD
+                .decode(keypair)
+                .map_err(|_| {
+                    ErrorKind::Generic("eval requires a peer id in the config".to_string())
+                })?,
+        )
+        .map_err(|_| ErrorKind::Generic("eval requires a peer id in the config".to_string()))?,
+        None => {
+            return Err(
+                ErrorKind::Generic("verifier requires a peer id in the config".to_string()).into(),
+            )
+        }
+    };
+
+    let local_peer_id = PeerId::from(local_key.public());
+
+    loop {
+        let rep = ledger.lock().await.get_reputation(local_peer_id).await?;
+        info!("Current reputation: {:?}", rep);
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }
