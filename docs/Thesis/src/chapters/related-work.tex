@@ -401,14 +401,16 @@ Another method is to send a hash of the file, which is more efficient, but easy 
 the server can store the hash of the file instead of the file itself.
 To address this, the client could send a challenge in the form of a salt to the server,
 which would then hash the salt with the file and return the hash.
-This means that the client has to preprocess the file and store salts for each file.
-This is also inefficient, as the client has to store the salts and preprocess the file.
+This is inefficient because the client has to preprocess the file and store salts for each file.
 
 It is also possible to use a Merkle tree, which is a binary tree of hashes.
 The leaves of the tree are the hashes of the file chunks, and the internal nodes are the hashes of their children.
 The root of the tree is the hash of the file.
 The client can request a proof of a chunk by requesting the sibling nodes of the path from the leaf to the root.
-This is an okay solution, which modern PoR protocols build upon, usually to allow updates to the file.
+This solution also requires the client to precompute challenges with salts and store them.
+
+Merkle trees are used by modern PoR protocols \cite{pormerkle} to build upon.
+They are used mainly to enable updates to the file or when the file is split into chunks.
 
 \subsection{First PoR protocols}
 
@@ -427,8 +429,8 @@ which allow the client to reconstruct the file if only some parts are corrupted.
 
 The later PoR protocols check the whole file and rely on cryptographic theory,
 which makes it close to impossible for the server to cheat the client with more than a negligible probability.
-The papers also start exploring the idea of public auditability, where the file can be audited without having
-a shared secret.
+The papers \cite{pormerkle, poralgebra} also start exploring the idea of public auditability,
+where the file can be audited without having a shared secret.
 In other words, the client does not need to store a secret in order to perform audits.
 All following papers also optimize different parts of the protocol, such as reducing bandwidth,
 reducing client storage, reducing algorithm complexity, and improving the security of the protocol.
@@ -471,7 +473,7 @@ Proofs of Retrievability are an important instrument to ensure integrity in dece
 Cloud storage provides a way to store and access data over the Internet.
 The user does not need to worry about the physical location of the storage, the hardware, the maintenance,
 the replication, the backups, etc., as it is abstracted away by the cloud storage provider.
-If we want to build a decentralized storage system, we need to provide the same guarantees and features
+If we want to build a decentralized storage system, we need to provide similar guarantees and features
 as centralized storage systems.
 For this purpose we will explore the requirements for Amazon's S3 \cite{s3-faq},
 which is one of the most popular cloud storage providers.
@@ -496,7 +498,7 @@ which is one of the most popular cloud storage providers.
 
 These features come at a cost, which is usually a fee for the storage and the bandwidth.
 
-If we want to build a decentralized storage system, we need to provide the same guarantees and features.
+If we want to build a decentralized storage system, we need to provide the similar guarantees and features.
 While we cannot restrict which users can access the data, we can encrypt it,
 which will make it unreadable to anyone who does not have the decryption key.
 There is one feature that is hard to achieve in a decentralized network --- deletion.

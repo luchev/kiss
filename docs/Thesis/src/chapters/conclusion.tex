@@ -19,14 +19,35 @@ and can provide guarantees that the data is stored correctly.
 This comes at a cost of time and resources, as the system has to continuously
 monitor the peers and the data they store.
 
-Combining PoR, a reputation system, and the modern decentralized networks,
-we can achieve a storage system that has similar guarantees as a cloud storage provider
-as listed in \autoref{s3-requirements}.
-Solving the integrity problem was a crucial step to achieve the requirement for data durability.
-
 If a client has specific requirements, that can only be met by using decentralized storage,
 e.g., the client wants the data to not be censored, it is worth using a system like this.
 However, if a client needs simple data storage, that is durable and available,
 it is recommended to rely on cloud storage providers.
 These providers can usually provide better speeds, and they rely on proof of retrievability internally,
 which allows them to provide guarantees about the data integrity.
+
+Combining PoR, a reputation system, and the modern decentralized networks,
+we can achieve a storage system that has similar guarantees as a cloud storage provider
+as listed in \autoref{s3-requirements}.
+Solving the integrity problem was a crucial step to achieve the requirement for data durability.
+
+There are a few of the requirements, which are not yet met, such as the requirement for
+permanent deletion of data.
+PoR allows us to verify that data is stored, but we do not yet have a way to verify that
+the data is deleted upon request.
+This could pose legal challenged in certain use cases.
+We also have to account for the fact that the peers in the network are not regulated,
+so any claim for high availability or durability is under the assumption that
+the system is not undergoing a large scale attack --- with enough resources,
+an adversary could take control of the network.
+Challenges like these prevent us from fully replacing cloud storage providers
+with decentralized storage systems, at least until we have solutions to them.
+
+Finally, we are assuming the peers in the system are uniform, have similar resources,
+have similar availability, and so on.
+The results in \autoref{section:balancing} are based on such an assumption.
+However, if we want this system to be used by different users --- some with their home computers,
+others on their phones, and some on data-center servers, we have to account for the differences.
+The reputation system must become dynamic, and the rewards cannot be the same for all peers.
+This is a challenge that has to be addressed before the system can be used by a wider audience,
+that is not preselected to have similar resources.

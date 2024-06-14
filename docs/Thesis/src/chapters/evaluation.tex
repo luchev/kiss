@@ -1,7 +1,7 @@
 \chapter{Evaluation}
 \label{chapter:evaluation}
 
-Before we evaluate the system, we will make a few notes that apply to the evaluation of the system as a whole.
+Before we evaluate the system, we shall make a few notes that apply to the evaluation of the system as a whole.
 
 \section{Notes}
 \label{section:notes}
@@ -31,9 +31,9 @@ We will not account for the overhead of the system being idle in the benchmarks.
 \section{Proof of Retrievability (PoR)}
 \label{section:por-evaluation}
 
-In this section, we will evaluate how the PoR protocol performs in a real-world scenario.
+In this section, we evaluate how the PoR protocol performs in a real-world scenario.
 We have discussed how PoR is used to ensure the integrity of the data stored on the nodes.
-Now, we will evaluate how viable is it to use PoR as a part of a storage system.
+Now, we evaluate how viable is it to use PoR as a part of a storage system.
 Does it adhere to the \autoref{section:requirements}?
 And is it fast enough to be used in a real-world scenario?
 The protocol has two parts --- the initial storing of a file and the subsequent repeated audits.
@@ -318,7 +318,11 @@ detect a malicious peer to decrease.
 For Keepers, the malicious behavior is corrupting data.
 We expect with the increase of files in the system, the time to detect a malicious Keeper to decrease.
 
-All files are verified each cycle.
+All files are verified each cycle in our testing environment.
+In a real world scenario, this is achievable only with very long cycles.
+The alternative option is to check a random subset of the files each cycle,
+which will provide probabilistic guarantees that a malicious Keeper will be detected.
+
 The Verifiers split the work of verifying the files based on the file's key.
 As an example, if we have two peers (2 Keepers and 2 Verifiers),
 the Verifiers would split the files of each Keeper and take turns verifying them
@@ -375,7 +379,7 @@ This is expected, mainly because of the communication overhead between the peers
     every head row/.style={before row=\toprule, after row=\midrule},
     every last row/.style={after row=\bottomrule},
     columns={npeers, data, cycle_time, avg, stddev},
-    columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}, dec sep align, fixed, fixed zerofill},
+    columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}},
     columns/data/.style={column name=\shortstack{\textsc{Data} \\ \textsc{stored}}, column type={r}, string type},
     columns/cycle_time/.style={column name=\shortstack{\textsc{Time per} \\ \textsc{cycle}}, string type, column type={r}},
     columns/avg/.style={column name=\shortstack{\textsc{Average} \\ \textsc{time}}, string type, column type={r}},
@@ -464,7 +468,7 @@ However, if the peers become overloaded, the time to detect a malicious peer inc
   every head row/.style={ before row=\toprule, after row=\midrule },
   every last row/.style={ after row=\bottomrule },
   columns={npeers, data, cycle_time, time},
-  columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}, dec sep align, fixed, fixed zerofill },
+  columns/npeers/.style={string type, column name=\shortstack{\textsc{Number} \\ \textsc{of peers}}},
   columns/data/.style={ column name=\shortstack{\textsc{Data} \\ \textsc{stored}}, column type=r, string type},
   columns/cycle_time/.style={ column name=\shortstack{\textsc{Time per} \\ \textsc{cycle}}, string type, column type={r}},
   columns/time/.style={ column name=\shortstack{\textsc{Time to discover} \\ \textsc{corrupt peer}}, string type, column type=r},
@@ -498,35 +502,80 @@ However, on its own, it is not enough to ensure that malicious peers are detecte
 Is a reputation system based on a ledger a viable measure against malicious nodes?
 We expect the ledger to be the source of truth for the reputation of peers and allow
 each peer to fetch said reputation and adjust its behavior accordingly.
+
 In \autoref{fig:reputation_loss} we can see how the reputation of a peer changes after it becomes malicious.
-This is observed by all peers in the network.
-The numbers are arbitrary --- how much reputation a peer has, how long it takes for the peer to be detected,
-etc. --- these are all specific to the peer.
-However, the general trend persists --- the peer loses reputation after it becomes malicious,
-and it goes in the negatives, resulting in it being mistrusted by other peers in the network.
+All peers in the network start with the same neutral reputation, which is 0.
+After 60 seconds, that is 10 cycles, one peer becomes malicious and corrupts some percentage of the data.
+The reputation of the peer starts to decrease and goes into the negatives.
+Once the reputation drops below 0, the peer is seen as malicious by the other peers in the network,
+and can be removed from the network.
+This example is for a very short period of time, but in a real-world scenario, the trends will be the same,
+just over a longer period of time --- malicious peers would lose reputation --- the more data they corrupt,
+the faster they lose reputation.
 
 \begin{figure}
   \centering
   \begin{tikzpicture}
     \begin{axis}[
       xlabel={Time (s)},
-      ylabel={Value},
+      ylabel={Reputation},
       grid=major,
       width=0.8\textwidth,
       height=8cm,
+      legend pos=outer north east,
+      cycle list name=color list,
     ]
-    \pgfplotstableread[col sep=comma]{./data/reputation_loss.csv}\datatable
-    \addplot[mark=none, blue] table [x expr=\coordindex, y=reputation] {\datatable};
-    \addplot[black, thick] coordinates {(0,0) (100,0)}; % Draws a horizontal line at y=0
-    \draw[red, thick, dashed] (axis cs:60,-70) -- (axis cs:60,60) node[pos=1, above] {Peer becomes malicious}; % Draws a vertical line at x=60 with text
+
+    % Read the data from the CSV file
+    \pgfplotstableread[col sep=comma]{./data/rep.csv}\datatable
+
+    % Manually specify legend entries and colors
+    \addplot[mark=none, thick, color=blue] table [x expr=\coordindex, y index=0] {\datatable};
+    \addlegendentry{0\% corrupted files}
+
+    \addplot[mark=none, thick, color=cyan] table [x expr=\coordindex, y index=1] {\datatable};
+    \addlegendentry{10\% corrupted files}
+
+    \addplot[mark=none, thick, color=green] table [x expr=\coordindex, y index=2] {\datatable};
+    \addlegendentry{20\% corrupted files}
+
+    \addplot[mark=none, thick, color=lime] table [x expr=\coordindex, y index=3] {\datatable};
+    \addlegendentry{30\% corrupted files}
+
+    \addplot[mark=none, thick, color=yellow] table [x expr=\coordindex, y index=4] {\datatable};
+    \addlegendentry{40\% corrupted files}
+
+    \addplot[mark=none, thick, color=orange] table [x expr=\coordindex, y index=5] {\datatable};
+    \addlegendentry{50\% corrupted files}
+
+    \addplot[mark=none, thick, color=red] table [x expr=\coordindex, y index=6] {\datatable};
+    \addlegendentry{60\% corrupted files}
+
+    \addplot[mark=none, thick, color=magenta] table [x expr=\coordindex, y index=7] {\datatable};
+    \addlegendentry{70\% corrupted files}
+
+    \addplot[mark=none, thick, color=purple] table [x expr=\coordindex, y index=8] {\datatable};
+    \addlegendentry{80\% corrupted files}
+
+    \addplot[mark=none, thick, color=brown] table [x expr=\coordindex, y index=9] {\datatable};
+    \addlegendentry{90\% corrupted files}
+
+    \addplot[mark=none, thick, color=black] table [x expr=\coordindex, y index=10] {\datatable};
+    \addlegendentry{100\% corrupted files}
+
+    % Draw a horizontal line at y=0
+    \addplot[black, thick] coordinates {(0,0) (100,0)};
+
+    % Draw a vertical line at x=60 with text
+    \draw[red, thick, dashed] (axis cs:60,-70) -- (axis cs:60,60) node[pos=1, above] {Peer becomes malicious};
+
     \end{axis}
   \end{tikzpicture}
-  \caption{Reputation of a peer, which goes malicious after 60 seconds.}
+  \caption{Reputation loss over time for different percentages of corrupted data.}
   \label{fig:reputation_loss}
 \end{figure}
 
-
-% \wtf{TODO: I'm still playing around with this idea, I'm not sure if this is the best way to do it.
+% I'm still playing around with this idea, I'm not sure if this is the best way to do it.
 % Perhaps the staked reputation will be returned gradually with each successful audit.
 % The whole idea of adding "staking" is to ensure the peer has a big hit in reputation from the beginning.
 % This way a new peer in the network cannot just accept a lot of files as soon as it joins and then go offline.}
@@ -567,20 +616,144 @@ and it goes in the negatives, resulting in it being mistrusted by other peers in
 % We need to solve this problem by either having a maximum reputation or by having the penalties be
 % percentage-based.
 
-\wtf{for each 100k files added to the system, we need to increase the cycle time by...,
-for each 1GB of data stored in the system, we need to increase the cycle time by...,
-for each X number of peers in the network, we need to increase the cycle time by...}
+One of the main questions we want to answer in this thesis is
+how to balance the reputation once we have PoR and the ledger in place.
 
-\subsection{Gaining and losing reputation as a Keeper}
-\wtf{Cover how the reputation awards should be balanced against the punishments to ensure
-that the system can maintain its integrity. We will assume that a node dropping to negative reputation
-results in it being kicked out of the network.}
+The reputation is controlled by two parameters:
+\begin{enumerate}
+  \item Reputation increase for storing a file or performing an audit.
+  \item Reputation decrease for corrupting data or not performing audits.
+\end{enumerate}
 
-\subsection{Gaining and losing reputation as a Verifier}
+We need to find the right balance between the two.
+If the reputation increase is too high, the nodes can easily become malicious,
+as they can absorb the penalties.
+If the reputation decrease is too high, the nodes will not be able to recover from a mistake,
+such as being temporarily offline or being under heavy load for a period of time.
 
-\wtf{Do the same for checking the previous Verifier's audit as we do for the Keeper}
-\wtf{ give peers some leeway from being offline - give it some time to be offline before punishing.  }
+\subsection{Balancing the reputation gain/loss}
+\label{section:balancing}
 
+The reputation gain and loss are parameters of the system that can be adjusted.
+For our evaluation we are using the following parameters:
+\begin{itemize}
+  \item Reputation increase for storing a file: 1
+  \item Reputation increase for performing an audit: 1
+  \item Reputation decrease for corrupting data: 5
+  \item Reputation decrease for not performing an audit: 5
+\end{itemize}
+
+These numbers are arbitrary, and the only important thing is that the reward is 20\% of the penalty.
+In such a configuration we expect that:
+\begin{itemize}
+  \item Peers that fail less than 20\% of the time to keep gaining reputation slowly.
+  \item Peers that fail 20\% of the time to maintain their reputation.
+  \item Peers that fail more than 20\% of the time to slowly lose reputation.
+\end{itemize}
+
+We ran the benchmark similarly to the previous benchmarks --- 
+1 peer goes malicious after 60 seconds and corrupts some percent of the data.
+The results are shown in \autoref{fig:reputation_loss_selected}.
+The benchmarks this time are run for 300 seconds, because we want to observe the long-term trends,
+unlike \autoref{fig:reputation_loss} where we were interested in how the extreme cases compare.
+
+As predicted when the reward is 20\% of the penalty, a peer that is corrupting 10\% of the data
+slowly increases its reputation, a peer that is corrupting 20\% of the data maintains its reputation,
+and a peer that is corrupting 30\% of the data slowly loses reputation.
+There are some oscillations in the data, which is due to the cycle time and what are the file IDs,
+that are being corrupted.
+
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={Time (s)},
+      ylabel={Reputation},
+      grid=major,
+      width=0.8\textwidth,
+      height=8cm,
+      legend pos=outer north east,
+    ]
+
+    % Read the data from the CSV file
+    \pgfplotstableread[col sep=comma]{./data/rep300.csv}\datatable
+
+    \addplot[mark=none, thick, color=blue] table [x expr=\coordindex, y index=0] {\datatable};
+    \addlegendentry{10\% files are corrupted}
+
+    \addplot[mark=none, thick, color=black] table [x expr=\coordindex, y index=1] {\datatable};
+    \addlegendentry{20\% files are corrupted}
+
+    \addplot[mark=none, thick, color=red] table [x expr=\coordindex, y index=2] {\datatable};
+    \addlegendentry{30\% files are corrupted}
+
+    % Draw a horizontal line at y=0
+    \addplot[black, thick] coordinates {(0,0) (300,0)};
+
+    % Draw a vertical line at x=60 with text
+    \draw[red, thick, dashed] (axis cs:60,-70) -- (axis cs:60,60) node[pos=1, above] {Peer becomes malicious};
+
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Reputation loss over time for 10\%, 20\%, and 30\% corrupted data.}
+  \label{fig:reputation_loss_selected}
+\end{figure}
+
+The conclusion we can derive from this experiment is that the leeway we give to peers is customizable,
+based on what the user requirements are.
+If we wish to have a very strict system and allow only 5\% leeway (corrupted data or peers being offline),
+we can set the reward to be 5\% of the penalty.
+On the other hand, if we know the peers are going to be going offline for 8 hours each day,
+because the users turn off their computers at night, we can set the reward to be greater than 33.3\% of the penalty.
+
+\subsection{Recovering reputation}
+
+It is possible for a peer to have downtime.
+Perhaps the network was disturbed, or the peer had to be restarted for updates.
+In such cases, the peer would lose reputation, which it can recover if it behaves well afterwards.
+
+The time that a peer can be offline should depend on its contribution thus far.
+Since we treat going offline as failing all audits, this is not much different from a peer
+behaving maliciously for a short period of time.
+The main thing we want to see is that a peer can recover its reputation after failing a few audits,
+as long as it is above the threshold of being removed from the network (zero reputation).
+
+We ran a simulation with a peer that goes offline for two cycles and then for one cycle.
+The reward in our simulation is 20\% of the penalty.
+The results are shown in \autoref{fig:reputation_recovery}.
+From the results we can see that the peer's reputation starts dropping shortly after it goes offline.
+The exact time depends on when the next audit will happen, but is within the one cycle range.
+Since the peer does not drop below zero reputation, after coming back online, it starts recovering its
+reputation, which is exactly what we want to see.
+There are no long-term effects of going offline for a short period of time.
+
+As a conclusion, a peer can go offline for a short period of time and recover its reputation afterwards,
+as long as it has contributed to the network sufficiently before going offline.
+How long a peer can go offline depends on the configuration of the reputation adjustments,
+similarly to the previous section.
+If we configure the increase of reputation for succeeding audits to be ten times less than the decrease
+for failing audits, the peer can go offline for 10\% of the time and maintain its reputation.
+
+\begin{figure}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[
+      xlabel={Time (s)},
+      ylabel={Reputation},
+      grid=major,
+      width=0.8\textwidth,
+      height=8cm,
+    ]
+    \pgfplotstableread[col sep=comma]{./data/recovery.csv}\datatable
+    \addplot[mark=none, blue] table [x expr=\coordindex, y=reputation] {\datatable};
+    \addplot[black, thick] coordinates {(0,0) (294,0)}; % Draws a horizontal line at y=0
+    \draw[red, thick, dashed] (axis cs:96,0) -- (axis cs:100,60) node[pos=1, above] {Peer goes offline for 2 cycles};
+    \draw[red, thick, dashed] (axis cs:190,50) -- (axis cs:185,0) node[pos=1, above] {Peer goes offline for 1 cycle};
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Reputation of a peer, which goes offline twice for two and for one cycles respectively.}
+  \label{fig:reputation_recovery}
+\end{figure}
 
 \section{Using Rust}
 

@@ -211,6 +211,17 @@ impl IVerifier for Verifier {
 
 impl Verifier {
     pub async fn punish_peer(&self, peer_id: PeerId) {
+        let rep = self
+            .ledger
+            .lock()
+            .await
+            .get_reputation(peer_id)
+            .await
+            .unwrap();
+        // time now in seconds:
+        let now = OffsetDateTime::now_utc().unix_timestamp();
+        info!("{} other peer rep: {}", now, rep);
+
         let res = {
             self.ledger
                 .lock()

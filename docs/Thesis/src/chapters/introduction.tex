@@ -107,7 +107,7 @@ we need to provide the same guarantees and features:
 \textbf{Scalability} is covered by most networks, regardless of being centralized or decentralized.
 Allowing many peers to join the network is a key feature of decentralized networks.
 \textbf{Performance} is also covered by most modern networks, as they provide $O(\log n)$ query time.
-\textbf{Resilience} is for the most part covered by the security additions to the networks, such as S/Kademlia.
+\textbf{Resilience} is for the most part covered by the security additions to the networks, such as S/Kademlia \ref{skademlia}.
 An exception is the storage attacks, which are not addressed.
 \textbf{Reliability} is covered by rebalancing the network when a node leaves or joins.
 Most networks also provide some form of redundancy, which allows the network to recover from failures.
@@ -146,3 +146,5 @@ the penalties and rewards for the nodes, and the reputation system.
 Implementing the validation system could make the performance degrade, so we have to evaluate
 if any of the requirements are affected by the validation system, and if so, how much.
 We will discuss the details and the results of the evaluation in \ref{chapter:evaluation}.
+
+We have implemented a version of the system, which is available at \url{https://github.com/luchev/kiss}.

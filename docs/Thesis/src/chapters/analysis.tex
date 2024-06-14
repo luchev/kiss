@@ -331,7 +331,7 @@ The Verifier can misbehave in the following ways:
 \begin{enumerate}
     \item \textbf{Not performing audits} --- the Verifier claims to perform audits, but does not.
     \item \textbf{Performing audits incorrectly} --- the Verifier performs audits, but does not check the results correctly.
-    \item \textbf{Accusing the Keeper of not storing the data} --- the Verifier accuses the Keeper of not storing the data, but the Keeper is storing the data.
+    \item \textbf{Wrongly Accusing the Keeper of not storing the data} --- the Verifier accuses the Keeper of not storing the data, but the Keeper is storing the data.
 \end{enumerate}
 
 \textbf{Not performing audits} can be caught by inspecting the result of the audits,
@@ -359,7 +359,7 @@ Finally, we can combine the two methods to get the best of both worlds.
 
 \textbf{Performing audits incorrectly} can be caught in the same way as not performing audits.
 
-\textbf{Accusing the Keeper of not storing the data} can be caught in the next cycle
+\textbf{Wrongly Accusing the Keeper of not storing the data} can be caught in the next cycle
 when the next Verifier audits the same Keeper.
 If the Keeper is not storing the data, the audit would fail, and the Keeper would have its reputation reduced.
 If the Keeper is storing the data, the audit would pass, and the Verifier that accused the Keeper

@@ -10,6 +10,7 @@
 // #![feature(trivial_bounds)]
 // #![deny(clippy::todo)]
 
+mod bench;
 mod deps;
 mod grpc;
 mod ledger;
@@ -33,6 +34,7 @@ use log::{debug, info, warn};
 use malice::IMalice;
 use p2p::swarm::ISwarm;
 use runtime_injector::Svc;
+use time::OffsetDateTime;
 use tokio::{sync::Mutex, try_join};
 use util::{die, Res};
 use verifier::IVerifier;
@@ -96,7 +98,9 @@ async fn start(ledger: Svc<Mutex<ImmuLedger>>, settings: Svc<dyn ISettings>) -> 
 
     loop {
         let rep = ledger.lock().await.get_reputation(local_peer_id).await?;
-        info!("Current reputation: {:?}", rep);
+        // time now
+        let now = OffsetDateTime::now_utc().unix_timestamp();
+        info!("{} Current reputation: {:?}", now, rep);
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }

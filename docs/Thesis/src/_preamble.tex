@@ -1,36 +1,20 @@
 \documentclass[article, titlepage, numbers=noenddot, paper=a4, fontsize=11pt]{scrreprt}
 \title{My Title}
-\RequirePackage{fix-cm} % fix some latex issues see: http://texdoc.net/texmf-dist/doc/latex/base/fixltx2e.pdf
-\PassOptionsToPackage{usenames,dvipsnames}{xcolor}%needed because several packages include xcolor
+\RequirePackage{fix-cm}
+\PassOptionsToPackage{usenames,dvipsnames}{xcolor}
 \usepackage[utf8]{inputenc}
         
-% ****************************************************************************************************
-% 1. Configure classicthesis for your needs here, e.g., remove "drafting" below 
-% in order to deactivate the time-stamp on the pages
-% ****************************************************************************************************
 \PassOptionsToPackage{eulerchapternumbers,listings,%drafting,%
 					 pdfspacing,%floatperchapter,%linedheaders,%
 					 subfig,beramono,eulermath,parts}{classicthesis}                                        
-% ********************************************************************
-% Available options for classicthesis.sty 
-% (see ClassicThesis.pdf for more information):
-% drafting
-% parts nochapters linedheaders
-% eulerchapternumbers beramono eulermath pdfspacing minionprospacing
-% tocaligned dottedtoc manychapters
-% listings floatperchapter subfig
-% ********************************************************************
 
 \usepackage{url}
 \usepackage{nameref}
-\usepackage{datetime} %needed to add the date just below
-\usepackage{pdflscape} %used to rotate pages with wide tables
-\usepackage{rotating} %used to rotate wide figures
-\usepackage{siunitx} %used for nice number formatting
-\usepackage{pgf} % needed for arrays among other things
-% ****************************************************************************************************
-% 2. Personal data and user ad-hoc commands
-% ****************************************************************************************************
+\usepackage{datetime} 
+\usepackage{pdflscape}
+\usepackage{rotating}
+\usepackage{siunitx}
+\usepackage{pgf}
 
 \def\authors{{Ivan Luchev/202202879}}
 \def\myTitle{Distributed Storage With Verification}
@@ -49,25 +33,11 @@
 \def\myVersion{\xspace}
 
 
-% ********************************************************************
-% Setup, finetuning, and useful commands
-% ********************************************************************
-\newcounter{dummy} % necessary for correct hyperlinks (to index, bib, etc.)
-\newlength{\abcd} % for ab..z string length calculation
+\newcounter{dummy}
+\newlength{\abcd}
 \providecommand{\mLyX}{L\kern-.1667em\lower.25em\hbox{Y}\kern-.125emX\@}
 \providecommand{\mBibTeX}{\textsc{Bib}\negthinspace\TeX\@}
-% ****************************************************************************************************
 
-
-% ****************************************************************************************************
-% 3. Loading some handy packages
-% ****************************************************************************************************
-% ******************************************************************** 
-% Packages with options that might require adjustments
-% ******************************************************************** 
-%\PassOptionsToPackage{ngerman,american}{babel}   % change this to your language(s)
-% Spanish languages need extra options in order to work with this template
-%\PassOptionsToPackage{spanish,es-lcroman}{babel}
 \usepackage[american]{babel}                  
 \usepackage{microtype}
 \usepackage{csquotes}
@@ -77,34 +47,37 @@
 \usepackage{pgfplots}
 \usepackage{pgfplotstable}
 \usepgfplotslibrary{statistics}
+\usepgfplotslibrary{colormaps} 
+\pgfplotsset{
+colormap={bright}{rgb255=(0,0,0) rgb255=(78,3,100) rgb255=(2,74,255)
+    rgb255=(255,21,181) rgb255=(255,113,26) rgb255=(147,213,114) rgb255=(230,255,0)
+    rgb255=(255,255,255)}
+}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{colortbl}
 \usepackage[left=0in, right=0in, top=1.5in, bottom=1.5in]{geometry}
-\definecolor{aublue}{HTML}{193b77} % the dark blue colour used by AU
+\definecolor{aublue}{HTML}{193b77}
 
 \PassOptionsToPackage{
-    backend=bibtex8,bibencoding=ascii,%
-    language=auto,%
-    style=numeric-comp,%
-    sorting=nyt, % name, year, title
-    maxbibnames=10, % default: 3, et al.
-    natbib=true % natbib compatibility mode (\citep and \citet still work)
+    backend=bibtex8,bibencoding=ascii,
+    language=auto,
+    style=numeric-comp,
+    sorting=nyt,
+    maxbibnames=10,
+    natbib=true
 }{biblatex}
 \usepackage{biblatex}
 
-\PassOptionsToPackage{fleqn}{amsmath}       % math environments and more by the AMS 
+\PassOptionsToPackage{fleqn}{amsmath}
 \usepackage{amsmath}
 \usepackage{dirtree}
-%
-% ******************************************************************** 
-% General useful packages
-% ******************************************************************** 
-\PassOptionsToPackage{T1}{fontenc} % T2A for cyrillics
+
+\PassOptionsToPackage{T1}{fontenc}
 \usepackage{fontenc}     
-\usepackage{textcomp} % fix warning with missing font shapes
-\usepackage{scrhack} % fix warnings when using KOMA with listings package          
-\usepackage{xspace} % to get the spacing after macros right  
+\usepackage{textcomp}
+\usepackage{scrhack}
+\usepackage{xspace}
 % \newfontface{TeXGyrePagella}
 \newcommand{\eg}{e.g.,\xspace}
 \newcommand{\Eg}{E.g.,\xspace}
@@ -113,18 +86,17 @@
 \newcommand{\ie}{i.e.,\xspace}
 \newcommand{\viz}{viz.\@\xspace}
 
-\usepackage{mparhack} % get marginpar right
-\usepackage{fixltx2e} % fixes some LaTeX stuff --> since 2015 in the LaTeX kernel (see below)
+\usepackage{mparhack}
+\usepackage{fixltx2e}
 \PassOptionsToPackage{printonlyused,smaller}{acronym} 
-    \usepackage{acronym} % nice macros for handling all acronyms in the thesis
+    \usepackage{acronym}
     \renewcommand*{\aclabelfont}[1]{\acsfont{#1}}
-% ****************************************************************************************************
-\usepackage{tabularx} % better tables
-    \setlength{\extrarowheight}{3pt} % increase table row height
+\usepackage{tabularx}
+    \setlength{\extrarowheight}{3pt}
 \newcommand{\tableheadline}[1]{\multicolumn{1}{c}{\spacedlowsmallcaps{#1}}}
-\newcommand{\myfloatalign}{\centering} % to be used with each float for alignment
+\newcommand{\myfloatalign}{\centering}
 \usepackage{caption}
-\captionsetup{font=small} % format=hang,
+\captionsetup{font=small}
 \usepackage{subfig}  
 \usepackage{listings}
 \usepackage{listings-rust}
@@ -146,20 +118,16 @@
 \usepackage{graphicx} 
 \usepackage{hyperref}
 \hypersetup{%
-    %draft, % = no hyperlinking at all (useful in b/w printouts)
-    colorlinks=true, linktocpage=true, pdfstartpage=3, pdfstartview=FitV,%
-    % uncomment the following line if you want to have black links (e.g., for printing)
-    %colorlinks=false, linktocpage=false, pdfstartpage=3, pdfstartview=FitV, pdfborder={0 0 0},%
-    breaklinks=true, pdfpagemode=UseNone, pageanchor=true, pdfpagemode=UseOutlines,%
-    plainpages=false, bookmarksnumbered, bookmarksopen=true, bookmarksopenlevel=1,%
-    hypertexnames=true, pdfhighlight=/O,%nesting=true,%frenchlinks,%
-    urlcolor=webbrown, linkcolor=RoyalBlue, citecolor=webgreen, %pagecolor=RoyalBlue,%
-    %urlcolor=Black, linkcolor=Black, citecolor=Black, %pagecolor=Black,%
-    pdftitle={\myTitle},%
-    pdfauthor={\textcopyright\ \myShortNames, \myUni, \myFaculty},%
-    pdfsubject={},%
-    pdfkeywords={},%
-    pdfproducer={LaTeX with hyperref and classicthesis}%
+    colorlinks=true, linktocpage=true, pdfstartpage=3, pdfstartview=FitV,
+    breaklinks=true, pdfpagemode=UseNone, pageanchor=true, pdfpagemode=UseOutlines,
+    plainpages=false, bookmarksnumbered, bookmarksopen=true, bookmarksopenlevel=1,
+    hypertexnames=true, pdfhighlight=/O,
+    urlcolor=webbrown, linkcolor=RoyalBlue, citecolor=webgreen,
+    pdftitle={\myTitle},
+    pdfauthor={\textcopyright\ \myShortNames, \myUni, \myFaculty},
+    pdfsubject={},
+    pdfkeywords={},
+    pdfproducer={LaTeX with hyperref and classicthesis}
 }   
 
 \makeatletter
@@ -172,19 +140,19 @@
 			\renewcommand*{\chapterautorefname}{Chapter}%
 			\renewcommand*{\sectionautorefname}{Section}%
 			\renewcommand*{\subsectionautorefname}{Section}%
-			\renewcommand*{\subsubsectionautorefname}{Section}%     
+			\renewcommand*{\subsubsectionautorefname}{Section}
                 }%
-       \addto\extrasngerman{% 
+       \addto\extrasngerman{
 			\renewcommand*{\paragraphautorefname}{Absatz}%
 			\renewcommand*{\subparagraphautorefname}{Unterabsatz}%
 			\renewcommand*{\footnoteautorefname}{Fu\"snote}%
 			\renewcommand*{\FancyVerbLineautorefname}{Zeile}%
 			\renewcommand*{\theoremautorefname}{Theorem}%
 			\renewcommand*{\appendixautorefname}{Anhang}%
-			\renewcommand*{\equationautorefname}{Gleichung}%        
+			\renewcommand*{\equationautorefname}{Gleichung}
 			\renewcommand*{\itemautorefname}{Punkt}%
-                }%  
-            \providecommand{\subfigureautorefname}{\figureautorefname}%             
+                }
+            \providecommand{\subfigureautorefname}{\figureautorefname}
     }{\relax}
 \makeatother
 \listfiles
@@ -194,7 +162,6 @@
 \bibliography{bibliography}
 \frenchspacing
 \raggedbottom
-% \selectlanguage{american}
 \pagestyle{plain}
 \pagenumbering{arabic}
 \newcommand\wtf[1]{\textcolor{red}{#1}}
