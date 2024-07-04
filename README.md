@@ -4,6 +4,9 @@ A decentralized storage system based on Kademlia, augmented with audits,
 based on a Proof of Retrievability protocol,
 and a reputation system using Immudb to ensure data integrity and availability.
 
+The full documentation explaining the reason behind this project as well as the contributions
+can be found under the [docs](https://github.com/luchev/kiss/blob/main/docs/thesis.pdf).
+
 ## Features
 
 - **Replicated storage**: Data is stored across multiple nodes in a Kademlia network.
